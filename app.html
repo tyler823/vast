@@ -238,14 +238,17 @@ const Icon = {
 // ─── Logo Component ───────────────────────────────────────────────────
 const VAST_LOGO_B64 = "data:image/jpeg;base64,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";
 
+const VAST_LOGO_LIGHT_B64 = "data:image/png;base64,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";
+
 function VASTLogo({ size = "md" }) {
   const heights = { lg: 56, md: 44, sm: 28 };
   const h = heights[size] || 44;
+  const src = C.isDark ? VAST_LOGO_B64 : VAST_LOGO_LIGHT_B64;
   return (
     <img
-      src={VAST_LOGO_B64}
+      src={src}
       alt="VAST"
-      style={{ height: h, width: "auto", objectFit: "contain", display: "block" }}
+      style={{ height: h, width: "auto", objectFit: "contain", display: "block", filter: C.isDark ? "none" : "none" }}
     />
   );
 }
@@ -594,9 +597,12 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const [segElapsed, setSegElapsed] = useState(0);
   const [notes, setNotes] = useState({});
   const [newHeadline, setNewHeadline] = useState({ type: "Customer", text: "" });
-  const [newTodo, setNewTodo] = useState({ title: "", assignee: "", dueDate: "" });
+  const defaultDueDate = () => new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10);
+  const [newTodo, setNewTodo] = useState({ title: "", assignee: "", dueDate: defaultDueDate() });
   const [newIssue, setNewIssue] = useState({ title: "", priority: "2" });
-  const [rating, setRating] = useState(0);
+  const [rating, setRating] = useState(0); // final computed average
+  const [memberRatings, setMemberRatings] = useState({}); // { memberId: score }
+  const [showRecap, setShowRecap] = useState(false);
   const [done, setDone] = useState(false);
   const [attendance, setAttendance] = useState({});
   const [spotlight, setSpotlight] = useState(null);
@@ -648,7 +654,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
     if (!newTodo.title.trim()) return;
     const t = { id: uid(), title: newTodo.title, assignee: newTodo.assignee, dueDate: newTodo.dueDate, done: false, createdAt: now() };
     onSave({ todos: [...(company.todos || []), t] });
-    setNewTodo({ title: "", assignee: "", dueDate: "" });
+    setNewTodo({ title: "", assignee: "", dueDate: defaultDueDate() });
   };
   const addIssue = () => {
     if (!newIssue.title.trim()) return;
@@ -677,11 +683,98 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
     cycle();
   };
 
+  const buildRecap = (mtgData, avgRating) => {
+    const d = new Date(mtgData.date);
+    const dateLabel = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    const lines = [];
+    lines.push(`VAST WEEKLY HUDDLE RECAP`);
+    lines.push(`${huddleName} — ${dateLabel}`);
+    lines.push(`Duration: ${Math.round(elapsed / 60)} min  |  Meeting Rating: ${avgRating}/10`);
+    lines.push("");
+
+    // Attendance
+    const present = (company.members || []).filter(m => attendance[m.id] !== false);
+    if (present.length) {
+      lines.push("ATTENDEES");
+      lines.push(present.map(m => m.name).join(", "));
+      lines.push("");
+    }
+
+    // Headlines
+    const activeHeadlines = (company.headlines || []).filter(h => !h.reviewed);
+    if (activeHeadlines.length) {
+      lines.push("HEADLINES FROM THE WEEK");
+      activeHeadlines.forEach(h => lines.push(`  [${h.type.toUpperCase()}] ${h.text}`));
+      lines.push("");
+    }
+
+    // Quarterly tasks — off track
+    const offTrack = (company.quarterlyTasks || []).filter(t => t.status === "off");
+    if (offTrack.length) {
+      lines.push("OFF-TRACK QUARTERLY TASKS");
+      offTrack.forEach(t => lines.push(`  ✗ ${t.title}${t.who ? ` (${t.who})` : ""}`));
+      lines.push("");
+    }
+
+    // Overdue to-dos
+    const today = new Date(); today.setHours(0,0,0,0);
+    const overdue = (company.todos || []).filter(t => !t.done && t.dueDate && new Date(t.dueDate) < today);
+    if (overdue.length) {
+      lines.push("OVERDUE TO-DOS");
+      overdue.forEach(t => lines.push(`  ⚠ ${t.title}${t.assignee ? ` — ${t.assignee}` : ""} (Due ${dateStr(new Date(t.dueDate))})`));
+      lines.push("");
+    }
+
+    // New to-dos added this meeting (created today)
+    const todayStr = new Date().toISOString().slice(0,10);
+    const newTodos = (company.todos || []).filter(t => !t.done && t.createdAt && t.createdAt.slice(0,10) === todayStr);
+    if (newTodos.length) {
+      lines.push("TO-DOS ASSIGNED THIS MEETING");
+      newTodos.forEach(t => lines.push(`  □ ${t.title}${t.assignee ? ` — ${t.assignee}` : ""}${t.dueDate ? ` (Due ${dateStr(new Date(t.dueDate))})` : ""}`));
+      lines.push("");
+    }
+
+    // Problems solved
+    if (solvedThisSession.length) {
+      lines.push("PROBLEMS SOLVED");
+      solvedThisSession.forEach(s => lines.push(`  ✓ ${s.title}${s.notes ? `: ${s.notes}` : ""}`));
+      lines.push("");
+    }
+
+    // Notes
+    if (notes.conclude) {
+      lines.push("MEETING NOTES");
+      lines.push(`  ${notes.conclude}`);
+      lines.push("");
+    }
+
+    // Individual ratings
+    const ratingEntries = Object.entries(memberRatings);
+    if (ratingEntries.length > 1) {
+      lines.push("INDIVIDUAL RATINGS");
+      ratingEntries.forEach(([mid, score]) => {
+        const m = (company.members || []).find(x => x.id === mid);
+        lines.push(`  ${m ? m.name : "Member"}: ${score}/10`);
+      });
+      lines.push(`  Average: ${avgRating}/10`);
+      lines.push("");
+    }
+
+    lines.push("—".repeat(40));
+    lines.push("Generated by VAST Platform");
+    return lines.join("\n");
+  };
+
   const finishMeeting = () => {
-    if (!rating) return;
+    const scores = Object.values(memberRatings).filter(Boolean);
+    const avgRating = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : rating;
+    if (!avgRating) return;
     const mtg = {
-      id: uid(), date: now(), rating, totalMinutes: Math.round(elapsed / 60),
-      notes, headlines: company.headlines?.slice(-5), todos: company.todos?.slice(-5),
+      id: uid(), date: now(), rating: avgRating, memberRatings, totalMinutes: Math.round(elapsed / 60),
+      notes, headlines: (company.headlines || []).filter(h => !h.reviewed).slice(-5),
+      reviewedHeadlines: (company.headlines || []).filter(h => h.reviewed).slice(-20),
+      completedTodos: (company.todos || []).filter(t => t.done).slice(-20),
+      todos: (company.todos || []).filter(t => !t.done).slice(-5),
       solvedProblems: solvedThisSession
     };
     // Archive quarter snapshot (once per quarter, keyed by currentQuarter)
@@ -711,23 +804,55 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
       : h
     );
     onSave({ huddles: updatedHuddles, meetings: [...(company.meetings || []), mtg], quarterHistory: newQH });
+    setRating(avgRating);
+    setShowRecap(true);
     setDone(true);
     clearInterval(timerRef.current);
     clearTimeout(spinRef.current);
   };
 
   if (done) {
+    const recap = buildRecap({ date: now() }, rating);
+    const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegElapsed(0); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); clearTimeout(spinRef.current); };
     return (
       <Layout title="Meeting Complete!" subtitle="Great work — keep the momentum going">
-        <div style={{ maxWidth: 480, margin: "0 auto", textAlign: "center" }} className="fade-in">
-          <div style={{ fontSize: 80, marginBottom: 16 }}>🎉</div>
-          <div className="card">
-            <div style={{ fontSize: 48, fontWeight: 800, color: rating >= 8 ? C.green : rating >= 6 ? C.yellow : C.red, fontFamily: "'Barlow Condensed',sans-serif" }}>{rating}/10</div>
-            <div style={{ color: C.textMuted, marginTop: 4 }}>Meeting Rating</div>
-            <div style={{ marginTop: 16, fontSize: 14, color: C.textMuted }}>Duration: {fmt(elapsed)}</div>
+        <div style={{ maxWidth: 680, margin: "0 auto" }} className="fade-in">
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <div style={{ fontSize: 64, marginBottom: 8 }}>🎉</div>
+            <div style={{ fontSize: 52, fontWeight: 800, color: rating >= 8 ? C.green : rating >= 6 ? C.yellow : C.red, fontFamily: "'Barlow Condensed',sans-serif", lineHeight: 1 }}>{rating}/10</div>
+            <div style={{ color: C.textMuted, marginTop: 4, fontSize: 14 }}>Average Meeting Rating · {fmt(elapsed)}</div>
           </div>
-          <button className="btn-primary" style={{ marginTop: 20, padding: "14px 32px", fontSize: 15 }} onClick={() => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegElapsed(0); setRating(0); setDone(false); setNotes({}); setAttendance({}); setSpotlight(null); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); clearTimeout(spinRef.current); }}>
-            End & Return
+
+          {Object.keys(memberRatings).length > 1 && (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <h3 style={{ fontSize: 16, marginBottom: 12 }}>Individual Ratings</h3>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                {Object.entries(memberRatings).map(([mid, score]) => {
+                  const m = (company.members || []).find(x => x.id === mid);
+                  return (
+                    <div key={mid} style={{ display: "flex", flexDirection: "column", alignItems: "center", background: C.surface2, borderRadius: 8, padding: "10px 16px", minWidth: 80 }}>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: score >= 8 ? C.green : score >= 6 ? C.yellow : C.red, fontFamily: "'Barlow Condensed',sans-serif" }}>{score}</div>
+                      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{m ? m.name : "—"}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="card" style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <h3 style={{ fontSize: 16 }}>Meeting Recap</h3>
+              <button className="btn-primary" style={{ padding: "8px 16px", fontSize: 12 }}
+                onClick={() => { navigator.clipboard.writeText(recap).catch(() => {}); }}>
+                📋 Copy Recap
+              </button>
+            </div>
+            <pre style={{ fontSize: 12, lineHeight: 1.7, color: C.textMuted, whiteSpace: "pre-wrap", fontFamily: "'Barlow',sans-serif", background: C.surface2, borderRadius: 6, padding: "16px", maxHeight: 400, overflowY: "auto" }}>{recap}</pre>
+          </div>
+
+          <button className="btn-primary" style={{ width: "100%", padding: "14px", fontSize: 15 }} onClick={resetMeeting}>
+            End & Return to Dashboard
           </button>
         </div>
       </Layout>
@@ -823,83 +948,131 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
           {/* TASK REVIEW */}
           {activeIdx === 2 && (
             <div className="card">
-              <h3 style={{ fontSize: 18, marginBottom: 16 }}>Quarterly Task Review</h3>
+              <h3 style={{ fontSize: 18, marginBottom: 4 }}>Quarterly Task Review</h3>
+              <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Update each task's status for this week.</div>
               {(company.quarterlyTasks || []).map(t => (
-                <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>{t.title}</div>
+                <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}`, gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
                     {t.who && <div style={{ fontSize: 12, color: C.textMuted }}>{t.who}</div>}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span className={t.status === "done" ? "tag-done" : t.status === "on" ? "tag-on" : "tag-off"}>
-                      {t.status === "done" ? "Done" : t.status === "on" ? "On Track" : "Off Track"}
-                    </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    {["on","off","done"].map(s => {
+                      const isActive = t.status === s;
+                      const bg = isActive ? (s === "off" ? "rgba(230,51,41,0.2)" : "rgba(34,197,94,0.2)") : C.surface2;
+                      const col = isActive ? (s === "off" ? C.red : C.green) : C.textMuted;
+                      const bor = isActive ? (s === "off" ? C.red : C.green) : C.border;
+                      return (
+                        <button key={s} onClick={() => onSave({ quarterlyTasks: (company.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s } : x) })}
+                          style={{ padding: "5px 12px", borderRadius: 5, fontSize: 11, fontWeight: 700, fontFamily: "'Barlow',sans-serif", cursor: "pointer", border: `1px solid ${bor}`, background: bg, color: col }}>
+                          {s === "on" ? "On Track" : s === "off" ? "Off Track" : "Done"}
+                        </button>
+                      );
+                    })}
                     {t.status === "off" && (
                       <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
-                        style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                        style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
                         {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "⚑ Problem Solve"}
                       </button>
                     )}
                   </div>
                 </div>
               ))}
-              {!company.quarterlyTasks?.length && <div style={{ color: C.textMuted }}>No tasks yet.</div>}
+              {!company.quarterlyTasks?.length && <div style={{ color: C.textMuted, padding: "16px 0" }}>No tasks yet. Add them in Quarterly Tasks.</div>}
             </div>
           )}
 
           {/* HEADLINES */}
-          {activeIdx === 3 && (
-            <div className="card">
-              <h3 style={{ fontSize: 18, marginBottom: 16 }}>Add Headlines</h3>
-              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 140 }}>
-                  <option>Customer</option><option>Employee</option>
-                </select>
-                <input placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && addHeadline()} style={{ flex: 1 }} />
-                <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addHeadline}>Add</button>
-              </div>
-              {(company.headlines || []).slice(-6).reverse().map(h => (
-                <div key={h.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 14 }}>
-                    <span className="chip" style={{ marginRight: 8, fontSize: 10 }}>{h.type}</span>{h.text}
-                  </div>
-                  <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
-                    style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===h.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===h.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0, marginLeft:8 }}>
-                    {(company.problemQueue||[]).find(p=>p.id===h.id) ? "✓ Queued" : "⚑ Problem Solve"}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* TO-DOS */}
-          {activeIdx === 4 && (
-            <div className="card">
-              <h3 style={{ fontSize: 18, marginBottom: 16 }}>To-Do Review & Add</h3>
-              <div style={{ marginBottom: 16 }}>
-                {(company.todos || []).filter(t => !t.done).slice(0, 8).map(t => (
-                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-                    <div className={`checkbox ${t.done ? "checked" : ""}`}
-                      onClick={() => onSave({ todos: company.todos.map(x => x.id === t.id ? { ...x, done: !x.done } : x) })}>
-                      {t.done && <Icon.check />}
+          {activeIdx === 3 && (() => {
+            const unreviewed = (company.headlines || []).filter(h => !h.reviewed);
+            const markReviewed = (id) => onSave({ headlines: company.headlines.map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h) });
+            return (
+              <div className="card">
+                <h3 style={{ fontSize: 18, marginBottom: 4 }}>Headlines</h3>
+                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Mark reviewed to remove from active list. Reviewed headlines stay in meeting history.</div>
+                {unreviewed.length === 0 && (
+                  <div style={{ color: C.textMuted, fontSize: 13, padding: "12px 0", marginBottom: 12 }}>All headlines reviewed. Add new ones below.</div>
+                )}
+                {unreviewed.map(h => (
+                  <div key={h.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}`, gap: 8 }}>
+                    <div style={{ fontSize: 14, flex: 1 }}>
+                      <span className="chip" style={{ marginRight: 8, fontSize: 10, background: h.type === "Customer" ? "rgba(59,130,246,0.15)" : "rgba(34,197,94,0.1)", borderColor: h.type === "Customer" ? "rgba(59,130,246,0.3)" : "rgba(34,197,94,0.2)", color: h.type === "Customer" ? C.blue : C.green }}>{h.type}</span>
+                      {h.text}
                     </div>
-                    <span style={{ fontSize: 14, flex: 1 }}>{t.title}</span>
-                    <span style={{ fontSize: 11, color: C.textMuted }}>{t.assignee}</span>
-                    <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
-                      style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                      {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "⚑ Problem Solve"}
-                    </button>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => markReviewed(h.id)}
+                        style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(34,197,94,0.4)`, background: "rgba(34,197,94,0.1)", color: C.green, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                        ✓ Reviewed
+                      </button>
+                      <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
+                        style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===h.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===h.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                        {(company.problemQueue||[]).find(p=>p.id===h.id) ? "✓ Queued" : "⚑ Problem Solve"}
+                      </button>
+                    </div>
                   </div>
                 ))}
+                <div style={{ marginTop: 16 }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: C.textMuted, letterSpacing: 1, textTransform: "uppercase", fontSize: 11 }}>Add New Headline</h4>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 140 }}>
+                      <option>Customer</option><option>Employee</option>
+                    </select>
+                    <input placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && addHeadline()} style={{ flex: 1 }} />
+                    <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addHeadline}>Add</button>
+                  </div>
+                </div>
               </div>
-              <h4 style={{ fontSize: 15, marginBottom: 10 }}>Add New To-Do</h4>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input placeholder="Task..." value={newTodo.title} onChange={e => setNewTodo(n => ({ ...n, title: e.target.value }))} style={{ flex: 2 }} />
-                <input placeholder="Who" value={newTodo.assignee} onChange={e => setNewTodo(n => ({ ...n, assignee: e.target.value }))} style={{ flex: 1 }} />
-                <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addTodo}>Add</button>
+            );
+          })()}
+
+          {/* TO-DOS */}
+          {activeIdx === 4 && (() => {
+            const pending = (company.todos || []).filter(t => !t.done);
+            const completeTodo = (id) => onSave({ todos: company.todos.map(x => x.id === id ? { ...x, done: true, completedAt: now() } : x) });
+            return (
+              <div className="card">
+                <h3 style={{ fontSize: 18, marginBottom: 4 }}>To-Do Review</h3>
+                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Mark complete to remove from active list. Completed to-dos are saved to history.</div>
+                {pending.length === 0 && (
+                  <div style={{ color: C.textMuted, fontSize: 13, padding: "12px 0", marginBottom: 12 }}>All to-dos complete! Add new ones below.</div>
+                )}
+                {pending.map(t => {
+                  const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
+                  return (
+                    <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 500 }}>{t.title}</div>
+                        <div style={{ fontSize: 11, color: isOverdue ? C.red : C.textMuted, marginTop: 2 }}>
+                          {t.assignee && <span>{t.assignee}</span>}
+                          {t.assignee && t.dueDate && <span> · </span>}
+                          {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "⚠ Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <button onClick={() => completeTodo(t.id)}
+                          style={{ padding: "5px 12px", borderRadius: 5, border: `1px solid rgba(34,197,94,0.4)`, background: "rgba(34,197,94,0.1)", color: C.green, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                          ✓ Complete
+                        </button>
+                        <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
+                          style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                          {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "⚑ Problem Solve"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ marginTop: 16 }}>
+                  <h4 style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted, marginBottom: 10 }}>Add New To-Do</h4>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <input placeholder="Task..." value={newTodo.title} onChange={e => setNewTodo(n => ({ ...n, title: e.target.value }))} style={{ flex: 2, minWidth: 160 }} />
+                    <input placeholder="Who" value={newTodo.assignee} onChange={e => setNewTodo(n => ({ ...n, assignee: e.target.value }))} style={{ flex: 1, minWidth: 100 }} />
+                    <input type="date" value={newTodo.dueDate} onChange={e => setNewTodo(n => ({ ...n, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 130 }} />
+                    <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addTodo}>Add</button>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* PROBLEM SOLVING */}
           {activeIdx === 5 && (() => {
@@ -1068,24 +1241,62 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
           })()}
 
           {/* CONCLUDE + RATE */}
-          {activeIdx === 6 && (
-            <div className="card">
-              <h3 style={{ fontSize: 18, marginBottom: 8 }}>Rate This Meeting</h3>
-              <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 20 }}>How would you rate this meeting on a scale of 1–10?</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
-                {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                  <button key={n} className={`rating-btn ${rating === n ? "sel" : ""}`} onClick={() => setRating(n)}>{n}</button>
-                ))}
+          {activeIdx === 6 && (() => {
+            const present = members.filter(m => attendance[m.id] !== false);
+            const scores = Object.values(memberRatings).filter(Boolean);
+            const avgPreview = scores.length > 0 ? (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(1) : null;
+            const canFinish = scores.length > 0 || rating > 0;
+            // For teams with no members set up, fall back to single rating
+            const useMulti = present.length > 0;
+            return (
+              <div className="card">
+                <h3 style={{ fontSize: 18, marginBottom: 4 }}>Rate This Meeting</h3>
+                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>
+                  {useMulti ? "Each attendee rates the meeting 1–10. The average is saved." : "Rate the meeting on a scale of 1–10."}
+                </div>
+
+                {useMulti ? (
+                  <div style={{ marginBottom: 24 }}>
+                    {present.map(m => (
+                      <div key={m.id} style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: C.text }}>{m.name}</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                            <button key={n}
+                              className={`rating-btn ${memberRatings[m.id] === n ? "sel" : ""}`}
+                              style={{ width: 36, height: 36, fontSize: 13 }}
+                              onClick={() => setMemberRatings(r => ({ ...r, [m.id]: n }))}>
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {avgPreview && (
+                      <div style={{ marginTop: 8, padding: "10px 14px", background: C.surface2, borderRadius: 8, fontSize: 14, color: C.text }}>
+                        Current average: <strong style={{ color: parseFloat(avgPreview) >= 8 ? C.green : parseFloat(avgPreview) >= 6 ? C.yellow : C.red }}>{avgPreview}/10</strong>
+                        <span style={{ color: C.textDim, fontSize: 12 }}> ({scores.length} of {present.length} rated)</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+                    {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                      <button key={n} className={`rating-btn ${rating === n ? "sel" : ""}`} onClick={() => setRating(n)}>{n}</button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="field">
+                  <label className="label">Closing notes</label>
+                  <textarea placeholder="Key takeaways, decisions made, action items..." value={notes.conclude || ""} onChange={e => setNotes(n => ({ ...n, conclude: e.target.value }))} />
+                </div>
+                <button className="btn-primary" style={{ width: "100%", padding: "14px", fontSize: 15 }} onClick={finishMeeting} disabled={!canFinish}>
+                  {canFinish ? `Complete Meeting & Generate Recap${avgPreview ? ` — Avg ${avgPreview}/10` : rating ? ` — ${rating}/10` : ""}` : "Rate the meeting to finish"}
+                </button>
               </div>
-              <div className="field">
-                <label className="label">Any closing notes</label>
-                <textarea placeholder="Key takeaways, decisions made..." value={notes.conclude || ""} onChange={e => setNotes(n => ({ ...n, conclude: e.target.value }))} />
-              </div>
-              <button className="btn-primary" style={{ width: "100%", padding: "14px", fontSize: 15 }} onClick={finishMeeting} disabled={!rating}>
-                {rating ? `Complete Meeting — Rated ${rating}/10` : "Select a Rating to Finish"}
-              </button>
-            </div>
-          )}
+            );
+          })()}
 
           {/* INTRODUCTIONS / GOOD NEWS */}
           {activeIdx === 0 && (
@@ -1195,10 +1406,23 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 }
 
 // ─── QUARTERLY TASKS ──────────────────────────────────────────────────
+const OPERATORS = { gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" };
+
+const meetsTarget = (task) => {
+  if (!task.target || !task.operator) return null; // null = no criterion set
+  const raw = parseFloat(task.target);
+  if (isNaN(raw)) return null;
+  // We evaluate based on the current status: "done" = met, "on" = heading toward, "off" = not meeting
+  // For display we just show the criterion — green if on/done, red if off
+  if (task.status === "done") return true;
+  if (task.status === "off") return false;
+  return null; // "on track" = neutral
+};
+
 function Tasks({ company, onSave }) {
   const [tab, setTab] = useState("company");
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ title: "", who: "", smart: false, status: "on", huddleId: "" });
+  const [form, setForm] = useState({ title: "", who: "", smart: false, status: "on", huddleId: "", target: "", operator: "" });
   const tasks = company.quarterlyTasks || [];
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
@@ -1206,7 +1430,7 @@ function Tasks({ company, onSave }) {
   const addTask = () => {
     if (!form.title.trim()) return;
     onSave({ quarterlyTasks: [...tasks, { id: uid(), ...form, createdAt: now() }] });
-    setForm({ title: "", who: "", smart: false, status: "on", huddleId: "" });
+    setForm({ title: "", who: "", smart: false, status: "on", huddleId: "", target: "", operator: "" });
     setShowAdd(false);
   };
   const updateStatus = (id, status) => onSave({ quarterlyTasks: tasks.map(t => t.id === id ? { ...t, status } : t) });
@@ -1256,16 +1480,35 @@ function Tasks({ company, onSave }) {
             <tbody>
               {tasks.map(t => (
                 <tr key={t.id}>
-                  <td style={{ fontWeight: 500 }}>{t.title}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    {t.title}
+                    {t.operator && t.target && (
+                      <span style={{ marginLeft: 8, fontSize: 11, color: C.textMuted, fontWeight: 400 }}>
+                        {OPERATORS[t.operator]} {t.target}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ color: C.textMuted }}>{t.who || "—"}</td>
                   <td>{t.smart && <span className="tag-on">SMART</span>}</td>
                   <td>
-                    <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
-                      style={{ width: 120, padding: "6px 10px", fontSize: 12 }}>
-                      <option value="on">On Track</option>
-                      <option value="off">Off Track</option>
-                      <option value="done">Done</option>
-                    </select>
+                    {(() => {
+                      const met = meetsTarget(t);
+                      const colors = {
+                        on: { bg: "rgba(34,197,94,0.12)", color: C.green, border: "rgba(34,197,94,0.3)" },
+                        off: { bg: "rgba(230,51,41,0.12)", color: C.red, border: "rgba(230,51,41,0.3)" },
+                        done: { bg: "rgba(59,130,246,0.12)", color: C.blue, border: "rgba(59,130,246,0.3)" },
+                      };
+                      // If criterion set, override on/done → green, off → red
+                      const effectiveColor = met === true ? colors.done : met === false ? colors.off : colors[t.status] || colors.on;
+                      return (
+                        <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
+                          style={{ width: 120, padding: "6px 10px", fontSize: 12, background: effectiveColor.bg, color: effectiveColor.color, border: `1px solid ${effectiveColor.border}`, borderRadius: 6, fontWeight: 700 }}>
+                          <option value="on">On Track</option>
+                          <option value="off">Off Track</option>
+                          <option value="done">Done</option>
+                        </select>
+                      );
+                    })()}
                   </td>
                   <td>
                     <button className="btn-danger" style={{ padding: "6px 10px" }} onClick={() => deleteTask(t.id)}><Icon.trash /></button>
@@ -1322,6 +1565,21 @@ function Tasks({ company, onSave }) {
                 {form.smart && <Icon.check />}
               </div>
               <span style={{ fontSize: 14 }}>This task is SMART (Specific, Measurable, Achievable, Relevant, Time-bound)</span>
+            </div>
+            <div className="field">
+              <label className="label">Target / Success Criteria (optional)</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <select value={form.operator || ""} onChange={e => setForm(f => ({ ...f, operator: e.target.value }))} style={{ width: 80, flexShrink: 0 }}>
+                  <option value="">—</option>
+                  <option value="gte">≥</option>
+                  <option value="lte">≤</option>
+                  <option value="gt">&gt;</option>
+                  <option value="lt">&lt;</option>
+                  <option value="eq">=</option>
+                </select>
+                <input placeholder="e.g. 10, 95%, $50k" value={form.target || ""} onChange={e => setForm(f => ({ ...f, target: e.target.value }))} style={{ flex: 1 }} />
+              </div>
+              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>When a status is set, this criterion determines green/red highlighting.</div>
             </div>
             <div className="field">
               <label className="label">Assign to Huddle</label>
@@ -1504,6 +1762,7 @@ function Headlines({ company, onSave }) {
   const headlines = company.headlines || [];
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
+  const [showReviewed, setShowReviewed] = useState(false);
 
   const add = () => {
     if (!form.text.trim()) return;
@@ -1511,7 +1770,35 @@ function Headlines({ company, onSave }) {
     setForm(f => ({ ...f, text: "" }));
   };
   const del = (id) => onSave({ headlines: headlines.filter(h => h.id !== id) });
-  const filtered = huddleFilter === "all" ? headlines : headlines.filter(h => h.huddleId === huddleFilter);
+  const markReviewed = (id) => onSave({ headlines: headlines.map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h) });
+  const unmarkReviewed = (id) => onSave({ headlines: headlines.map(h => h.id === id ? { ...h, reviewed: false, reviewedAt: null } : h) });
+
+  const applyHuddleFilter = (arr) => huddleFilter === "all" ? arr : arr.filter(h => h.huddleId === huddleFilter);
+  const active = applyHuddleFilter(headlines.filter(h => !h.reviewed));
+  const reviewed = applyHuddleFilter(headlines.filter(h => h.reviewed));
+
+  const HeadlineRow = ({ h, isReviewed }) => (
+    <div key={h.id} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}`, gap: 8, opacity: isReviewed ? 0.6 : 1 }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ marginBottom: 4 }}>
+          <span className="chip" style={{ marginRight: 8, fontSize: 10, background: h.type === "Customer" ? "rgba(59,130,246,0.15)" : "rgba(34,197,94,0.1)", borderColor: h.type === "Customer" ? "rgba(59,130,246,0.3)" : "rgba(34,197,94,0.2)", color: h.type === "Customer" ? C.blue : C.green }}>{h.type}</span>
+          {h.huddleId && <span className="chip" style={{ marginRight: 8, fontSize: 10 }}>{huddles.find(x => x.id === h.huddleId)?.name || ""}</span>}
+          {isReviewed && <span className="chip" style={{ fontSize: 10, background: "rgba(34,197,94,0.1)", borderColor: "rgba(34,197,94,0.3)", color: C.green }}>Reviewed</span>}
+        </div>
+        <span style={{ fontSize: 14, textDecoration: isReviewed ? "line-through" : "none" }}>{h.text}</span>
+        <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{dateStr(new Date(h.date))}{isReviewed && h.reviewedAt ? ` · Reviewed ${dateStr(new Date(h.reviewedAt))}` : ""}</div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        {!isReviewed && (
+          <button className="btn-ghost" style={{ fontSize: 11, color: C.green, border: `1px solid rgba(34,197,94,0.3)`, padding: "4px 10px", borderRadius: 5 }} onClick={() => markReviewed(h.id)}>✓ Reviewed</button>
+        )}
+        {isReviewed && (
+          <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5 }} onClick={() => unmarkReviewed(h.id)}>Reopen</button>
+        )}
+        <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(h.id)}><Icon.trash /></button>
+      </div>
+    </div>
+  );
 
   return (
     <Layout title="Headlines" subtitle="Customer & Employee news from the week">
@@ -1532,7 +1819,7 @@ function Headlines({ company, onSave }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <span style={{ fontSize: 14, color: C.textMuted }}>{filtered.length} headline{filtered.length !== 1 ? "s" : ""}</span>
+          <span style={{ fontSize: 14, color: C.textMuted }}>{active.length} active · {reviewed.length} reviewed</span>
           <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
             style={{ padding: "6px 12px", fontSize: 13, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text }}>
             <option value="all">All Huddles</option>
@@ -1540,20 +1827,22 @@ function Headlines({ company, onSave }) {
           </select>
         </div>
 
-        <div className="card">
-          {filtered.length === 0 && <div className="empty-state"><div style={{ fontSize: 14 }}>No headlines yet. Share what's happening with customers and employees.</div></div>}
-          {[...filtered].reverse().map(h => (
-            <div key={h.id} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
-              <div>
-                <span className="chip" style={{ marginRight: 10, fontSize: 10, background: h.type === "Customer" ? "rgba(59,130,246,0.15)" : "rgba(34,197,94,0.1)", borderColor: h.type === "Customer" ? "rgba(59,130,246,0.3)" : "rgba(34,197,94,0.2)", color: h.type === "Customer" ? C.blue : C.green }}>{h.type}</span>
-                {h.huddleId && <span className="chip" style={{ marginRight: 10, fontSize: 10 }}>{huddles.find(x => x.id === h.huddleId)?.name || ""}</span>}
-                <span style={{ fontSize: 14 }}>{h.text}</span>
-                <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{dateStr(new Date(h.date))}</div>
-              </div>
-              <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(h.id)}><Icon.trash /></button>
-            </div>
-          ))}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize: 16, marginBottom: 12 }}>Active ({active.length})</h3>
+          {active.length === 0 && <div style={{ fontSize: 13, color: C.textMuted, padding: "8px 0" }}>No active headlines. All caught up!</div>}
+          {[...active].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={false} />)}
         </div>
+
+        {reviewed.length > 0 && (
+          <div className="card">
+            <button className="btn-ghost" style={{ width: "100%", textAlign: "left", padding: "4px 0", marginBottom: showReviewed ? 12 : 0 }}
+              onClick={() => setShowReviewed(s => !s)}>
+              <span style={{ fontSize: 16, fontWeight: 700 }}>Reviewed ({reviewed.length})</span>
+              <span style={{ marginLeft: 8, color: C.textMuted }}>{showReviewed ? "▲ Hide" : "▼ Show"}</span>
+            </button>
+            {showReviewed && [...reviewed].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={true} />)}
+          </div>
+        )}
       </div>
     </Layout>
   );
@@ -1674,7 +1963,8 @@ function Issues({ company, onSave }) {
 
 // ─── TO-DOS ───────────────────────────────────────────────────────────
 function Todos({ company, onSave }) {
-  const [form, setForm] = useState({ title: "", assignee: "", dueDate: "", huddleId: "" });
+  const todoDueDefault = () => new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10);
+  const [form, setForm] = useState({ title: "", assignee: "", dueDate: todoDueDefault(), huddleId: "" });
   const todos = company.todos || [];
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
@@ -1682,7 +1972,7 @@ function Todos({ company, onSave }) {
   const add = () => {
     if (!form.title.trim()) return;
     onSave({ todos: [...todos, { id: uid(), ...form, done: false, createdAt: now() }] });
-    setForm({ title: "", assignee: "", dueDate: "", huddleId: "" });
+    setForm({ title: "", assignee: "", dueDate: todoDueDefault(), huddleId: "" });
   };
   const toggle = (id) => onSave({ todos: todos.map(t => t.id === id ? { ...t, done: !t.done } : t) });
   const del = (id) => onSave({ todos: todos.filter(t => t.id !== id) });
@@ -1720,16 +2010,24 @@ function Todos({ company, onSave }) {
         <div className="card" style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 18, marginBottom: 12 }}>Pending ({pending.length})</h3>
           {pending.length === 0 && <div style={{ fontSize: 13, color: C.textMuted }}>All clear! No pending to-dos.</div>}
-          {pending.map(t => (
-            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
-              <div className={`checkbox ${t.done ? "checked" : ""}`} onClick={() => toggle(t.id)}>{t.done && <Icon.check />}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>{t.title}</div>
-                <div style={{ fontSize: 11, color: C.textMuted }}>{t.assignee && `${t.assignee} · `}{t.dueDate && `Due ${dateStr(new Date(t.dueDate))}`}{t.huddleId && ` · ${huddles.find(x => x.id === t.huddleId)?.name || ""}`}</div>
+          {pending.map(t => {
+            const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
+            return (
+              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                <div className={`checkbox ${t.done ? "checked" : ""}`} onClick={() => toggle(t.id)}>{t.done && <Icon.check />}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>{t.title}</div>
+                  <div style={{ fontSize: 11, color: isOverdue ? C.red : C.textMuted, marginTop: 2 }}>
+                    {t.assignee && <span>{t.assignee}</span>}
+                    {t.assignee && t.dueDate && <span> · </span>}
+                    {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "⚠ Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
+                    {t.huddleId && <span> · {huddles.find(x => x.id === t.huddleId)?.name || ""}</span>}
+                  </div>
+                </div>
+                <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(t.id)}><Icon.trash /></button>
               </div>
-              <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(t.id)}><Icon.trash /></button>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {done.length > 0 && (
