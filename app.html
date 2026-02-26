@@ -15,10 +15,10 @@
         clearInterval(check);
         window.$memberstackDom.getCurrentMember().then(function(res) {
           if (!res || !res.data) {
-            window.location.href = "./index.html";
+            window.location.href = "/index.html";
           }
         }).catch(function() {
-          window.location.href = "./index.html";
+          window.location.href = "/index.html";
         });
       }, 100);
     });
@@ -288,7 +288,7 @@ function Sidebar({ view, setView, company }) {
       </nav>
 
       <div style={{ padding: "12px 8px", borderTop: `1px solid ${C.border}` }}>
-        <button className="sidebar-link" onClick={() => window.$memberstackDom?.logout().then(() => { window.location.href = "./index.html"; })}><Icon.logout /> Sign Out</button>
+        <button className="sidebar-link" onClick={() => window.$memberstackDom?.logout().then(() => { window.location.href = "/index.html"; })}><Icon.logout /> Sign Out</button>
       </div>
     </div>
   );
