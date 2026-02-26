@@ -2484,6 +2484,27 @@ function Settings({ company, onSave }) {
   };
   const delMember = (id) => onSave({ members: company.members.filter(m => m.id !== id) });
 
+  const renameMember = (id, newName) => {
+    const oldName = (company.members || []).find(m => m.id === id)?.name;
+    if (!oldName || oldName === newName) return;
+    const rename = (name) => name === oldName ? newName : name;
+    // Cascade rename across all data that references member name
+    const updates = {
+      members: company.members.map(m => m.id === id ? { ...m, name: newName } : m),
+      quarterlyTasks: (company.quarterlyTasks || []).map(t => ({ ...t, who: rename(t.who) })),
+      todos: (company.todos || []).map(t => ({
+        ...t,
+        assignee: t.assignee === oldName ? newName : t.assignee,
+        assignees: (t.assignees || []).map(a => rename(a)),
+      })),
+      scorecard: {
+        ...company.scorecard,
+        measurables: (company.scorecard?.measurables || []).map(m => ({ ...m, owner: rename(m.owner) })),
+      },
+    };
+    onSave(updates);
+  };
+
   return (
     <Layout title="Settings" subtitle={company.name}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 900 }}>
@@ -2573,14 +2594,22 @@ function Settings({ company, onSave }) {
           <div className="card" style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 18, marginBottom: 16 }}>Team Members</h3>
             {(company.members || []).map(m => (
-              <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{m.name}</div>
-                  <div style={{ fontSize: 11, color: C.textMuted }}>{m.email} · {m.role}</div>
+              <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}`, gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <input
+                    defaultValue={m.name}
+                    onBlur={e => renameMember(m.id, e.target.value.trim())}
+                    onKeyDown={e => e.key === "Enter" && e.target.blur()}
+                    style={{ fontSize: 14, fontWeight: 600, color: C.text, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, padding: "2px 0", outline: "none", width: "100%", fontFamily: "'Barlow',sans-serif" }}
+                  />
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{m.email}{m.email && m.role ? " · " : ""}{m.role}</div>
                 </div>
-                <button className="btn-danger" style={{ padding: "6px 10px" }} onClick={() => delMember(m.id)}><Icon.trash /></button>
+                <button className="btn-danger" style={{ padding: "6px 10px", flexShrink: 0 }} onClick={() => delMember(m.id)}><Icon.trash /></button>
               </div>
             ))}
+            {(company.members||[]).length > 0 && (
+              <div style={{ fontSize: 11, color: C.textDim, marginTop: 8, fontStyle: "italic" }}>Click a name to edit it. Changes cascade to all tasks and to-dos.</div>
+            )}
             <div style={{ marginTop: 16 }}>
               <h4 style={{ fontSize: 15, marginBottom: 10 }}>Add Team Member</h4>
               <div className="field">
