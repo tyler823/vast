@@ -1,1 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VAST — Venture Accelerator System for Trades</title>
+  <meta name="description" content="The operating system built for trades businesses. Run better meetings, hit your quarterly targets, and grow with purpose." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root {
+      --red: #E63329;
+      --red-dark: #b82820;
+      --red-glow: rgba(230, 51, 41, 0.15);
+      --bg: #080808;
+      --surface: #111111;
+      --surface2: #1a1a1a;
+      --border: #222222;
+      --text: #f0f0f0;
+      --muted: #888888;
+      --dim: #444444;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Barlow', sans-serif;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 48px;
+      height: 72px;
+      background: rgba(8, 8, 8, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      transition: all 0.3s;
+    }
+
+    .nav-logo img {
+      height: 36px;
+      width: auto;
+      display: block;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 36px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .btn-login {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--red);
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-login:hover {
+      background: var(--red-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(230,51,41,0.3);
+    }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      padding: 120px 48px 80px;
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Diagonal red slash */
+    .hero-bg::before {
+      content: '';
+      position: absolute;
+      top: -10%;
+      right: -5%;
+      width: 55%;
+      height: 130%;
+      background: linear-gradient(135deg, transparent 40%, rgba(230,51,41,0.04) 40%, rgba(230,51,41,0.08) 60%, transparent 60%);
+      transform: skewX(-8deg);
+    }
+
+    /* Grid texture */
+    .hero-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 80% 80% at 70% 50%, black 30%, transparent 70%);
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 760px;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--red-glow);
+      border: 1px solid rgba(230,51,41,0.3);
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 28px;
+      opacity: 0;
+      animation: fadeUp 0.6s ease 0.1s forwards;
+    }
+
+    .hero-eyebrow::before {
+      content: '';
+      display: block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+
+    .hero h1 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: clamp(56px, 8vw, 108px);
+      font-weight: 900;
+      line-height: 0.92;
+      letter-spacing: -1px;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+      opacity: 0;
+      animation: fadeUp 0.6s ease 0.25s forwards;
+    }
+
+    .hero h1 em {
+      font-style: normal;
+      color: var(--red);
+    }
+
+    .hero-sub {
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--muted);
+      max-width: 520px;
+      line-height: 1.7;
+      margin-bottom: 40px;
+      opacity: 0;
+      animation: fadeUp 0.6s ease 0.4s forwards;
+    }
+
+    .hero-ctas {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      opacity: 0;
+      animation: fadeUp 0.6s ease 0.55s forwards;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--red);
+      color: #fff;
+      padding: 16px 32px;
+      border-radius: 6px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .btn-primary:hover {
+      background: var(--red-dark);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(230,51,41,0.35);
+    }
+
+    .btn-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      color: var(--text);
+      padding: 15px 28px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .btn-outline:hover {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    /* Stats bar */
+    .hero-stats {
+      position: absolute;
+      bottom: 48px;
+      left: 48px;
+      right: 48px;
+      display: flex;
+      align-items: center;
+      gap: 48px;
+      z-index: 1;
+      opacity: 0;
+      animation: fadeUp 0.6s ease 0.8s forwards;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-num {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 36px;
+      font-weight: 900;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    .stat-divider {
+      width: 1px;
+      height: 36px;
+      background: var(--border);
+    }
+
+    /* ── SECTIONS ── */
+    section {
+      padding: 100px 48px;
+    }
+
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 20px;
+    }
+
+    .section-label::before {
+      content: '';
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: var(--red);
+    }
+
+    .section-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: clamp(36px, 5vw, 60px);
+      font-weight: 800;
+      line-height: 1.0;
+      text-transform: uppercase;
+      letter-spacing: -0.5px;
+      margin-bottom: 20px;
+    }
+
+    .section-sub {
+      font-size: 16px;
+      color: var(--muted);
+      max-width: 560px;
+      line-height: 1.75;
+    }
+
+    /* ── WHAT IS VAST ── */
+    .what-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .what-right {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+    }
+
+    .what-card {
+      background: var(--surface);
+      padding: 28px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .what-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--red);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.3s;
+    }
+
+    .what-card:hover::before { transform: scaleX(1); }
+    .what-card:hover { background: var(--surface2); }
+
+    .what-card-icon {
+      font-size: 28px;
+      margin-bottom: 14px;
+    }
+
+    .what-card h4 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .what-card p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    /* ── SYSTEM FEATURES ── */
+    .features-bg {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      margin-top: 60px;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      padding: 40px 32px;
+      transition: background 0.2s;
+      position: relative;
+    }
+
+    .feature-card:hover { background: var(--surface2); }
+
+    .feature-num {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 72px;
+      font-weight: 900;
+      color: rgba(230,51,41,0.1);
+      line-height: 1;
+      margin-bottom: -12px;
+    }
+
+    .feature-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .feature-tag {
+      display: inline-block;
+      margin-top: 16px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--red);
+      border: 1px solid rgba(230,51,41,0.3);
+      padding: 3px 10px;
+      border-radius: 3px;
+    }
+
+    /* ── CADENCE ── */
+    .cadence-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 60px;
+    }
+
+    .cadence-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 36px 28px;
+      position: relative;
+      transition: border-color 0.2s;
+    }
+
+    .cadence-card:hover { border-color: var(--red); }
+
+    .cadence-freq {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 12px;
+    }
+
+    .cadence-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .cadence-items {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .cadence-items li {
+      font-size: 14px;
+      color: var(--muted);
+      padding-left: 16px;
+      position: relative;
+    }
+
+    .cadence-items li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: var(--red);
+      font-size: 12px;
+    }
+
+    /* ── NAVIGATOR CALLOUT ── */
+    .navigator-section {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .navigator-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .nav-blocks {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .nav-block {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+      transition: border-color 0.2s;
+    }
+
+    .nav-block:hover { border-color: rgba(230,51,41,0.4); }
+
+    .nav-block-label {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 6px;
+    }
+
+    .nav-block-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .nav-block p {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── WHO IT'S FOR ── */
+    .trades-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      margin-top: 60px;
+      background: var(--border);
+    }
+
+    .trade-item {
+      background: var(--surface);
+      padding: 36px 28px;
+      transition: background 0.2s;
+      text-align: center;
+    }
+
+    .trade-item:hover { background: var(--surface2); }
+
+    .trade-icon {
+      font-size: 36px;
+      margin-bottom: 14px;
+    }
+
+    .trade-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── CTA ── */
+    .cta-section {
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      padding: 120px 48px;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 60% at 50% 50%, rgba(230,51,41,0.08) 0%, transparent 70%);
+    }
+
+    .cta-section .section-title {
+      font-size: clamp(44px, 6vw, 80px);
+      margin: 0 auto 24px;
+      max-width: 800px;
+    }
+
+    .cta-section .section-sub {
+      margin: 0 auto 48px;
+      max-width: 480px;
+      text-align: center;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-logo img {
+      height: 28px;
+      width: auto;
+      opacity: 0.7;
+    }
+
+    .footer-copy {
+      font-size: 12px;
+      color: var(--dim);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      font-size: 12px;
+      color: var(--dim);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover { color: var(--muted); }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse-red {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(230,51,41,0.4); }
+      50%       { box-shadow: 0 0 0 12px rgba(230,51,41,0); }
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── TICKER TAPE ── */
+    .ticker-wrap {
+      overflow: hidden;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 14px 0;
+    }
+
+    .ticker {
+      display: flex;
+      gap: 0;
+      animation: ticker 30s linear infinite;
+      width: max-content;
+    }
+
+    .ticker-item {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 0 40px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--dim);
+      white-space: nowrap;
+    }
+
+    .ticker-item span {
+      color: var(--red);
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    @keyframes ticker {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      nav { padding: 0 24px; }
+      .nav-links { display: none; }
+      section { padding: 72px 24px; }
+      .hero { padding: 100px 24px 80px; }
+      .hero-stats { left: 24px; right: 24px; gap: 24px; }
+      .what-grid, .navigator-grid { grid-template-columns: 1fr; gap: 40px; }
+      .features-grid, .cadence-row { grid-template-columns: 1fr; }
+      .trades-grid { grid-template-columns: 1fr 1fr; }
+      footer { flex-direction: column; gap: 24px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a href="#" class="nav-logo">
+      <img src="data:image/jpeg;base64,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" alt="VAST — Venture Accelerator System for Trades" />
+    </a>
+    <ul class="nav-links">
+      <li><a href="#system">The System</a></li>
+      <li><a href="#cadence">Cadence</a></li>
+      <li><a href="#navigator">Navigator</a></li>
+      <li><a href="#who">Who It's For</a></li>
+    </ul>
+    <a href="./app" class="btn-login">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      Login to Platform
+    </a>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-content">
+      <div class="hero-eyebrow">Venture Accelerator System for Trades</div>
+      <h1>Run Your<br/>Business.<br/><em>Don't Let It</em><br/>Run You.</h1>
+      <p class="hero-sub">VAST is the operating system built specifically for trades businesses. Align your team, hit your targets, and grow with purpose — week after week, quarter after quarter.</p>
+      <div class="hero-ctas">
+        <a href="./app" class="btn-primary">
+          Get Started
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+        <a href="#system" class="btn-outline">See the System</a>
+      </div>
+    </div>
+
+    <div class="hero-stats">
+      <div class="stat-item">
+        <span class="stat-num">3</span>
+        <span class="stat-label">Meeting Cadences</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-num">90</span>
+        <span class="stat-label">Day Quarterly Focus</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-num">5</span>
+        <span class="stat-label">Core Tools</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-num">1</span>
+        <span class="stat-label">Platform. Built for Trades.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- TICKER -->
+  <div class="ticker-wrap">
+    <div class="ticker">
+      <div class="ticker-item"><span>◆</span> Navigator</div>
+      <div class="ticker-item"><span>◆</span> Weekly Huddle</div>
+      <div class="ticker-item"><span>◆</span> Quarterly Tasks</div>
+      <div class="ticker-item"><span>◆</span> Scorecard</div>
+      <div class="ticker-item"><span>◆</span> Issue Solving</div>
+      <div class="ticker-item"><span>◆</span> Responsibility Chart</div>
+      <div class="ticker-item"><span>◆</span> To-Do Tracking</div>
+      <div class="ticker-item"><span>◆</span> Meeting Ratings</div>
+      <div class="ticker-item"><span>◆</span> Headlines</div>
+      <div class="ticker-item"><span>◆</span> Historical Quarters</div>
+      <!-- duplicate for seamless loop -->
+      <div class="ticker-item"><span>◆</span> Navigator</div>
+      <div class="ticker-item"><span>◆</span> Weekly Huddle</div>
+      <div class="ticker-item"><span>◆</span> Quarterly Tasks</div>
+      <div class="ticker-item"><span>◆</span> Scorecard</div>
+      <div class="ticker-item"><span>◆</span> Issue Solving</div>
+      <div class="ticker-item"><span>◆</span> Responsibility Chart</div>
+      <div class="ticker-item"><span>◆</span> To-Do Tracking</div>
+      <div class="ticker-item"><span>◆</span> Meeting Ratings</div>
+      <div class="ticker-item"><span>◆</span> Headlines</div>
+      <div class="ticker-item"><span>◆</span> Historical Quarters</div>
+    </div>
+  </div>
+
+  <!-- WHAT IS VAST -->
+  <section id="about">
+    <div class="what-grid">
+      <div class="reveal">
+        <div class="section-label">What is VAST</div>
+        <h2 class="section-title">The Operating System Trades Companies Actually Need</h2>
+        <p class="section-sub">Most trades businesses run on gut instinct and spreadsheets. VAST gives you a proven framework — the same one that powers high-performing companies — adapted for the real world of plumbers, electricians, HVAC techs, contractors, and more.</p>
+        <p class="section-sub" style="margin-top: 16px;">Set a two-year vision. Execute it 90 days at a time. Solve problems weekly. Know your numbers. Stay aligned as a team.</p>
+        <a href="./app" class="btn-primary" style="margin-top: 36px; display: inline-flex;">Start for Free →</a>
+      </div>
+      <div class="what-right reveal" style="transition-delay: 0.15s;">
+        <div class="what-card">
+          <div class="what-card-icon">🧭</div>
+          <h4>Clear Direction</h4>
+          <p>Define your purpose, your market, and your 2-year target with the Navigator — your company's single source of truth.</p>
+        </div>
+        <div class="what-card">
+          <div class="what-card-icon">📊</div>
+          <h4>Track the Numbers</h4>
+          <p>Know your most important metrics every week. No surprises. No guessing. Just data that drives decisions.</p>
+        </div>
+        <div class="what-card">
+          <div class="what-card-icon">🎯</div>
+          <h4>Quarterly Focus</h4>
+          <p>Break your big goals into 90-day tasks your team can actually execute and stay accountable to.</p>
+        </div>
+        <div class="what-card">
+          <div class="what-card-icon">🤝</div>
+          <h4>Team Alignment</h4>
+          <p>Run structured weekly meetings that energize your people, solve real problems, and keep everyone rowing the same direction.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="system" class="features-bg">
+    <div class="reveal">
+      <div class="section-label">The VAST System</div>
+      <h2 class="section-title">Five Tools.<br/>One Platform.</h2>
+      <p class="section-sub">Everything your team needs to operate at a higher level, in one place — no integrations, no workarounds.</p>
+    </div>
+    <div class="features-grid reveal" style="transition-delay: 0.2s;">
+      <div class="feature-card">
+        <div class="feature-num">01</div>
+        <div class="feature-title">Navigator</div>
+        <p class="feature-desc">Your company's strategic blueprint. Capture your core values, top focus, marketing strategy, and 2-year financial targets in a single living document every team member can reference.</p>
+        <span class="feature-tag">Strategic Clarity</span>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">02</div>
+        <div class="feature-title">Weekly Huddle</div>
+        <p class="feature-desc">A structured 60-minute meeting with a built-in timer, attendance tracker, Good News spotlight, scorecard review, task check-in, headlines, to-do review, and live problem solving. Every single week.</p>
+        <span class="feature-tag">Team Cadence</span>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">03</div>
+        <div class="feature-title">Quarterly Tasks</div>
+        <p class="feature-desc">Set company-wide and individual 90-day SMART tasks. Track On Track, Off Track, and Done status. Flag off-track tasks directly to the Problem Solving queue during meetings.</p>
+        <span class="feature-tag">Execution</span>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">04</div>
+        <div class="feature-title">Scorecard</div>
+        <p class="feature-desc">Enter your most important numbers weekly — revenue, closed jobs, leads, NPS, or anything your business tracks. Assign ownership to each metric and see 8 weeks of history at a glance.</p>
+        <span class="feature-tag">Data & Accountability</span>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">05</div>
+        <div class="feature-title">Issue Solving (IDS)</div>
+        <p class="feature-desc">Identify, discuss, and solve your team's real problems. Select up to 3 issues to focus on each meeting, capture discussion notes, mark solved or push back for next time. Solved problems are archived by quarter.</p>
+        <span class="feature-tag">Problem Solving</span>
+      </div>
+      <div class="feature-card" style="background: var(--red-glow); border-left: 3px solid var(--red);">
+        <div class="feature-num" style="color: rgba(230,51,41,0.2);">+</div>
+        <div class="feature-title">Everything Else</div>
+        <p class="feature-desc">Headlines, To-Dos, Responsibility Chart, Meeting History, Historical Quarters archive, team attendance tracking, and a Good News spotlight to start every meeting the right way.</p>
+        <span class="feature-tag">Complete Platform</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- CADENCE -->
+  <section id="cadence">
+    <div class="reveal">
+      <div class="section-label">Meeting Cadence</div>
+      <h2 class="section-title">Annual. Quarterly.<br/>Weekly. Winning.</h2>
+      <p class="section-sub">Consistent meetings with reliable agendas are how high-performing teams stay aligned. VAST gives you the structure so you never have to wonder "what do we talk about today?"</p>
+    </div>
+    <div class="cadence-row reveal" style="transition-delay: 0.2s;">
+      <div class="cadence-card">
+        <div class="cadence-freq">Annual · 1–2 Days</div>
+        <div class="cadence-title">Company Vision</div>
+        <ul class="cadence-items">
+          <li>Revisit your Navigator</li>
+          <li>Set the year's focus</li>
+          <li>Define annual revenue &amp; profit targets</li>
+          <li>Align the leadership team</li>
+          <li>Establish Q1 Quarterly Tasks</li>
+        </ul>
+      </div>
+      <div class="cadence-card">
+        <div class="cadence-freq">Quarterly · ½–1 Day</div>
+        <div class="cadence-title">90-Day Sprint</div>
+        <ul class="cadence-items">
+          <li>Review prior quarter's tasks &amp; results</li>
+          <li>Archive quarter to Historical record</li>
+          <li>Set next quarter's Tasks</li>
+          <li>Resolve outstanding issues</li>
+          <li>Celebrate wins, address gaps</li>
+        </ul>
+      </div>
+      <div class="cadence-card">
+        <div class="cadence-freq">Weekly · 60–90 Min</div>
+        <div class="cadence-title">Weekly Huddle</div>
+        <ul class="cadence-items">
+          <li>Attendance &amp; Good News spotlight</li>
+          <li>Scorecard numbers review</li>
+          <li>Quarterly task check-in</li>
+          <li>Customer &amp; employee headlines</li>
+          <li>To-Do confirmation</li>
+          <li>Problem Solving (IDS)</li>
+          <li>Rate the meeting (1–10)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- NAVIGATOR -->
+  <section id="navigator" class="navigator-section">
+    <div class="navigator-grid">
+      <div class="reveal">
+        <div class="section-label">The Navigator</div>
+        <h2 class="section-title">Your Blueprint<br/>on One Page</h2>
+        <p class="section-sub">Most business owners have their vision locked in their heads. The Navigator gets it out and into a shared document your entire team can see, understand, and execute toward.</p>
+        <p class="section-sub" style="margin-top: 16px;">From your core values to your 2-year revenue target, every critical element of your business strategy lives in one place — accessible to every team member, always up to date.</p>
+        <a href="./app" class="btn-outline" style="margin-top: 36px; display: inline-flex;">Build Your Navigator →</a>
+      </div>
+      <div class="nav-blocks reveal" style="transition-delay: 0.15s;">
+        <div class="nav-block">
+          <div class="nav-block-label">Core Values</div>
+          <div class="nav-block-title">Who We Are</div>
+          <p>The non-negotiable principles that define how your company operates and hires.</p>
+        </div>
+        <div class="nav-block">
+          <div class="nav-block-label">Top Focus</div>
+          <div class="nav-block-title">Our Purpose</div>
+          <p>Why you exist, your primary avenue to market, and what you're truly building.</p>
+        </div>
+        <div class="nav-block">
+          <div class="nav-block-label">Major Motivator</div>
+          <div class="nav-block-title">What Drives Us</div>
+          <p>The emotional engine behind your company — the "why" that gets your team out of bed.</p>
+        </div>
+        <div class="nav-block">
+          <div class="nav-block-label">Marketing Strategy</div>
+          <div class="nav-block-title">How We Win</div>
+          <p>Target market, differentiation, proof points, and your core promise to customers.</p>
+        </div>
+        <div class="nav-block" style="grid-column: span 2;">
+          <div class="nav-block-label">2-Year Target</div>
+          <div class="nav-block-title">Where We're Going</div>
+          <p>A specific future date with revenue, profit, and a vivid description of what your company looks and feels like when you get there.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHO IT'S FOR -->
+  <section id="who">
+    <div style="text-align: center; max-width: 600px; margin: 0 auto;" class="reveal">
+      <div class="section-label" style="justify-content: center;">Who It's For</div>
+      <h2 class="section-title">Built for the Trades.<br/>All of Them.</h2>
+      <p class="section-sub" style="margin: 0 auto;">If your business does the physical work that keeps the world running, VAST was built for you.</p>
+    </div>
+    <div class="trades-grid reveal" style="transition-delay: 0.2s;">
+      <div class="trade-item"><div class="trade-icon">🔧</div><div class="trade-name">Plumbing</div></div>
+      <div class="trade-item"><div class="trade-icon">⚡</div><div class="trade-name">Electrical</div></div>
+      <div class="trade-item"><div class="trade-icon">❄️</div><div class="trade-name">HVAC</div></div>
+      <div class="trade-item"><div class="trade-icon">🏗️</div><div class="trade-name">General Contractors</div></div>
+      <div class="trade-item"><div class="trade-icon">🪟</div><div class="trade-name">Windows &amp; Doors</div></div>
+      <div class="trade-item"><div class="trade-icon">🎨</div><div class="trade-name">Painting</div></div>
+      <div class="trade-item"><div class="trade-icon">🌿</div><div class="trade-name">Landscaping</div></div>
+      <div class="trade-item"><div class="trade-icon">🔩</div><div class="trade-name">Any Trade</div></div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="reveal" style="position: relative; z-index: 1;">
+      <div class="section-label" style="justify-content: center;">Get Started Today</div>
+      <h2 class="section-title">Your Team Deserves<br/>a Better <em style="color: var(--red); font-style: normal;">System.</em></h2>
+      <p class="section-sub">Create your company account in minutes. Start running better meetings this week.</p>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap;">
+        <a href="./app" class="btn-primary" style="font-size: 18px; padding: 18px 40px;">
+          Launch VAST Platform
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+        <a href="#system" class="btn-outline">Learn More</a>
+      </div>
+      <p style="margin-top: 24px; font-size: 12px; color: var(--dim);">No credit card required &nbsp;·&nbsp; Company-isolated data &nbsp;·&nbsp; Start in minutes</p>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <a href="#" class="footer-logo">
+      <img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/wAARCAH0AfQDASIAAhEBAxEB/8QAHQABAAICAwEBAAAAAAAAAAAAAAgJBgcBBAUDAv/aAAwDAQACEQMRAD8AhkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//2Q==" alt="VAST" />
+    </a>
+    <span class="footer-copy">© 2025 VAST — Venture Accelerator System for Trades. All Rights Reserved.</span>
+    <ul class="footer-links">
+      <li><a href="#system">System</a></li>
+      <li><a href="#cadence">Cadence</a></li>
+      <li><a href="#who">Who It's For</a></li>
+      <li><a href="./app">Login</a></li>
+    </ul>
+  </footer>
+
+  <script>
+    // Scroll reveal
+    const reveals = document.querySelectorAll('.reveal');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+
+    reveals.forEach(el => observer.observe(el));
+
+    // Nav scroll effect
+    const nav = document.querySelector('nav');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 60) {
+        nav.style.borderBottomColor = 'rgba(255,255,255,0.08)';
+        nav.style.background = 'rgba(8,8,8,0.97)';
+      } else {
+        nav.style.borderBottomColor = 'rgba(255,255,255,0.05)';
+        nav.style.background = 'rgba(8,8,8,0.92)';
+      }
+    });
+
+    // Animated counters
+    const counters = document.querySelectorAll('.stat-num');
+    const targets = [3, 90, 5, 1];
+    let counted = false;
+
+    const countObserver = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !counted) {
+        counted = true;
+        counters.forEach((counter, i) => {
+          const target = targets[i];
+          let count = 0;
+          const step = Math.ceil(target / 30);
+          const timer = setInterval(() => {
+            count = Math.min(count + step, target);
+            counter.textContent = count;
+            if (count >= target) clearInterval(timer);
+          }, 40);
+        });
+      }
+    }, { threshold: 0.5 });
+
+    const heroStats = document.querySelector('.hero-stats');
+    if (heroStats) countObserver.observe(heroStats);
+  </script>
+</body>
+</html>
