@@ -19,7 +19,7 @@
       var ms = window.$memberstackDom;
       if (!ms) { alert("Loading... please try again in a moment."); return; }
       ms.openModal("SIGNUP", { planId: PLAN_ID }).then(function(res) {
-        if (res && res.data) window.location.href = "./app.html";
+        if (res && res.data) window.location.href = "/app.html";
       }).catch(function() {});
     }
 
@@ -28,7 +28,7 @@
       var ms = window.$memberstackDom;
       if (!ms) { alert("Loading... please try again in a moment."); return; }
       ms.openModal("LOGIN").then(function(res) {
-        if (res && res.data) window.location.href = "./app.html";
+        if (res && res.data) window.location.href = "/app.html";
       }).catch(function() {});
     }
 
@@ -38,7 +38,7 @@
         if (!window.$memberstackDom) return;
         clearInterval(check);
         window.$memberstackDom.getCurrentMember().then(function(res) {
-          if (res && res.data) window.location.href = "./app.html";
+          if (res && res.data) window.location.href = "/app.html";
         }).catch(function() {});
       }, 100);
     });
@@ -1001,7 +1001,7 @@
         <h2 class="section-title">Your Blueprint<br/>on One Page</h2>
         <p class="section-sub">Most business owners have their vision locked in their heads. The Navigator gets it out and into a shared document your entire team can see, understand, and execute toward.</p>
         <p class="section-sub" style="margin-top: 16px;">From your core values to your 2-year revenue target, every critical element of your business strategy lives in one place — accessible to every team member, always up to date.</p>
-        <a href="./app.html" class="btn-outline" style="margin-top: 36px; display: inline-flex;">Build Your Navigator →</a>
+        <a href="/app.html" class="btn-outline" style="margin-top: 36px; display: inline-flex;">Build Your Navigator →</a>
       </div>
       <div class="nav-blocks reveal" style="transition-delay: 0.15s;">
         <div class="nav-block">
@@ -1129,7 +1129,7 @@
       <li><a href="#cadence">Cadence</a></li>
       <li><a href="#who">Who It's For</a></li>
       <li><a href="#pricing">Pricing</a></li>
-      <li><a href="./app.html">Login</a></li>
+      <li><a href="/app.html">Login</a></li>
     </ul>
   </footer>
 
