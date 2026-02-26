@@ -112,7 +112,7 @@ const makeSTYLE = (C) => `
   .sidebar-link.active{background:${C.redGlow};color:${C.red};border-left:3px solid ${C.red};padding-left:13px}
   .divider{height:1px;background:${C.border};margin:12px 0}
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
-  .modal{background:${C.surface};border:1px solid ${C.border};border-radius:12px;padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto}
+  .modal{background:${C.surface};border:1px solid ${C.border};border-radius:12px;padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-sizing:border-box}
   .field{margin-bottom:16px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
@@ -129,6 +129,17 @@ const makeSTYLE = (C) => `
   .badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;background:${C.red};color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:0 6px}
   .checkbox{width:18px;height:18px;border-radius:4px;border:2px solid ${C.border};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s}
   .checkbox.checked{background:${C.green};border-color:${C.green};color:#fff}
+  /* ── Mobile ── */
+  @media(max-width:768px){
+    .grid2{grid-template-columns:1fr!important}
+    .grid3{grid-template-columns:1fr!important}
+    .card{padding:14px!important}
+    .modal{padding:20px!important;max-height:85vh!important}
+    .timer-display{font-size:36px!important}
+    .mob-stack{flex-direction:column!important}
+    .mob-hide{display:none!important}
+    .mob-full{width:100%!important}
+  }
   .stat-card{background:${C.surface};border:1px solid ${C.border};border-radius:10px;padding:20px;text-align:center}
   .vast-logo-text{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:800;letter-spacing:2px;color:#fff}
   .vast-logo-mark{color:${C.red};font-size:22px;margin-left:2px}
@@ -288,8 +299,19 @@ function VASTLogo({ size = "md" }) {
   );
 }
 
+// ─── MOBILE HOOK ─────────────────────────────────────────────────────
+function useMobile() {
+  const [mobile, setMobile] = React.useState(() => window.innerWidth <= 768);
+  React.useEffect(() => {
+    const fn = () => setMobile(window.innerWidth <= 768);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+  return mobile;
+}
+
 // ─── SIDEBAR ──────────────────────────────────────────────────────────
-function Sidebar({ view, setView, company, theme, toggleTheme }) {
+function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMobileOpen }) {
   const openIssues = company.issues?.filter(i => i.status !== "resolved").length || 0;
   const pendingTodos = company.todos?.filter(t => !t.done).length || 0;
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
@@ -306,59 +328,96 @@ function Sidebar({ view, setView, company, theme, toggleTheme }) {
     </button>
   );
 
-  return (
-    <div style={{ width: 220, minHeight: "100vh", background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", position: "fixed", left: 0, top: 0, zIndex: 50 }}>
-      <div style={{ padding: "16px", borderBottom: `1px solid ${C.border}` }}>
-        <VASTLogo size="md" />
-        <div style={{ marginTop: 8, fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{company.name}</div>
-      </div>
+  const navItems = (
+    <>
+      <Link id="dashboard" icon={Icon.dashboard} label="Dashboard" />
+      <SectionLabel label="Navigators" />
+      {navigators.map(n => <Link key={n.id} id={"navigator:" + n.id} icon={Icon.navigator} label={n.name} />)}
+      <SectionLabel label="Huddles" />
+      {huddles.map(h => <Link key={h.id} id={"huddle:" + h.id} icon={Icon.huddle} label={h.name} />)}
+      <SectionLabel label="Org Charts" />
+      {orgCharts.map(o => <Link key={o.id} id={"orgchart:" + o.id} icon={Icon.org} label={o.name} />)}
+      <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 8, paddingTop: 8 }} />
+      <Link id="tasks" icon={Icon.tasks} label="Quarterly Tasks" />
+      <Link id="scorecard" icon={Icon.scorecard} label="Scorecard" />
+      <Link id="headlines" icon={Icon.headlines} label="Headlines" />
+      <Link id="issues" icon={Icon.issues} label="Issues" badge={openIssues} />
+      <Link id="todos" icon={Icon.tasks} label="To-Dos" badge={pendingTodos} />
+      <Link id="history" icon={Icon.history} label="Meeting History" />
+      <Link id="quarterhistory" icon={Icon.archive} label="Historical Quarters" />
+      <Link id="settings" icon={Icon.settings} label="Settings" />
+    </>
+  );
 
-      <nav style={{ flex: 1, padding: "12px 8px", overflowY: "auto" }}>
-        <Link id="dashboard" icon={Icon.dashboard} label="Dashboard" />
-
-        <SectionLabel label="Navigators" />
-        {navigators.map(n => <Link key={n.id} id={"navigator:" + n.id} icon={Icon.navigator} label={n.name} />)}
-
-        <SectionLabel label="Huddles" />
-        {huddles.map(h => <Link key={h.id} id={"huddle:" + h.id} icon={Icon.huddle} label={h.name} />)}
-
-        <SectionLabel label="Org Charts" />
-        {orgCharts.map(o => <Link key={o.id} id={"orgchart:" + o.id} icon={Icon.org} label={o.name} />)}
-
-        <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 8, paddingTop: 8 }} />
-        <Link id="tasks" icon={Icon.tasks} label="Quarterly Tasks" />
-        <Link id="scorecard" icon={Icon.scorecard} label="Scorecard" />
-        <Link id="headlines" icon={Icon.headlines} label="Headlines" />
-        <Link id="issues" icon={Icon.issues} label="Issues" badge={openIssues} />
-        <Link id="todos" icon={Icon.tasks} label="To-Dos" badge={pendingTodos} />
-        <Link id="history" icon={Icon.history} label="Meeting History" />
-        <Link id="quarterhistory" icon={Icon.archive} label="Historical Quarters" />
-        <Link id="settings" icon={Icon.settings} label="Settings" />
-      </nav>
-
-      <div style={{ padding: "12px 8px", borderTop: `1px solid ${C.border}` }}>
-        <button className="sidebar-link" onClick={toggleTheme} style={{ marginBottom: 4 }}>
-          <span style={{ fontSize: 15 }}>{theme === "dark" ? "☀️" : "🌙"}</span>
-          <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
-        </button>
-        <button className="sidebar-link" onClick={() => window.$memberstackDom?.logout().then(() => { window.location.href = "/index.html"; })}><Icon.logout /> Sign Out</button>
-      </div>
+  const footer = (
+    <div style={{ padding: "12px 8px", borderTop: `1px solid ${C.border}` }}>
+      <button className="sidebar-link" onClick={toggleTheme} style={{ marginBottom: 4 }}>
+        <span style={{ fontSize: 15 }}>{theme === "dark" ? "☀️" : "🌙"}</span>
+        <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+      </button>
+      <button className="sidebar-link" onClick={() => window.$memberstackDom?.logout().then(() => { window.location.href = "/index.html"; })}><Icon.logout /> Sign Out</button>
     </div>
+  );
+
+  // Desktop sidebar
+  return (
+    <>
+      {/* Mobile: overlay backdrop */}
+      {mobileOpen && (
+        <div onClick={() => setMobileOpen(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 49 }} />
+      )}
+
+      {/* Sidebar panel — fixed on desktop, slide-in drawer on mobile */}
+      <div style={{
+        width: 220, minHeight: "100vh", background: C.surface,
+        borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column",
+        position: "fixed", left: 0, top: 0, zIndex: 50,
+        transform: typeof mobileOpen !== "undefined" && window.innerWidth <= 768
+          ? (mobileOpen ? "translateX(0)" : "translateX(-100%)")
+          : "translateX(0)",
+        transition: "transform 0.25s ease",
+      }}>
+        <div style={{ padding: "16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <VASTLogo size="md" />
+            <div style={{ marginTop: 6, fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{company.name}</div>
+          </div>
+          {mobileOpen && (
+            <button onClick={() => setMobileOpen(false)}
+              style={{ background: "none", border: "none", color: C.textMuted, fontSize: 22, cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}>✕</button>
+          )}
+        </div>
+        <nav style={{ flex: 1, padding: "12px 8px", overflowY: "auto" }}>{navItems}</nav>
+        {footer}
+      </div>
+    </>
   );
 }
 
 // ─── MAIN LAYOUT ──────────────────────────────────────────────────────
+const MobileMenuContext = React.createContext(() => {});
+
 function Layout({ children, title, subtitle, action }) {
+  const mobile = useMobile();
+  const openMobileMenu = React.useContext(MobileMenuContext);
   return (
-    <div style={{ marginLeft: 220, minHeight: "100vh", background: C.bg }}>
-      <div style={{ borderBottom: `1px solid ${C.border}`, padding: "20px 32px", background: C.surface, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: C.text }}>{title}</h1>
-          {subtitle && <div style={{ fontSize: 13, color: C.textMuted, marginTop: 2 }}>{subtitle}</div>}
+    <div style={{ marginLeft: mobile ? 0 : 220, minHeight: "100vh", background: C.bg, paddingBottom: mobile ? 16 : 0 }}>
+      {/* Header */}
+      <div style={{ borderBottom: `1px solid ${C.border}`, padding: mobile ? "14px 16px" : "20px 32px", background: C.surface, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, position: "sticky", top: 0, zIndex: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: mobile ? 10 : 0, minWidth: 0 }}>
+          {mobile && (
+            <button onClick={openMobileMenu}
+              style={{ background: "none", border: "none", color: C.text, fontSize: 22, cursor: "pointer", padding: "2px 6px", lineHeight: 1, flexShrink: 0 }}>☰</button>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: mobile ? 18 : 26, fontWeight: 800, color: C.text, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</h1>
+            {subtitle && <div style={{ fontSize: mobile ? 11 : 13, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subtitle}</div>}
+          </div>
         </div>
-        {action}
+        {action && <div style={{ flexShrink: 0 }}>{action}</div>}
       </div>
-      <div style={{ padding: "28px 32px" }} className="fade-in">{children}</div>
+      <div style={{ padding: mobile ? "16px" : "28px 32px" }} className="fade-in">{children}</div>
     </div>
   );
 }
@@ -431,7 +490,7 @@ function Dashboard({ company, setView }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 16, marginBottom: 24 }}>
         {[
           { label: "Quarterly Tasks", value: `${onTrack + done}/${total}`, sub: "on or completed", color: C.red },
           { label: "Open Issues", value: openIssues, sub: "to resolve", color: C.yellow },
@@ -542,7 +601,7 @@ function Navigator({ company, onSave, navigatorId, navigatorName }) {
   return (
     <Layout title={navigatorName} subtitle="Your company's operating blueprint"
       action={<button className="btn-primary" onClick={save}>{saved ? "✓ Saved" : "Save Navigator"}</button>}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 16 }}>
         <div>
           <NavSection label="Core Values">
             {[0, 1, 2].map(i => (
@@ -973,7 +1032,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
   return (
     <Layout title={`${huddleName} — Live`} subtitle={`Total: ${fmt(elapsed)}`}>
-      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "min(280px,100%) 1fr", gap: 20 }} className="mob-stack">
         {/* Agenda sidebar */}
         <div>
           <div className="card" style={{ marginBottom: 12 }}>
@@ -1048,7 +1107,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                   <h3 style={{ fontSize: 18, margin: 0 }}>Scorecard — {company.currentQuarter || "This Quarter"}</h3>
                   <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>{weeks.length} weeks · enter this week's numbers in the <span style={{ color: C.red, fontWeight: 700 }}>highlighted column</span></div>
                 </div>
-                <div style={{ overflowX: "auto" }}>
+                <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr>
@@ -2422,7 +2481,7 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {leaders.map((l, i) => (
-            <div key={l.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr auto", gap: 10, alignItems: "start", padding: "12px 14px", background: C.surface2, borderRadius: 8, border: `1px solid ${C.border}` }}>
+            <div key={l.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "start", padding: "12px 14px", background: C.surface2, borderRadius: 8, border: `1px solid ${C.border}` }}>
               <div className="field" style={{ margin: 0 }}>
                 <label className="label">Title</label>
                 <input value={l.title} onChange={e => setLeader(l.id, "title", e.target.value)} placeholder="e.g. CEO, Visionary" />
@@ -2664,7 +2723,7 @@ function Settings({ company, onSave }) {
 
   return (
     <Layout title="Settings" subtitle={company.name}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 900 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 20, maxWidth: 900 }}>
         <div>
           <div className="card" style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 18, marginBottom: 16 }}>Company Name</h3>
@@ -3061,6 +3120,7 @@ function GlobalStyles({ theme }) {
 function VASTApp() {
   const [company, setCompanyState] = useState(null);
   const [view, setView] = useState("dashboard");
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("vast-theme") || "dark");
 
   // Reassign global C before every render so all children pick up current theme
@@ -3115,7 +3175,8 @@ function VASTApp() {
   return (
     <div style={{ minHeight: "100vh", background: C.bg }}>
       <GlobalStyles theme={theme} />
-      <Sidebar view={view} setView={setView} company={company} theme={theme} toggleTheme={toggleTheme} />
+      <MobileMenuContext.Provider value={() => setMobileOpen(true)}>
+      <Sidebar view={view} setView={v => { setView(v); setMobileOpen(false); }} company={company} theme={theme} toggleTheme={toggleTheme} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       {view === "dashboard" && <Dashboard {...viewProps} setView={setView} />}
       {view.startsWith("navigator:") && (() => {
         const nid = view.slice(10);
