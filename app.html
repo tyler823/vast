@@ -508,6 +508,15 @@ function Dashboard({ company, setView }) {
 }
 
 // ─── NAVIGATOR ────────────────────────────────────────────────────────
+function NavSection({ label, children }) {
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div style={{ background: C.red, color: "#fff", fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 2, textTransform: "uppercase", padding: "8px 16px", borderRadius: 6, marginBottom: 16, display: "inline-block" }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
 function Navigator({ company, onSave, navigatorId, navigatorName }) {
   const navigators = company.navigators || [{ id: "nav-1", name: "Navigator", coreValues: ["","",""] }];
   const navObj = navigators.find(n => n.id === navigatorId) || navigators[0] || {};
@@ -528,28 +537,23 @@ function Navigator({ company, onSave, navigatorId, navigatorName }) {
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   };
 
-  const Section = ({ label, children }) => (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div style={{ background: C.red, color: "#fff", fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 2, textTransform: "uppercase", padding: "8px 16px", borderRadius: 6, marginBottom: 16, display: "inline-block" }}>{label}</div>
-      {children}
-    </div>
-  );
+  // Section defined outside component to avoid remount on re-render
 
   return (
     <Layout title={navigatorName} subtitle="Your company's operating blueprint"
       action={<button className="btn-primary" onClick={save}>{saved ? "✓ Saved" : "Save Navigator"}</button>}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
-          <Section label="Core Values">
+          <NavSection label="Core Values">
             {[0, 1, 2].map(i => (
               <div key={i} className="field">
                 <label className="label">Value {i + 1}</label>
                 <input placeholder={`Core value ${i + 1}`} value={(nav.coreValues || [])[i] || ""} onChange={e => setCV(i, e.target.value)} />
               </div>
             ))}
-          </Section>
+          </NavSection>
 
-          <Section label="Top Focus">
+          <NavSection label="Top Focus">
             <div className="field">
               <label className="label">Purpose — Why we exist</label>
               <input placeholder="Our purpose..." value={nav.purpose || ""} onChange={e => set("purpose", e.target.value)} />
@@ -558,18 +562,18 @@ function Navigator({ company, onSave, navigatorId, navigatorName }) {
               <label className="label">Our Avenue — How we deliver</label>
               <input placeholder="Through..." value={nav.avenue || ""} onChange={e => set("avenue", e.target.value)} />
             </div>
-          </Section>
+          </NavSection>
 
-          <Section label="Major Motivator">
+          <NavSection label="Major Motivator">
             <div className="field">
               <label className="label">What drives us</label>
               <textarea placeholder="Our major motivator is..." value={nav.majorMotivator || ""} onChange={e => set("majorMotivator", e.target.value)} />
             </div>
-          </Section>
+          </NavSection>
         </div>
 
         <div>
-          <Section label="Marketing Strategy">
+          <NavSection label="Marketing Strategy">
             <div className="field">
               <label className="label">Target Market</label>
               <input placeholder="We serve..." value={nav.targetMarket || ""} onChange={e => set("targetMarket", e.target.value)} />
@@ -586,9 +590,9 @@ function Navigator({ company, onSave, navigatorId, navigatorName }) {
               <label className="label">Our Promise</label>
               <input placeholder="We guarantee..." value={nav.promise || ""} onChange={e => set("promise", e.target.value)} />
             </div>
-          </Section>
+          </NavSection>
 
-          <Section label="2 Year Target">
+          <NavSection label="2 Year Target">
             <div className="grid2">
               <div className="field">
                 <label className="label">Future Date</label>
@@ -607,7 +611,7 @@ function Navigator({ company, onSave, navigatorId, navigatorName }) {
               <label className="label">What Does It Look Like?</label>
               <textarea placeholder="In 2 years, we will..." value={nav.whatLooksLike || ""} onChange={e => set("whatLooksLike", e.target.value)} />
             </div>
-          </Section>
+          </NavSection>
         </div>
       </div>
     </Layout>
@@ -2304,6 +2308,17 @@ function Todos({ company, onSave }) {
 }
 
 // ─── ORG CHART ────────────────────────────────────────────────────────
+function PreviewBox({ label, name, note, color }) {
+  color = color || C.red;
+  return (
+    <div style={{ background: C.surface, border: `2px solid ${color}`, borderRadius: 8, padding: "10px 14px", minWidth: 140, maxWidth: 200, flexShrink: 0 }}>
+      <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 14, fontWeight: 800, color, marginBottom: 2 }}>{label}</div>
+      {name && <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{name}</div>}
+      {note && <div style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.4 }}>{note}</div>}
+    </div>
+  );
+}
+
 const DEFAULT_CHART_LEADERS = [
   { id: "l1", title: "Dreamer (Visionary)", name: "", responsibilities: "Big Ideas, Strategic Thinking, Culture, R&D" },
   { id: "l2", title: "Doer (Integrator)", name: "", responsibilities: "Fulfillment, Business Plan, Lead, Bridge Building" },
@@ -2370,13 +2385,7 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
   const leaders = chart.leaders || DEFAULT_CHART_LEADERS;
   const departments = chart.departments || DEFAULT_CHART_DEPTS;
 
-  const PreviewBox = ({ label, name, note, color = C.red }) => (
-    <div style={{ background: C.surface, border: `2px solid ${color}`, borderRadius: 8, padding: "10px 14px", minWidth: 140, maxWidth: 200, flexShrink: 0 }}>
-      <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 14, fontWeight: 800, color, marginBottom: 2 }}>{label}</div>
-      {name && <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{name}</div>}
-      {note && <div style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.4 }}>{note}</div>}
-    </div>
-  );
+  // PreviewBox defined at module level to avoid remount
 
   return (
     <Layout title={orgChartName} subtitle="Define roles and accountability"
