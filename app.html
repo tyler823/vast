@@ -615,6 +615,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const [attendance, setAttendance] = useState({});
   const [spotlight, setSpotlight] = useState(null);
   const [spinning, setSpinning] = useState(false);
+  const [alreadySelected, setAlreadySelected] = useState([]); // ids selected this session
   // Problem solving session state
   const [focusQueue, setFocusQueue] = useState([]); // up to 3 selected items being discussed
   const [activeIssueId, setActiveIssueId] = useState(null);
