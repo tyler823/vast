@@ -517,7 +517,7 @@ function Navigator({ company, onSave, navigatorId, navigatorName }) {
   useEffect(() => {
     const n = (company.navigators || []).find(x => x.id === navigatorId) || {};
     setNav(n);
-  }, [navigatorId, company.navigators]);
+  }, [navigatorId]); // only re-sync when switching navigators, not on every company save
 
   const set = (k, v) => setNav(n => ({ ...n, [k]: v }));
   const setCV = (i, v) => { const cv = [...(nav.coreValues || ["", "", ""])]; cv[i] = v; set("coreValues", cv); };
@@ -2304,18 +2304,47 @@ function Todos({ company, onSave }) {
 }
 
 // ─── ORG CHART ────────────────────────────────────────────────────────
+const DEFAULT_CHART_LEADERS = [
+  { id: "l1", title: "Dreamer (Visionary)", name: "", responsibilities: "Big Ideas, Strategic Thinking, Culture, R&D" },
+  { id: "l2", title: "Doer (Integrator)", name: "", responsibilities: "Fulfillment, Business Plan, Lead, Bridge Building" },
+];
+const DEFAULT_CHART_DEPTS = [
+  { id: "d1", label: "Sales / Marketing", color: "blue",   staff: [] },
+  { id: "d2", label: "Operations",        color: "yellow", staff: [] },
+  { id: "d3", label: "Finance",           color: "green",  staff: [] },
+];
+const DEPT_COLORS = ["blue","yellow","green","red","purple"];
+const deptColor = (c) => ({ blue: C.blue, yellow: C.yellow, green: C.green, red: C.red, purple: "#a855f7" })[c] || C.blue;
+
+function migrateChart(raw) {
+  // Migrate old dreamer/doer/salesRoles etc. format to new leaders/departments format
+  if (raw.leaders) return raw; // already migrated
+  const leaders = [
+    { id: "l1", title: "Dreamer (Visionary)", name: raw.dreamer || "", responsibilities: "Big Ideas, Strategic Thinking, Culture, R&D" },
+    { id: "l2", title: "Doer (Integrator)",   name: raw.doer   || "", responsibilities: "Fulfillment, Business Plan, Lead, Bridge Building" },
+  ];
+  const deptMap = [
+    { id: "d1", label: "Sales / Marketing", color: "blue",   key: "salesRoles" },
+    { id: "d2", label: "Operations",        color: "yellow", key: "opsRoles" },
+    { id: "d3", label: "Finance",           color: "green",  key: "financeRoles" },
+  ];
+  const departments = deptMap.map(d => ({
+    id: d.id, label: d.label, color: d.color,
+    staff: (raw[d.key] || []).flatMap(r => r.members.map(name => ({ id: uid(), title: r.role, name }))),
+  }));
+  return { ...raw, leaders, departments };
+}
+
 function OrgChart({ company, onSave, orgChartId, orgChartName }) {
   const orgCharts = company.orgCharts || [{ id: "org-1", name: "Responsibility Chart" }];
-  const chartObj = orgCharts.find(o => o.id === orgChartId) || orgCharts[0] || {};
-  const [chart, setChart] = useState(chartObj);
+  const rawObj = orgCharts.find(o => o.id === orgChartId) || orgCharts[0] || {};
+  const [chart, setChart] = useState(() => migrateChart(rawObj));
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    const o = (company.orgCharts || []).find(x => x.id === orgChartId) || {};
-    setChart(o);
-  }, [orgChartId, company.orgCharts]);
-
-  const set = (k, v) => setChart(c => ({ ...c, [k]: v }));
+    const raw = (company.orgCharts || []).find(x => x.id === orgChartId) || {};
+    setChart(migrateChart(raw));
+  }, [orgChartId]);
 
   const save = () => {
     const updated = orgCharts.map(o => o.id === orgChartId ? { ...chart, id: orgChartId, name: orgChartName } : o);
@@ -2323,10 +2352,29 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   };
 
-  const Box = ({ title, items, color = C.red }) => (
-    <div style={{ background: C.surface, border: `2px solid ${color}`, borderRadius: 8, padding: "12px 16px", minWidth: 160 }}>
-      <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 16, fontWeight: 700, borderBottom: `1px solid ${C.border}`, paddingBottom: 6, marginBottom: 8 }}>{title}</div>
-      {items.map((item, i) => <div key={i} style={{ fontSize: 13, color: C.textMuted, marginBottom: 4 }}>• {item}</div>)}
+  // Leaders
+  const setLeader = (id, k, v) => setChart(c => ({ ...c, leaders: (c.leaders || DEFAULT_CHART_LEADERS).map(l => l.id === id ? { ...l, [k]: v } : l) }));
+  const addLeader = () => setChart(c => ({ ...c, leaders: [...(c.leaders || DEFAULT_CHART_LEADERS), { id: uid(), title: "New Role", name: "", responsibilities: "" }] }));
+  const removeLeader = (id) => setChart(c => ({ ...c, leaders: (c.leaders || []).filter(l => l.id !== id) }));
+
+  // Departments
+  const setDept = (id, k, v) => setChart(c => ({ ...c, departments: (c.departments || DEFAULT_CHART_DEPTS).map(d => d.id === id ? { ...d, [k]: v } : d) }));
+  const addDept = () => setChart(c => ({ ...c, departments: [...(c.departments || DEFAULT_CHART_DEPTS), { id: uid(), label: "New Department", color: DEPT_COLORS[(c.departments||[]).length % DEPT_COLORS.length], staff: [] }] }));
+  const removeDept = (id) => setChart(c => ({ ...c, departments: (c.departments || []).filter(d => d.id !== id) }));
+
+  // Staff
+  const addStaff = (deptId) => setChart(c => ({ ...c, departments: (c.departments||[]).map(d => d.id === deptId ? { ...d, staff: [...(d.staff||[]), { id: uid(), title: "", name: "" }] } : d) }));
+  const setStaff = (deptId, staffId, k, v) => setChart(c => ({ ...c, departments: (c.departments||[]).map(d => d.id === deptId ? { ...d, staff: (d.staff||[]).map(s => s.id === staffId ? { ...s, [k]: v } : s) } : d) }));
+  const removeStaff = (deptId, staffId) => setChart(c => ({ ...c, departments: (c.departments||[]).map(d => d.id === deptId ? { ...d, staff: (d.staff||[]).filter(s => s.id !== staffId) } : d) }));
+
+  const leaders = chart.leaders || DEFAULT_CHART_LEADERS;
+  const departments = chart.departments || DEFAULT_CHART_DEPTS;
+
+  const PreviewBox = ({ label, name, note, color = C.red }) => (
+    <div style={{ background: C.surface, border: `2px solid ${color}`, borderRadius: 8, padding: "10px 14px", minWidth: 140, maxWidth: 200, flexShrink: 0 }}>
+      <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 14, fontWeight: 800, color, marginBottom: 2 }}>{label}</div>
+      {name && <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{name}</div>}
+      {note && <div style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.4 }}>{note}</div>}
     </div>
   );
 
@@ -2334,66 +2382,121 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
     <Layout title={orgChartName} subtitle="Define roles and accountability"
       action={<button className="btn-primary" onClick={save}>{saved ? "✓ Saved" : "Save Chart"}</button>}>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-        <div>
-          <div className="card" style={{ marginBottom: 16 }}>
-            <h3 style={{ fontSize: 18, marginBottom: 16 }}>Dreamer (Visionary)</h3>
-            <div className="field">
-              <label className="label">Name</label>
-              <input placeholder="Who is the Dreamer?" value={chart.dreamer || ""} onChange={e => set("dreamer", e.target.value)} />
-            </div>
-            <div style={{ fontSize: 13, color: C.textMuted }}>Responsibilities: Big Ideas, Strategic Thinking, Culture, R&D</div>
-          </div>
-
-          <div className="card" style={{ marginBottom: 16 }}>
-            <h3 style={{ fontSize: 18, marginBottom: 16 }}>Doer (Integrator)</h3>
-            <div className="field">
-              <label className="label">Name</label>
-              <input placeholder="Who is the Doer?" value={chart.doer || ""} onChange={e => set("doer", e.target.value)} />
-            </div>
-            <div style={{ fontSize: 13, color: C.textMuted }}>Responsibilities: Fulfillment, Business Plan, Lead, Bridge Building</div>
-          </div>
+      {/* ── LEADERSHIP TIER ── */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <h3 style={{ fontSize: 18, margin: 0 }}>Leadership</h3>
+          <button className="btn-secondary" style={{ fontSize: 12, padding: "6px 12px" }} onClick={addLeader}>+ Add Role</button>
         </div>
-
-        <div>
-          {[
-            { key: "salesRoles", label: "Sales / Marketing", items: ["Marketing/Sales", "Revenue Generation", "Partner Relations"] },
-            { key: "opsRoles", label: "Operations", items: ["Field Work", "Process Mgmt", "Providing the Service", "Customer Service"] },
-            { key: "financeRoles", label: "Finance", items: ["Accounting", "Reporting", "HR/Administration"] },
-          ].map(dept => (
-            <div key={dept.key} className="card" style={{ marginBottom: 16 }}>
-              <h3 style={{ fontSize: 18, marginBottom: 16 }}>{dept.label}</h3>
-              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 12 }}>{dept.items.join(" · ")}</div>
-              <div className="field">
-                <label className="label">Team Members</label>
-                <textarea placeholder="List team members and their roles..."
-                  value={(chart[dept.key] || []).map(r => `${r.role}: ${r.members.join(", ")}`).join("\n")}
-                  onChange={e => {
-                    const lines = e.target.value.split("\n");
-                    const roles = lines.map(l => { const [r, ...m] = l.split(":"); return { role: r?.trim(), members: m.join(":").split(",").map(x => x.trim()).filter(Boolean) }; }).filter(r => r.role);
-                    set(dept.key, roles);
-                  }}
-                  style={{ minHeight: 80 }} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {leaders.map((l, i) => (
+            <div key={l.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr auto", gap: 10, alignItems: "start", padding: "12px 14px", background: C.surface2, borderRadius: 8, border: `1px solid ${C.border}` }}>
+              <div className="field" style={{ margin: 0 }}>
+                <label className="label">Title</label>
+                <input value={l.title} onChange={e => setLeader(l.id, "title", e.target.value)} placeholder="e.g. CEO, Visionary" />
               </div>
+              <div className="field" style={{ margin: 0 }}>
+                <label className="label">Person</label>
+                {(company.members||[]).length > 0 ? (
+                  <select value={l.name} onChange={e => setLeader(l.id, "name", e.target.value)}>
+                    <option value="">— Select —</option>
+                    {(company.members||[]).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                    <option value="__custom">Other...</option>
+                  </select>
+                ) : (
+                  <input value={l.name} onChange={e => setLeader(l.id, "name", e.target.value)} placeholder="Name" />
+                )}
+                {l.name === "__custom" && <input style={{ marginTop: 6 }} placeholder="Enter name..." onChange={e => setLeader(l.id, "name", e.target.value)} />}
+              </div>
+              <div className="field" style={{ margin: 0 }}>
+                <label className="label">Responsibilities</label>
+                <input value={l.responsibilities} onChange={e => setLeader(l.id, "responsibilities", e.target.value)} placeholder="Key responsibilities..." />
+              </div>
+              {leaders.length > 1 && (
+                <button className="btn-danger" style={{ padding: "6px 10px", marginTop: 20 }} onClick={() => removeLeader(l.id)}><Icon.trash /></button>
+              )}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Visual preview */}
-      <div className="card" style={{ marginTop: 20 }}>
-        <h3 style={{ fontSize: 18, marginBottom: 20 }}>Chart Preview</h3>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
-          <Box title={`Dreamer${chart.dreamer ? ` — ${chart.dreamer}` : ""}`} items={["Big Ideas", "Strategic Thinking", "Culture", "R&D"]} />
-          <div style={{ width: 2, height: 24, background: C.border }} />
-          <Box title={`Doer${chart.doer ? ` — ${chart.doer}` : ""}`} items={["Fulfillment", "Business Plan", "Lead", "Bridge Building"]} />
-          <div style={{ width: 2, height: 24, background: C.border }} />
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 24, position: "relative" }}>
-            <div style={{ position: "absolute", top: 0, left: "16.5%", right: "16.5%", height: 2, background: C.border }} />
-            <Box title="Sales/Mktg" items={["Marketing/Sales", "Revenue Generation", "Partner Relations"]} color={C.blue} />
-            <Box title="Operations" items={["Field Work", "Process Mgmt", "Service Delivery", "Customer Service"]} color={C.yellow} />
-            <Box title="Finance" items={["Accounting", "Reporting", "HR/Admin"]} color={C.green} />
+      {/* ── DEPARTMENTS ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16, marginBottom: 16 }}>
+        {departments.map(dept => (
+          <div key={dept.id} className="card" style={{ borderTop: `3px solid ${deptColor(dept.color)}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <input value={dept.label} onChange={e => setDept(dept.id, "label", e.target.value)}
+                style={{ flex: 1, fontFamily: "'Barlow Condensed',sans-serif", fontSize: 17, fontWeight: 800, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, padding: "2px 0", outline: "none" }} />
+              <select value={dept.color} onChange={e => setDept(dept.id, "color", e.target.value)}
+                style={{ width: 80, fontSize: 11, padding: "4px 6px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, color: C.text }}>
+                <option value="blue">Blue</option>
+                <option value="yellow">Yellow</option>
+                <option value="green">Green</option>
+                <option value="red">Red</option>
+                <option value="purple">Purple</option>
+              </select>
+              <button className="btn-danger" style={{ padding: "4px 8px", fontSize: 11 }} onClick={() => removeDept(dept.id)}><Icon.trash /></button>
+            </div>
+
+            {/* Staff rows */}
+            {(dept.staff || []).map(s => (
+              <div key={s.id} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                <input value={s.title} onChange={e => setStaff(dept.id, s.id, "title", e.target.value)}
+                  placeholder="Title" style={{ flex: 1, fontSize: 12, padding: "6px 8px" }} />
+                {(company.members||[]).length > 0 ? (
+                  <select value={s.name} onChange={e => setStaff(dept.id, s.id, "name", e.target.value)} style={{ flex: 1, fontSize: 12, padding: "6px 8px" }}>
+                    <option value="">— Name —</option>
+                    {(company.members||[]).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                  </select>
+                ) : (
+                  <input value={s.name} onChange={e => setStaff(dept.id, s.id, "name", e.target.value)}
+                    placeholder="Name" style={{ flex: 1, fontSize: 12, padding: "6px 8px" }} />
+                )}
+                <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim, flexShrink: 0 }} onClick={() => removeStaff(dept.id, s.id)}><Icon.trash /></button>
+              </div>
+            ))}
+            <button className="btn-secondary" style={{ width: "100%", fontSize: 12, padding: "7px", marginTop: 4 }} onClick={() => addStaff(dept.id)}>
+              + Add Staff
+            </button>
           </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button className="btn-secondary" style={{ padding: "12px 20px", fontSize: 13 }} onClick={addDept}>+ Add Department</button>
+        </div>
+      </div>
+
+      {/* ── VISUAL PREVIEW ── */}
+      <div className="card" style={{ marginTop: 4, overflowX: "auto" }}>
+        <h3 style={{ fontSize: 18, marginBottom: 20 }}>Chart Preview</h3>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 400 }}>
+          {/* Leaders chain */}
+          {leaders.map((l, i) => (
+            <React.Fragment key={l.id}>
+              <PreviewBox label={l.title} name={l.name} note={l.responsibilities} color={C.red} />
+              {i < leaders.length - 1 && <div style={{ width: 2, height: 20, background: C.border }} />}
+            </React.Fragment>
+          ))}
+          {/* Connector to departments */}
+          {departments.length > 0 && (
+            <>
+              <div style={{ width: 2, height: 20, background: C.border }} />
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 16, position: "relative", flexWrap: "wrap", justifyContent: "center" }}>
+                {departments.length > 1 && (
+                  <div style={{ position: "absolute", top: 0, left: "10%", right: "10%", height: 2, background: C.border, zIndex: 0 }} />
+                )}
+                {departments.map(dept => (
+                  <div key={dept.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", zIndex: 1 }}>
+                    <PreviewBox
+                      label={dept.label}
+                      name=""
+                      note={(dept.staff||[]).map(s => `${s.title}${s.name ? `: ${s.name}` : ""}`).join(" · ") || undefined}
+                      color={deptColor(dept.color)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </Layout>
