@@ -2374,7 +2374,7 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
 
   // Departments
   const setDept = (id, k, v) => setChart(c => ({ ...c, departments: (c.departments || DEFAULT_CHART_DEPTS).map(d => d.id === id ? { ...d, [k]: v } : d) }));
-  const addDept = () => setChart(c => ({ ...c, departments: [...(c.departments || DEFAULT_CHART_DEPTS), { id: uid(), label: "New Department", color: DEPT_COLORS[(c.departments||[]).length % DEPT_COLORS.length], staff: [] }] }));
+  const addDept = () => setChart(c => ({ ...c, departments: [...(c.departments || DEFAULT_CHART_DEPTS), { id: uid(), label: "New Department", color: DEPT_COLORS[(c.departments||[]).length % DEPT_COLORS.length], headName: "", headTitle: "", staff: [] }] }));
   const removeDept = (id) => setChart(c => ({ ...c, departments: (c.departments || []).filter(d => d.id !== id) }));
 
   // Staff
@@ -2433,7 +2433,8 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16, marginBottom: 16 }}>
         {departments.map(dept => (
           <div key={dept.id} className="card" style={{ borderTop: `3px solid ${deptColor(dept.color)}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            {/* Dept name + color + delete */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <input value={dept.label} onChange={e => setDept(dept.id, "label", e.target.value)}
                 style={{ flex: 1, fontFamily: "'Barlow Condensed',sans-serif", fontSize: 17, fontWeight: 800, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, padding: "2px 0", outline: "none" }} />
               <select value={dept.color} onChange={e => setDept(dept.id, "color", e.target.value)}
@@ -2447,11 +2448,32 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
               <button className="btn-danger" style={{ padding: "4px 8px", fontSize: 11 }} onClick={() => removeDept(dept.id)}><Icon.trash /></button>
             </div>
 
+            {/* Department Head */}
+            <div style={{ padding: "10px 12px", marginBottom: 12, background: `${deptColor(dept.color)}18`, border: `1px solid ${deptColor(dept.color)}40`, borderRadius: 7 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: deptColor(dept.color), marginBottom: 8 }}>Department Head</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={dept.headTitle || ""} onChange={e => setDept(dept.id, "headTitle", e.target.value)}
+                  placeholder="Title (e.g. Director)" style={{ flex: 1, fontSize: 12, padding: "6px 8px" }} />
+                {(company.members||[]).length > 0 ? (
+                  <select value={dept.headName || ""} onChange={e => setDept(dept.id, "headName", e.target.value)} style={{ flex: 1, fontSize: 12, padding: "6px 8px" }}>
+                    <option value="">— Select —</option>
+                    {(company.members||[]).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                  </select>
+                ) : (
+                  <input value={dept.headName || ""} onChange={e => setDept(dept.id, "headName", e.target.value)}
+                    placeholder="Name" style={{ flex: 1, fontSize: 12, padding: "6px 8px" }} />
+                )}
+              </div>
+            </div>
+
             {/* Staff rows */}
+            {(dept.staff || []).length > 0 && (
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted, marginBottom: 8 }}>Staff</div>
+            )}
             {(dept.staff || []).map(s => (
               <div key={s.id} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
                 <input value={s.title} onChange={e => setStaff(dept.id, s.id, "title", e.target.value)}
-                  placeholder="Title" style={{ flex: 1, fontSize: 12, padding: "6px 8px" }} />
+                  placeholder="Role" style={{ flex: 1, fontSize: 12, padding: "6px 8px" }} />
                 {(company.members||[]).length > 0 ? (
                   <select value={s.name} onChange={e => setStaff(dept.id, s.id, "name", e.target.value)} style={{ flex: 1, fontSize: 12, padding: "6px 8px" }}>
                     <option value="">— Name —</option>
@@ -2497,7 +2519,7 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
                   <div key={dept.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", zIndex: 1 }}>
                     <PreviewBox
                       label={dept.label}
-                      name=""
+                      name={dept.headName ? `${dept.headTitle ? dept.headTitle + ": " : ""}${dept.headName}` : ""}
                       note={(dept.staff||[]).map(s => `${s.title}${s.name ? `: ${s.name}` : ""}`).join(" · ") || undefined}
                       color={deptColor(dept.color)}
                     />
