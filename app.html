@@ -758,21 +758,28 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
       lines.push("");
     }
 
-    // Overdue to-dos
+    // All open to-dos grouped by assignee
     const today = new Date(); today.setHours(0,0,0,0);
-    const overdue = (company.todos || []).filter(t => !t.done && t.dueDate && new Date(t.dueDate) < today);
-    if (overdue.length) {
-      lines.push("OVERDUE TO-DOS");
-      overdue.forEach(t => lines.push(`  ⚠ ${t.title}${t.assignee ? ` — ${t.assignee}` : ""} (Due ${dateStr(new Date(t.dueDate))})`));
-      lines.push("");
-    }
-
-    // New to-dos added this meeting (created today)
     const todayStr = new Date().toISOString().slice(0,10);
-    const newTodos = (company.todos || []).filter(t => !t.done && t.createdAt && t.createdAt.slice(0,10) === todayStr);
-    if (newTodos.length) {
-      lines.push("TO-DOS ASSIGNED THIS MEETING");
-      newTodos.forEach(t => lines.push(`  □ ${t.title}${t.assignee ? ` — ${t.assignee}` : ""}${t.dueDate ? ` (Due ${dateStr(new Date(t.dueDate))})` : ""}`));
+    const allOpen = (company.todos || []).filter(t => !t.done);
+    if (allOpen.length) {
+      lines.push("OPEN TO-DOS BY TEAM MEMBER");
+      // Group by assignee
+      const grouped = {};
+      allOpen.forEach(t => {
+        const key = t.assignee || "Unassigned";
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(t);
+      });
+      Object.entries(grouped).sort(([a],[b]) => a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : a.localeCompare(b)).forEach(([name, items]) => {
+        lines.push(`  ${name}:`);
+        items.forEach(t => {
+          const isOverdue = t.dueDate && new Date(t.dueDate) < today;
+          const isNew = t.createdAt && t.createdAt.slice(0,10) === todayStr;
+          const tag = isOverdue ? " ⚠ OVERDUE" : isNew ? " ★ NEW" : "";
+          lines.push(`    □ ${t.title}${t.dueDate ? ` (Due ${dateStr(new Date(t.dueDate))})` : ""}${tag}`);
+        });
+      });
       lines.push("");
     }
 
@@ -2178,7 +2185,14 @@ function Todos({ company, onSave }) {
           <h3 style={{ fontSize: 18, marginBottom: 16 }}>Add To-Do</h3>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <input placeholder="What needs to happen?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} style={{ flex: 2, minWidth: 200 }} />
-            <input placeholder="Who" value={form.assignee} onChange={e => setForm(f => ({ ...f, assignee: e.target.value }))} style={{ flex: 1, minWidth: 120 }} />
+{(company.members || []).length > 0 ? (
+              <select value={form.assignee} onChange={e => setForm(f => ({ ...f, assignee: e.target.value }))} style={{ flex: 1, minWidth: 140 }}>
+                <option value="">Unassigned</option>
+                {(company.members || []).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+              </select>
+            ) : (
+              <input placeholder="Who" value={form.assignee} onChange={e => setForm(f => ({ ...f, assignee: e.target.value }))} style={{ flex: 1, minWidth: 120 }} />
+            )}
             <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 120 }} />
             <select value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ flex: 1, minWidth: 140 }}>
               <option value="">No Huddle</option>
