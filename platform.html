@@ -1,1 +1,2022 @@
+import { useState, useEffect, useRef, useCallback } from "react";
 
+// ─── VAST Color Palette ──────────────────────────────────────────────
+const C = {
+  bg: "#080808",
+  surface: "#111111",
+  surface2: "#1a1a1a",
+  surface3: "#222222",
+  border: "#2a2a2a",
+  red: "#E63329",
+  redDark: "#b82820",
+  redGlow: "rgba(230,51,41,0.15)",
+  text: "#f0f0f0",
+  textMuted: "#888",
+  textDim: "#555",
+  green: "#22c55e",
+  yellow: "#eab308",
+  blue: "#3b82f6",
+};
+
+// ─── Injected Styles ─────────────────────────────────────────────────
+const STYLE = `
+  @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:${C.bg};color:${C.text};font-family:'Barlow',sans-serif;min-height:100vh}
+  ::-webkit-scrollbar{width:4px;height:4px}
+  ::-webkit-scrollbar-track{background:${C.surface}}
+  ::-webkit-scrollbar-thumb{background:${C.border};border-radius:2px}
+  input,textarea,select{background:${C.surface2};border:1px solid ${C.border};color:${C.text};font-family:'Barlow',sans-serif;border-radius:6px;padding:10px 14px;width:100%;font-size:14px;outline:none;transition:border 0.2s}
+  input:focus,textarea:focus,select:focus{border-color:${C.red}}
+  textarea{resize:vertical;min-height:80px}
+  select option{background:${C.surface2}}
+  button{cursor:pointer;font-family:'Barlow',sans-serif;font-weight:600;border:none;border-radius:6px;transition:all 0.2s}
+  .btn-primary{background:${C.red};color:#fff;padding:10px 20px;font-size:14px}
+  .btn-primary:hover{background:${C.redDark};transform:translateY(-1px)}
+  .btn-secondary{background:${C.surface2};color:${C.text};padding:10px 20px;font-size:14px;border:1px solid ${C.border}}
+  .btn-secondary:hover{border-color:${C.red};color:${C.red}}
+  .btn-ghost{background:transparent;color:${C.textMuted};padding:8px 14px;font-size:13px}
+  .btn-ghost:hover{color:${C.text};background:${C.surface2}}
+  .btn-danger{background:rgba(230,51,41,0.15);color:${C.red};padding:8px 14px;font-size:13px;border:1px solid rgba(230,51,41,0.3)}
+  .btn-danger:hover{background:${C.red};color:#fff}
+  .card{background:${C.surface};border:1px solid ${C.border};border-radius:10px;padding:20px}
+  .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:${C.textMuted};margin-bottom:6px;display:block}
+  h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;letter-spacing:0.5px}
+  .tag-on{background:rgba(34,197,94,0.15);color:${C.green};border:1px solid rgba(34,197,94,0.3);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+  .tag-off{background:rgba(230,51,41,0.15);color:${C.red};border:1px solid rgba(230,51,41,0.3);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+  .tag-done{background:rgba(34,197,94,0.15);color:${C.green};border:1px solid rgba(34,197,94,0.3);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+  .sidebar-link{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:8px;color:${C.textMuted};font-size:14px;font-weight:500;cursor:pointer;transition:all 0.15s;text-decoration:none;border:none;background:none;width:100%;text-align:left}
+  .sidebar-link:hover{background:${C.surface2};color:${C.text}}
+  .sidebar-link.active{background:${C.redGlow};color:${C.red};border-left:3px solid ${C.red};padding-left:13px}
+  .divider{height:1px;background:${C.border};margin:12px 0}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+  .modal{background:${C.surface};border:1px solid ${C.border};border-radius:12px;padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto}
+  .field{margin-bottom:16px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .fade-in{animation:fadeIn 0.3s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .progress-bar{height:6px;background:${C.surface2};border-radius:3px;overflow:hidden}
+  .progress-fill{height:100%;background:${C.red};border-radius:3px;transition:width 0.5s}
+  .rating-btn{width:44px;height:44px;border-radius:8px;border:1px solid ${C.border};background:${C.surface2};color:${C.textMuted};font-size:15px;font-weight:700;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center}
+  .rating-btn:hover,.rating-btn.sel{background:${C.red};border-color:${C.red};color:#fff}
+  .huddle-item{padding:16px;border-radius:8px;border:1px solid ${C.border};background:${C.surface};margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all 0.2s}
+  .huddle-item.active{border-color:${C.red};background:${C.redGlow}}
+  .huddle-item.done{opacity:0.5}
+  .timer-display{font-family:'Barlow Condensed',sans-serif;font-size:52px;font-weight:700;color:${C.red};letter-spacing:2px}
+  .badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;background:${C.red};color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:0 6px}
+  .checkbox{width:18px;height:18px;border-radius:4px;border:2px solid ${C.border};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s}
+  .checkbox.checked{background:${C.green};border-color:${C.green};color:#fff}
+  .stat-card{background:${C.surface};border:1px solid ${C.border};border-radius:10px;padding:20px;text-align:center}
+  .vast-logo-text{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:800;letter-spacing:2px;color:#fff}
+  .vast-logo-mark{color:${C.red};font-size:22px;margin-left:2px}
+  .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+  .empty-state{text-align:center;padding:48px;color:${C.textMuted}}
+  .empty-state svg{opacity:0.3;margin-bottom:12px}
+  .row{display:flex;align-items:center;gap:12px}
+  .row-between{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:${C.surface2};border:1px solid ${C.border};border-radius:20px;padding:4px 12px;font-size:12px;color:${C.textMuted}}
+  .table{width:100%;border-collapse:collapse}
+  .table th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${C.textMuted};border-bottom:1px solid ${C.border}}
+  .table td{padding:12px;font-size:14px;border-bottom:1px solid ${C.surface2}}
+  .table tr:last-child td{border-bottom:none}
+  .table tr:hover td{background:${C.surface2}}
+  .priority-1{color:${C.red};font-weight:700}
+  .priority-2{color:${C.yellow};font-weight:700}
+  .priority-3{color:${C.blue};font-weight:700}
+`;
+
+// ─── Helpers ─────────────────────────────────────────────────────────
+const uid = () => Math.random().toString(36).slice(2, 9);
+const now = () => new Date().toISOString();
+const dateStr = (d = new Date()) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const weekKey = () => {
+  const d = new Date();
+  const startOfYear = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+  return `${d.getFullYear()}-W${week}`;
+};
+
+// ─── Storage Helpers ─────────────────────────────────────────────────
+async function loadCompany(companyId) {
+  try {
+    const result = await window.storage.get(`vast:company:${companyId}`);
+    return result ? JSON.parse(result.value) : null;
+  } catch { return null; }
+}
+async function saveCompany(companyId, data) {
+  try {
+    await window.storage.set(`vast:company:${companyId}`, JSON.stringify(data));
+  } catch(e) { console.error(e); }
+}
+async function listCompanies() {
+  try {
+    const result = await window.storage.list("vast:company:");
+    return result?.keys || [];
+  } catch { return []; }
+}
+
+// ─── Default Company Data ─────────────────────────────────────────────
+function defaultCompany(name, code) {
+  return {
+    name, code,
+    members: [],
+    navigator: {
+      coreValues: ["", "", ""],
+      purpose: "", avenue: "", targetMarket: "",
+      different: "", proof: "", promise: "",
+      futureDate: "", revenue: "", profit: "", whatLooksLike: "",
+      majorMotivator: ""
+    },
+    orgChart: {
+      dreamer: "", doer: "",
+      salesRoles: [{ role: "Sales/Mktg", members: [""] }],
+      opsRoles: [{ role: "Operations", members: [""] }],
+      financeRoles: [{ role: "Finance", members: [""] }],
+    },
+    quarterlyTasks: [],
+    individualTasks: {},
+    scorecard: { measurables: [], entries: {} },
+    meetings: [],
+    issues: [],
+    headlines: [],
+    todos: [],
+    currentQuarter: `Q${Math.ceil((new Date().getMonth() + 1) / 3)} ${new Date().getFullYear()}`,
+    yearGoal: { futureDate: "", revenue: "", profit: "", goals: ["", "", "", "", ""] },
+    problemQueue: [],
+    quarterHistory: []
+  };
+}
+
+// ─── Icons ───────────────────────────────────────────────────────────
+const Icon = {
+  dashboard: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+  navigator: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>,
+  huddle: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  tasks: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>,
+  scorecard: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+  issues: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+  org: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="6" height="4"/><rect x="9" y="15" width="6" height="4"/><rect x="16" y="7" width="6" height="4"/><line x1="5" y1="11" x2="5" y2="15"/><line x1="19" y1="11" x2="19" y2="15"/><line x1="12" y1="15" x2="12" y2="11"/><line x1="5" y1="15" x2="19" y2="15"/></svg>,
+  history: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><polyline points="12 7 12 12 15 15"/></svg>,
+  settings: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+  plus: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  trash: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  edit: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  chevron: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
+  check: () => <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>,
+  logout: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+  archive: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>,
+  headlines: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+};
+
+// ─── Logo Component ───────────────────────────────────────────────────
+const VAST_LOGO_B64 = "data:image/jpeg;base64,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";
+
+function VASTLogo({ size = "md" }) {
+  const heights = { lg: 56, md: 44, sm: 28 };
+  const h = heights[size] || 44;
+  return (
+    <img
+      src={VAST_LOGO_B64}
+      alt="VAST"
+      style={{ height: h, width: "auto", objectFit: "contain", display: "block" }}
+    />
+  );
+}
+
+// ─── AUTH SCREEN ──────────────────────────────────────────────────────
+function AuthScreen({ onLogin }) {
+  const [mode, setMode] = useState("login"); // login | register
+  const [form, setForm] = useState({ name: "", email: "", companyName: "", companyCode: "", password: "" });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleLogin = async () => {
+    setError(""); setLoading(true);
+    if (!form.companyCode || !form.password) { setError("Company code and password required."); setLoading(false); return; }
+    const companyId = form.companyCode.toUpperCase().trim();
+    const data = await loadCompany(companyId);
+    if (!data) { setError("Company not found. Check your company code."); setLoading(false); return; }
+    if (data.password !== form.password) { setError("Incorrect password."); setLoading(false); return; }
+    const member = form.email ? data.members.find(m => m.email.toLowerCase() === form.email.toLowerCase()) : data.members[0];
+    const user = member || { id: "owner", name: data.name, email: "", role: "owner" };
+    onLogin({ ...user, companyId, companyName: data.name });
+    setLoading(false);
+  };
+
+  const handleRegister = async () => {
+    setError(""); setLoading(true);
+    if (!form.companyName || !form.companyCode || !form.name || !form.password) {
+      setError("All fields required."); setLoading(false); return;
+    }
+    const companyId = form.companyCode.toUpperCase().trim().replace(/\s+/g, "-");
+    const existing = await loadCompany(companyId);
+    if (existing) { setError("Company code already taken. Choose another."); setLoading(false); return; }
+    const owner = { id: uid(), name: form.name, email: form.email, role: "owner" };
+    const company = defaultCompany(form.companyName, companyId);
+    company.members = [owner];
+    company.password = form.password;
+    await saveCompany(companyId, company);
+    onLogin({ ...owner, companyId, companyName: form.companyName });
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ width: "100%", maxWidth: 420 }} className="fade-in">
+        <div style={{ textAlign: "center", marginBottom: 40 }}>
+          <VASTLogo size="lg" />
+          <div style={{ marginTop: 8, fontSize: 13, color: C.textMuted, letterSpacing: 1, textTransform: "uppercase" }}>
+            Venture Accelerator System for Trades
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 32 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 24, background: C.surface2, borderRadius: 8, padding: 4 }}>
+            {["login", "register"].map(m => (
+              <button key={m} onClick={() => { setMode(m); setError(""); }}
+                style={{ flex: 1, padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "'Barlow',sans-serif", fontWeight: 600, fontSize: 13, textTransform: "uppercase", letterSpacing: 1, transition: "all 0.2s",
+                  background: mode === m ? C.red : "transparent", color: mode === m ? "#fff" : C.textMuted }}>
+                {m === "login" ? "Sign In" : "Create Company"}
+              </button>
+            ))}
+          </div>
+
+          {mode === "register" && (
+            <>
+              <div className="field">
+                <label className="label">Your Name</label>
+                <input placeholder="John Smith" value={form.name} onChange={e => set("name", e.target.value)} />
+              </div>
+              <div className="field">
+                <label className="label">Company Name</label>
+                <input placeholder="Smith Plumbing Co." value={form.companyName} onChange={e => set("companyName", e.target.value)} />
+              </div>
+              <div className="field">
+                <label className="label">Company Code <span style={{ color: C.textMuted, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(unique login ID)</span></label>
+                <input placeholder="SMITHPLUMBING" value={form.companyCode} onChange={e => set("companyCode", e.target.value)} />
+              </div>
+            </>
+          )}
+
+          {mode === "login" && (
+            <div className="field">
+              <label className="label">Company Code</label>
+              <input placeholder="SMITHPLUMBING" value={form.companyCode} onChange={e => set("companyCode", e.target.value)} />
+            </div>
+          )}
+
+          <div className="field">
+            <label className="label">Email {mode === "register" ? "" : "(optional)"}</label>
+            <input type="email" placeholder="you@company.com" value={form.email} onChange={e => set("email", e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="label">Password</label>
+            <input type="password" placeholder="••••••••" value={form.password} onChange={e => set("password", e.target.value)}
+              onKeyDown={e => e.key === "Enter" && (mode === "login" ? handleLogin() : handleRegister())} />
+          </div>
+
+          {error && <div style={{ background: "rgba(230,51,41,0.1)", border: `1px solid rgba(230,51,41,0.3)`, borderRadius: 8, padding: "10px 14px", color: C.red, fontSize: 13, marginBottom: 16 }}>{error}</div>}
+
+          <button className="btn-primary" style={{ width: "100%", padding: "14px", fontSize: 15 }}
+            onClick={mode === "login" ? handleLogin : handleRegister} disabled={loading}>
+            {loading ? "Loading..." : mode === "login" ? "Sign In" : "Create Company & Sign In"}
+          </button>
+        </div>
+
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: C.textDim }}>
+          © 2025 VAST · Venture Accelerator System for Trades
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SIDEBAR ──────────────────────────────────────────────────────────
+function Sidebar({ view, setView, user, company, onLogout }) {
+  const openIssues = company.issues?.filter(i => i.status !== "resolved").length || 0;
+  const pendingTodos = company.todos?.filter(t => !t.done).length || 0;
+
+  const links = [
+    { id: "dashboard", label: "Dashboard", icon: Icon.dashboard },
+    { id: "navigator", label: "Navigator", icon: Icon.navigator },
+    { id: "huddle", label: "Weekly Huddle", icon: Icon.huddle },
+    { id: "tasks", label: "Quarterly Tasks", icon: Icon.tasks },
+    { id: "scorecard", label: "Scorecard", icon: Icon.scorecard },
+    { id: "headlines", label: "Headlines", icon: Icon.headlines },
+    { id: "issues", label: "Issues", icon: Icon.issues, badge: openIssues },
+    { id: "todos", label: "To-Dos", icon: Icon.tasks, badge: pendingTodos },
+    { id: "orgchart", label: "Responsibility Chart", icon: Icon.org },
+    { id: "history", label: "Meeting History", icon: Icon.history },
+    { id: "quarterhistory", label: "Historical Quarters", icon: Icon.archive },
+    { id: "settings", label: "Settings", icon: Icon.settings },
+  ];
+
+  return (
+    <div style={{ width: 220, minHeight: "100vh", background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", position: "fixed", left: 0, top: 0, zIndex: 50 }}>
+      <div style={{ padding: "16px", borderBottom: `1px solid ${C.border}` }}>
+        <VASTLogo size="md" />
+        <div style={{ marginTop: 8, fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {company.name}
+        </div>
+      </div>
+
+      <nav style={{ flex: 1, padding: "12px 8px", overflowY: "auto" }}>
+        {links.map(l => (
+          <button key={l.id} className={`sidebar-link ${view === l.id ? "active" : ""}`} onClick={() => setView(l.id)}>
+            <l.icon />
+            <span style={{ flex: 1 }}>{l.label}</span>
+            {l.badge > 0 && <span className="badge">{l.badge}</span>}
+          </button>
+        ))}
+      </nav>
+
+      <div style={{ padding: "12px 8px", borderTop: `1px solid ${C.border}` }}>
+        <div style={{ padding: "8px 16px", marginBottom: 4 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{user.name}</div>
+          <div style={{ fontSize: 11, color: C.textMuted }}>{user.role}</div>
+        </div>
+        <button className="sidebar-link" onClick={onLogout}><Icon.logout /> Sign Out</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN LAYOUT ──────────────────────────────────────────────────────
+function Layout({ children, title, subtitle, action }) {
+  return (
+    <div style={{ marginLeft: 220, minHeight: "100vh", background: C.bg }}>
+      <div style={{ borderBottom: `1px solid ${C.border}`, padding: "20px 32px", background: C.surface, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: C.text }}>{title}</h1>
+          {subtitle && <div style={{ fontSize: 13, color: C.textMuted, marginTop: 2 }}>{subtitle}</div>}
+        </div>
+        {action}
+      </div>
+      <div style={{ padding: "28px 32px" }} className="fade-in">{children}</div>
+    </div>
+  );
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────
+function Dashboard({ company, user, setView }) {
+  const q = company.currentQuarter || "This Quarter";
+  const tasks = company.quarterlyTasks || [];
+  const onTrack = tasks.filter(t => t.status === "on").length;
+  const offTrack = tasks.filter(t => t.status === "off").length;
+  const done = tasks.filter(t => t.status === "done").length;
+  const total = tasks.length;
+  const pct = total > 0 ? Math.round(((onTrack + done) / total) * 100) : 0;
+  const openIssues = (company.issues || []).filter(i => i.status !== "resolved").length;
+  const pendingTodos = (company.todos || []).filter(t => !t.done).length;
+  const lastMeeting = company.meetings?.slice(-1)[0];
+  const avgRating = company.meetings?.length
+    ? (company.meetings.reduce((a, m) => a + (m.rating || 0), 0) / company.meetings.length).toFixed(1)
+    : "—";
+
+  return (
+    <Layout title={`Welcome back, ${user.name.split(" ")[0]}`} subtitle={dateStr()}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
+        {[
+          { label: "Quarterly Tasks", value: `${onTrack + done}/${total}`, sub: "on or completed", color: C.red },
+          { label: "Open Issues", value: openIssues, sub: "to resolve", color: C.yellow },
+          { label: "Pending To-Dos", value: pendingTodos, sub: "this week", color: C.blue },
+          { label: "Avg Meeting Rating", value: avgRating, sub: `of ${company.meetings?.length || 0} meetings`, color: C.green },
+        ].map(s => (
+          <div key={s.label} className="stat-card">
+            <div style={{ fontSize: 36, fontWeight: 800, color: s.color, fontFamily: "'Barlow Condensed',sans-serif" }}>{s.value}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginTop: 4 }}>{s.label}</div>
+            <div style={{ fontSize: 11, color: C.textMuted }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        <div className="card">
+          <div className="section-header">
+            <h3 style={{ fontSize: 18 }}>{q} — Task Progress</h3>
+            <button className="btn-ghost" onClick={() => setView("tasks")}>View All →</button>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div className="progress-bar"><div className="progress-fill" style={{ width: `${pct}%` }} /></div>
+            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 6 }}>{pct}% on track or complete</div>
+          </div>
+          {tasks.slice(0, 5).map(t => (
+            <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+              <span style={{ fontSize: 14, color: C.text }}>{t.title || "Untitled task"}</span>
+              <span className={t.status === "done" ? "tag-done" : t.status === "on" ? "tag-on" : "tag-off"}>
+                {t.status === "done" ? "Done" : t.status === "on" ? "On Track" : "Off Track"}
+              </span>
+            </div>
+          ))}
+          {!tasks.length && <div style={{ color: C.textMuted, fontSize: 14, textAlign: "center", padding: 20 }}>No tasks yet. Add them in Quarterly Tasks.</div>}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div className="card">
+            <div className="section-header">
+              <h3 style={{ fontSize: 18 }}>Weekly Huddle</h3>
+              <button className="btn-primary" style={{ padding: "8px 16px", fontSize: 13 }} onClick={() => setView("huddle")}>Start Meeting</button>
+            </div>
+            {lastMeeting ? (
+              <div>
+                <div style={{ fontSize: 13, color: C.textMuted }}>Last meeting: {dateStr(new Date(lastMeeting.date))}</div>
+                <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Rating: <span style={{ color: lastMeeting.rating >= 8 ? C.green : lastMeeting.rating >= 6 ? C.yellow : C.red, fontWeight: 700 }}>{lastMeeting.rating}/10</span></div>
+              </div>
+            ) : <div style={{ fontSize: 13, color: C.textMuted }}>No meetings yet. Run your first Weekly Huddle!</div>}
+          </div>
+
+          <div className="card">
+            <div className="section-header">
+              <h3 style={{ fontSize: 18 }}>Recent Headlines</h3>
+              <button className="btn-ghost" onClick={() => setView("headlines")}>View All →</button>
+            </div>
+            {(company.headlines || []).slice(-3).reverse().map(h => (
+              <div key={h.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: 14 }}>
+                <span className="chip" style={{ marginRight: 8, fontSize: 10 }}>{h.type}</span>{h.text}
+              </div>
+            ))}
+            {!(company.headlines || []).length && <div style={{ fontSize: 13, color: C.textMuted }}>No headlines yet.</div>}
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
+// ─── NAVIGATOR ────────────────────────────────────────────────────────
+function Navigator({ company, onSave }) {
+  const [nav, setNav] = useState(company.navigator || {});
+  const [saved, setSaved] = useState(false);
+  const set = (k, v) => setNav(n => ({ ...n, [k]: v }));
+  const setCV = (i, v) => { const cv = [...(nav.coreValues || ["", "", ""])]; cv[i] = v; set("coreValues", cv); };
+
+  const save = () => { onSave({ navigator: nav }); setSaved(true); setTimeout(() => setSaved(false), 2000); };
+
+  const Section = ({ label, children }) => (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div style={{ background: C.red, color: "#fff", fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 2, textTransform: "uppercase", padding: "8px 16px", borderRadius: 6, marginBottom: 16, display: "inline-block" }}>{label}</div>
+      {children}
+    </div>
+  );
+
+  return (
+    <Layout title="Navigator" subtitle="Your company's operating blueprint"
+      action={<button className="btn-primary" onClick={save}>{saved ? "✓ Saved" : "Save Navigator"}</button>}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div>
+          <Section label="Core Values">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="field">
+                <label className="label">Value {i + 1}</label>
+                <input placeholder={`Core value ${i + 1}`} value={(nav.coreValues || [])[i] || ""} onChange={e => setCV(i, e.target.value)} />
+              </div>
+            ))}
+          </Section>
+
+          <Section label="Top Focus">
+            <div className="field">
+              <label className="label">Purpose — Why we exist</label>
+              <input placeholder="Our purpose..." value={nav.purpose || ""} onChange={e => set("purpose", e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="label">Our Avenue — How we deliver</label>
+              <input placeholder="Through..." value={nav.avenue || ""} onChange={e => set("avenue", e.target.value)} />
+            </div>
+          </Section>
+
+          <Section label="Major Motivator">
+            <div className="field">
+              <label className="label">What drives us</label>
+              <textarea placeholder="Our major motivator is..." value={nav.majorMotivator || ""} onChange={e => set("majorMotivator", e.target.value)} />
+            </div>
+          </Section>
+        </div>
+
+        <div>
+          <Section label="Marketing Strategy">
+            <div className="field">
+              <label className="label">Target Market</label>
+              <input placeholder="We serve..." value={nav.targetMarket || ""} onChange={e => set("targetMarket", e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="label">Why We're Different</label>
+              <input placeholder="Unlike others, we..." value={nav.different || ""} onChange={e => set("different", e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="label">Proof</label>
+              <input placeholder="We can prove this by..." value={nav.proof || ""} onChange={e => set("proof", e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="label">Our Promise</label>
+              <input placeholder="We guarantee..." value={nav.promise || ""} onChange={e => set("promise", e.target.value)} />
+            </div>
+          </Section>
+
+          <Section label="2 Year Target">
+            <div className="grid2">
+              <div className="field">
+                <label className="label">Future Date</label>
+                <input type="date" value={nav.futureDate || ""} onChange={e => set("futureDate", e.target.value)} />
+              </div>
+              <div className="field">
+                <label className="label">Revenue Goal</label>
+                <input placeholder="$0,000,000" value={nav.revenue || ""} onChange={e => set("revenue", e.target.value)} />
+              </div>
+            </div>
+            <div className="field">
+              <label className="label">Profit Goal</label>
+              <input placeholder="$0,000,000" value={nav.profit || ""} onChange={e => set("profit", e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="label">What Does It Look Like?</label>
+              <textarea placeholder="In 2 years, we will..." value={nav.whatLooksLike || ""} onChange={e => set("whatLooksLike", e.target.value)} />
+            </div>
+          </Section>
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
+// ─── WEEKLY HUDDLE ────────────────────────────────────────────────────
+const AGENDA = [
+  { id: "intros", label: "Introductions / Good News", minutes: 5 },
+  { id: "scoring", label: "Scoring — Review Numbers", minutes: 5 },
+  { id: "tasks", label: "Task Review — On/Off Track", minutes: 5 },
+  { id: "headlines", label: "Customer & Employee Headlines", minutes: 5 },
+  { id: "todos", label: "To-Dos — Confirm Completion", minutes: 5 },
+  { id: "problems", label: "Problem Solving (IDS)", minutes: 30 },
+  { id: "conclude", label: "Conclude & Rate Meeting", minutes: 5 },
+];
+
+function WeeklyHuddle({ company, onSave, user }) {
+  const [started, setStarted] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [segElapsed, setSegElapsed] = useState(0);
+  const [notes, setNotes] = useState({});
+  const [newHeadline, setNewHeadline] = useState({ type: "Customer", text: "" });
+  const [newTodo, setNewTodo] = useState({ title: "", assignee: "", dueDate: "" });
+  const [newIssue, setNewIssue] = useState({ title: "", priority: "2" });
+  const [rating, setRating] = useState(0);
+  const [done, setDone] = useState(false);
+  const [attendance, setAttendance] = useState({});
+  const [spotlight, setSpotlight] = useState(null);
+  const [spinning, setSpinning] = useState(false);
+  // Problem solving session state
+  const [focusQueue, setFocusQueue] = useState([]); // up to 3 selected items being discussed
+  const [activeIssueId, setActiveIssueId] = useState(null);
+  const [issueNotes, setIssueNotes] = useState({});
+  const [solvedThisSession, setSolvedThisSession] = useState([]);
+  const timerRef = useRef(null);
+  const spinRef = useRef(null);
+  const members = company.members || [];
+
+  const addToProblemQueue = (item) => {
+    const pq = company.problemQueue || [];
+    if (pq.find(p => p.id === item.id)) return; // already in queue
+    onSave({ problemQueue: [...pq, item] });
+  };
+  const seg = AGENDA[activeIdx];
+  const segLimit = seg.minutes * 60;
+
+  useEffect(() => {
+    if (started && !done) {
+      timerRef.current = setInterval(() => {
+        setElapsed(e => e + 1);
+        setSegElapsed(e => e + 1);
+      }, 1000);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [started, activeIdx, done]);
+
+  const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const over = segElapsed > segLimit;
+
+  const next = () => {
+    if (activeIdx < AGENDA.length - 1) { setActiveIdx(i => i + 1); setSegElapsed(0); }
+  };
+  const prev = () => {
+    if (activeIdx > 0) { setActiveIdx(i => i - 1); setSegElapsed(0); }
+  };
+
+  const addHeadline = () => {
+    if (!newHeadline.text.trim()) return;
+    const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, date: now() };
+    onSave({ headlines: [...(company.headlines || []), h] });
+    setNewHeadline(n => ({ ...n, text: "" }));
+  };
+  const addTodo = () => {
+    if (!newTodo.title.trim()) return;
+    const t = { id: uid(), title: newTodo.title, assignee: newTodo.assignee, dueDate: newTodo.dueDate, done: false, createdAt: now() };
+    onSave({ todos: [...(company.todos || []), t] });
+    setNewTodo({ title: "", assignee: "", dueDate: "" });
+  };
+  const addIssue = () => {
+    if (!newIssue.title.trim()) return;
+    const iss = { id: uid(), title: newIssue.title, priority: newIssue.priority, status: "open", createdAt: now() };
+    onSave({ issues: [...(company.issues || []), iss] });
+    setNewIssue({ title: "", priority: "2" });
+  };
+
+  const autoSelect = () => {
+    const present = members.filter(m => attendance[m.id] !== false);
+    if (!present.length) return;
+    setSpotlight(null);
+    setSpinning(true);
+    let count = 0;
+    const total = 18;
+    const cycle = () => {
+      const idx = Math.floor(Math.random() * present.length);
+      setSpotlight(present[idx]);
+      count++;
+      if (count < total) {
+        spinRef.current = setTimeout(cycle, 80 + count * 12);
+      } else {
+        setSpinning(false);
+      }
+    };
+    cycle();
+  };
+
+  const finishMeeting = () => {
+    if (!rating) return;
+    const mtg = {
+      id: uid(), date: now(), rating, totalMinutes: Math.round(elapsed / 60),
+      notes, headlines: company.headlines?.slice(-5), todos: company.todos?.slice(-5),
+      solvedProblems: solvedThisSession
+    };
+    // Archive quarter snapshot (once per quarter, keyed by currentQuarter)
+    const qh = company.quarterHistory || [];
+    const qLabel = company.currentQuarter || "Unknown Quarter";
+    const existingIdx = qh.findIndex(q => q.quarter === qLabel);
+    const snapshot = {
+      quarter: qLabel,
+      archivedAt: now(),
+      tasks: (company.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status })),
+      todos: (company.todos || []).map(t => ({ title: t.title, assignee: t.assignee, done: t.done })),
+      solvedProblems: [
+        ...(existingIdx >= 0 ? (qh[existingIdx].solvedProblems || []) : []),
+        ...solvedThisSession
+      ],
+      meetingRatings: [
+        ...(existingIdx >= 0 ? (qh[existingIdx].meetingRatings || []) : []),
+        { date: now(), rating }
+      ]
+    };
+    const newQH = existingIdx >= 0
+      ? qh.map((q, i) => i === existingIdx ? snapshot : q)
+      : [...qh, snapshot];
+    onSave({ meetings: [...(company.meetings || []), mtg], quarterHistory: newQH });
+    setDone(true);
+    clearInterval(timerRef.current);
+    clearTimeout(spinRef.current);
+  };
+
+  if (done) {
+    return (
+      <Layout title="Meeting Complete!" subtitle="Great work — keep the momentum going">
+        <div style={{ maxWidth: 480, margin: "0 auto", textAlign: "center" }} className="fade-in">
+          <div style={{ fontSize: 80, marginBottom: 16 }}>🎉</div>
+          <div className="card">
+            <div style={{ fontSize: 48, fontWeight: 800, color: rating >= 8 ? C.green : rating >= 6 ? C.yellow : C.red, fontFamily: "'Barlow Condensed',sans-serif" }}>{rating}/10</div>
+            <div style={{ color: C.textMuted, marginTop: 4 }}>Meeting Rating</div>
+            <div style={{ marginTop: 16, fontSize: 14, color: C.textMuted }}>Duration: {fmt(elapsed)}</div>
+          </div>
+          <button className="btn-primary" style={{ marginTop: 20, padding: "14px 32px", fontSize: 15 }} onClick={() => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegElapsed(0); setRating(0); setDone(false); setNotes({}); setAttendance({}); setSpotlight(null); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); clearTimeout(spinRef.current); }}>
+            End & Return
+          </button>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!started) {
+    return (
+      <Layout title="Weekly Huddle" subtitle="60–90 minute structured team meeting">
+        <div style={{ maxWidth: 600, margin: "0 auto" }}>
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3 style={{ fontSize: 20, marginBottom: 16 }}>Meeting Agenda</h3>
+            {AGENDA.map((a, i) => (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 28, height: 28, background: C.surface2, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.red }}>{i + 1}</div>
+                  <span style={{ fontSize: 15 }}>{a.label}</span>
+                </div>
+                <span style={{ fontSize: 13, color: C.textMuted, fontWeight: 600 }}>{a.minutes} min</span>
+              </div>
+            ))}
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", color: C.textMuted, fontSize: 14 }}>
+              <span>Total</span><span style={{ fontWeight: 700 }}>60 min</span>
+            </div>
+          </div>
+          <button className="btn-primary" style={{ width: "100%", padding: "16px", fontSize: 16 }} onClick={() => setStarted(true)}>
+            ▶  Start Huddle
+          </button>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout title="Weekly Huddle — Live" subtitle={`Total: ${fmt(elapsed)}`}>
+      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 20 }}>
+        {/* Agenda sidebar */}
+        <div>
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ textAlign: "center" }}>
+              <div className="timer-display" style={{ color: over ? C.red : C.text }}>{fmt(segElapsed)}</div>
+              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>/ {seg.minutes}:00 allocated</div>
+              {over && <div style={{ color: C.red, fontSize: 11, fontWeight: 700, marginTop: 4 }}>OVERTIME</div>}
+            </div>
+          </div>
+          {AGENDA.map((a, i) => (
+            <div key={a.id} className={`huddle-item ${i === activeIdx ? "active" : ""} ${i < activeIdx ? "done" : ""}`}
+              onClick={() => { setActiveIdx(i); setSegElapsed(0); }}>
+              <div style={{ width: 22, height: 22, background: i < activeIdx ? C.green : i === activeIdx ? C.red : C.surface2, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {i < activeIdx ? <Icon.check /> : <span style={{ fontSize: 10, fontWeight: 700 }}>{i + 1}</span>}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>{a.minutes} min</div>
+              </div>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button className="btn-secondary" style={{ flex: 1 }} onClick={prev} disabled={activeIdx === 0}>← Back</button>
+            <button className="btn-primary" style={{ flex: 1 }} onClick={next} disabled={activeIdx === AGENDA.length - 1}>Next →</button>
+          </div>
+        </div>
+
+        {/* Content area */}
+        <div className="fade-in" key={activeIdx}>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h2 style={{ fontSize: 24, marginBottom: 4 }}>{seg.label}</h2>
+            <div style={{ fontSize: 13, color: C.textMuted }}>{seg.minutes} minutes allocated</div>
+          </div>
+
+          {/* SCORING segment */}
+          {activeIdx === 1 && (
+            <div className="card">
+              <h3 style={{ fontSize: 18, marginBottom: 16 }}>Key Scorecard Numbers</h3>
+              {(company.scorecard?.measurables || []).length === 0 ? (
+                <div style={{ color: C.textMuted, fontSize: 14 }}>No measurables set up yet. Add them in the Scorecard section.</div>
+              ) : (company.scorecard.measurables || []).map(m => {
+                const wk = weekKey();
+                const val = company.scorecard.entries?.[wk]?.[m.id] || "";
+                return (
+                  <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                    <span style={{ fontSize: 14 }}>{m.name}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 12, color: C.textMuted }}>Target: {m.target}</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: val >= m.target ? C.green : C.red }}>{val || "—"}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* TASK REVIEW */}
+          {activeIdx === 2 && (
+            <div className="card">
+              <h3 style={{ fontSize: 18, marginBottom: 16 }}>Quarterly Task Review</h3>
+              {(company.quarterlyTasks || []).map(t => (
+                <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{t.title}</div>
+                    {t.who && <div style={{ fontSize: 12, color: C.textMuted }}>{t.who}</div>}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className={t.status === "done" ? "tag-done" : t.status === "on" ? "tag-on" : "tag-off"}>
+                      {t.status === "done" ? "Done" : t.status === "on" ? "On Track" : "Off Track"}
+                    </span>
+                    {t.status === "off" && (
+                      <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
+                        style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                        {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "⚑ Problem Solve"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {!company.quarterlyTasks?.length && <div style={{ color: C.textMuted }}>No tasks yet.</div>}
+            </div>
+          )}
+
+          {/* HEADLINES */}
+          {activeIdx === 3 && (
+            <div className="card">
+              <h3 style={{ fontSize: 18, marginBottom: 16 }}>Add Headlines</h3>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 140 }}>
+                  <option>Customer</option><option>Employee</option>
+                </select>
+                <input placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && addHeadline()} style={{ flex: 1 }} />
+                <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addHeadline}>Add</button>
+              </div>
+              {(company.headlines || []).slice(-6).reverse().map(h => (
+                <div key={h.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 14 }}>
+                    <span className="chip" style={{ marginRight: 8, fontSize: 10 }}>{h.type}</span>{h.text}
+                  </div>
+                  <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
+                    style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===h.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===h.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0, marginLeft:8 }}>
+                    {(company.problemQueue||[]).find(p=>p.id===h.id) ? "✓ Queued" : "⚑ Problem Solve"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* TO-DOS */}
+          {activeIdx === 4 && (
+            <div className="card">
+              <h3 style={{ fontSize: 18, marginBottom: 16 }}>To-Do Review & Add</h3>
+              <div style={{ marginBottom: 16 }}>
+                {(company.todos || []).filter(t => !t.done).slice(0, 8).map(t => (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                    <div className={`checkbox ${t.done ? "checked" : ""}`}
+                      onClick={() => onSave({ todos: company.todos.map(x => x.id === t.id ? { ...x, done: !x.done } : x) })}>
+                      {t.done && <Icon.check />}
+                    </div>
+                    <span style={{ fontSize: 14, flex: 1 }}>{t.title}</span>
+                    <span style={{ fontSize: 11, color: C.textMuted }}>{t.assignee}</span>
+                    <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
+                      style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                      {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "⚑ Problem Solve"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <h4 style={{ fontSize: 15, marginBottom: 10 }}>Add New To-Do</h4>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input placeholder="Task..." value={newTodo.title} onChange={e => setNewTodo(n => ({ ...n, title: e.target.value }))} style={{ flex: 2 }} />
+                <input placeholder="Who" value={newTodo.assignee} onChange={e => setNewTodo(n => ({ ...n, assignee: e.target.value }))} style={{ flex: 1 }} />
+                <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addTodo}>Add</button>
+              </div>
+            </div>
+          )}
+
+          {/* PROBLEM SOLVING */}
+          {activeIdx === 5 && (() => {
+            const pq = company.problemQueue || [];
+            const openIssues = (company.issues || []).filter(i => i.status !== "resolved");
+            // All items available for problem solving (queue + open issues not already in queue)
+            const allItems = [
+              ...pq,
+              ...openIssues.filter(i => !pq.find(p => p.id === i.id)).map(i => ({ id: i.id, title: i.title, source: "issue", sourceLabel: `P${i.priority} Issue` }))
+            ].filter(item => !solvedThisSession.find(s => s.id === item.id));
+
+            const inFocus = focusQueue;
+            const pending = allItems.filter(item => !inFocus.find(f => f.id === item.id));
+            const canAddMore = inFocus.length < 3;
+            const activeItem = inFocus.find(f => f.id === activeIssueId);
+
+            const selectForFocus = (item) => {
+              if (inFocus.length >= 3) return;
+              setFocusQueue(q => [...q, item]);
+              if (!activeIssueId) setActiveIssueId(item.id);
+            };
+            const markSolved = (item) => {
+              setSolvedThisSession(s => [...s, { ...item, notes: issueNotes[item.id] || "", solvedAt: now() }]);
+              setFocusQueue(q => q.filter(f => f.id !== item.id));
+              // remove from problemQueue in company data
+              onSave({ problemQueue: pq.filter(p => p.id !== item.id) });
+              const next = inFocus.find(f => f.id !== item.id);
+              setActiveIssueId(next ? next.id : null);
+            };
+            const markNotSolved = (item) => {
+              setFocusQueue(q => q.filter(f => f.id !== item.id));
+              const next = inFocus.find(f => f.id !== item.id);
+              setActiveIssueId(next ? next.id : null);
+            };
+
+            return (
+              <div className="fade-in">
+                {/* Add new issue */}
+                <div className="card" style={{ marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 18, marginBottom: 12 }}>Problem Solving — IDS</h3>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input placeholder="Identify a new issue..." value={newIssue.title} onChange={e => setNewIssue(n => ({ ...n, title: e.target.value }))} style={{ flex: 1 }} onKeyDown={e => e.key === "Enter" && addIssue()} />
+                    <select value={newIssue.priority} onChange={e => setNewIssue(n => ({ ...n, priority: e.target.value }))} style={{ width: 110 }}>
+                      <option value="1">Priority 1</option>
+                      <option value="2">Priority 2</option>
+                      <option value="3">Priority 3</option>
+                    </select>
+                    <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addIssue}>Add</button>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  {/* LEFT: Problem queue + selection */}
+                  <div>
+                    {/* Focus queue */}
+                    <div className="card" style={{ marginBottom: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                        <h4 style={{ fontSize: 15 }}>Focus Queue <span style={{ color: C.textMuted, fontSize: 12 }}>({inFocus.length}/3)</span></h4>
+                        {!canAddMore && <span style={{ fontSize: 11, color: C.yellow, fontWeight: 700 }}>MAX 3 SELECTED</span>}
+                      </div>
+                      {inFocus.length === 0 && (
+                        <div style={{ fontSize: 13, color: C.textMuted, textAlign: "center", padding: "12px 0" }}>Select up to 3 problems below to discuss.</div>
+                      )}
+                      {inFocus.map((item, idx) => (
+                        <div key={item.id} onClick={() => setActiveIssueId(item.id)}
+                          style={{ padding: "10px 12px", borderRadius: 7, border: `1px solid ${activeIssueId === item.id ? C.red : C.border}`, background: activeIssueId === item.id ? C.redGlow : C.surface2, marginBottom: 6, cursor: "pointer", transition: "all 0.15s" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 20, height: 20, borderRadius: "50%", background: activeIssueId === item.id ? C.red : C.surface3, color: activeIssueId === item.id ? "#fff" : C.textMuted, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{idx + 1}</div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{item.title}</div>
+                              <div style={{ fontSize: 10, color: C.red, fontWeight: 700, letterSpacing: 0.5 }}>{item.sourceLabel}</div>
+                            </div>
+                            {issueNotes[item.id] && <div style={{ fontSize: 10, color: C.green }}>📝</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Pending problems */}
+                    <div className="card">
+                      <h4 style={{ fontSize: 15, marginBottom: 12 }}>Problem Queue <span style={{ color: C.textMuted, fontSize: 12 }}>({pending.length})</span></h4>
+                      {pending.length === 0 && (
+                        <div style={{ fontSize: 13, color: C.textMuted, textAlign: "center", padding: "12px 0" }}>
+                          {allItems.length === 0 ? "No problems queued. Use ⚑ Problem Solve buttons in earlier segments, or add an issue above." : "All queued problems are in focus."}
+                        </div>
+                      )}
+                      {pending.map(item => (
+                        <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</div>
+                            <div style={{ fontSize: 10, color: C.textMuted }}>{item.sourceLabel}</div>
+                          </div>
+                          <button onClick={() => selectForFocus(item)} disabled={!canAddMore}
+                            style={{ padding: "5px 12px", borderRadius: 5, border: `1px solid ${canAddMore ? C.red : C.border}`, background: canAddMore ? "rgba(230,51,41,0.1)" : C.surface2, color: canAddMore ? C.red : C.textDim, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor: canAddMore ? "pointer" : "not-allowed" }}>
+                            + Focus
+                          </button>
+                        </div>
+                      ))}
+                      {/* Solved this session */}
+                      {solvedThisSession.length > 0 && (
+                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: C.green, marginBottom: 6, textTransform: "uppercase" }}>Solved This Session</div>
+                          {solvedThisSession.map(item => (
+                            <div key={item.id} style={{ fontSize: 13, color: C.textMuted, textDecoration: "line-through", padding: "4px 0" }}>✓ {item.title}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RIGHT: Active discussion */}
+                  <div>
+                    {!activeItem ? (
+                      <div className="card" style={{ textAlign: "center", padding: "40px 20px" }}>
+                        <div style={{ fontSize: 32, marginBottom: 12 }}>💬</div>
+                        <div style={{ fontSize: 14, color: C.textMuted }}>Select a problem from the focus queue to begin discussion.</div>
+                      </div>
+                    ) : (
+                      <div className="card fade-in" key={activeItem.id}>
+                        <div style={{ background: C.red, color: "#fff", borderRadius: 6, padding: "8px 14px", marginBottom: 16, display: "inline-block", fontSize: 11, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase" }}>
+                          {activeItem.sourceLabel}
+                        </div>
+                        <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, lineHeight: 1.3 }}>{activeItem.title}</h3>
+                        <div className="field">
+                          <label className="label">Discussion Notes</label>
+                          <textarea
+                            placeholder="Identify → Discuss → Solve. Capture the root cause, ideas discussed, and proposed solution..."
+                            value={issueNotes[activeItem.id] || ""}
+                            onChange={e => setIssueNotes(n => ({ ...n, [activeItem.id]: e.target.value }))}
+                            style={{ minHeight: 140 }}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                          <button onClick={() => markSolved(activeItem)}
+                            style={{ flex: 1, padding: "12px", borderRadius: 8, border: `1px solid ${C.green}`, background: "rgba(34,197,94,0.12)", color: C.green, fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:15, cursor:"pointer", letterSpacing:1 }}>
+                            ✓ SOLVED
+                          </button>
+                          <button onClick={() => markNotSolved(activeItem)}
+                            style={{ flex: 1, padding: "12px", borderRadius: 8, border: `1px solid rgba(230,51,41,0.4)`, background: "rgba(230,51,41,0.08)", color: C.red, fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:15, cursor:"pointer", letterSpacing:1 }}>
+                            ↩ NOT SOLVED
+                          </button>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.textDim, marginTop: 10, textAlign: "center" }}>
+                          "Not Solved" returns this item to the queue for a future meeting.
+                        </div>
+                        {/* Quick switch between focus items */}
+                        {inFocus.length > 1 && (
+                          <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 8 }}>SWITCH TO:</div>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {inFocus.filter(f => f.id !== activeItem.id).map(f => (
+                                <button key={f.id} onClick={() => setActiveIssueId(f.id)}
+                                  style={{ padding: "5px 12px", borderRadius: 5, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily:"'Barlow',sans-serif", fontSize:12, cursor:"pointer" }}>
+                                  {f.title.length > 30 ? f.title.slice(0, 30) + "…" : f.title}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* CONCLUDE + RATE */}
+          {activeIdx === 6 && (
+            <div className="card">
+              <h3 style={{ fontSize: 18, marginBottom: 8 }}>Rate This Meeting</h3>
+              <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 20 }}>How would you rate this meeting on a scale of 1–10?</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+                {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                  <button key={n} className={`rating-btn ${rating === n ? "sel" : ""}`} onClick={() => setRating(n)}>{n}</button>
+                ))}
+              </div>
+              <div className="field">
+                <label className="label">Any closing notes</label>
+                <textarea placeholder="Key takeaways, decisions made..." value={notes.conclude || ""} onChange={e => setNotes(n => ({ ...n, conclude: e.target.value }))} />
+              </div>
+              <button className="btn-primary" style={{ width: "100%", padding: "14px", fontSize: 15 }} onClick={finishMeeting} disabled={!rating}>
+                {rating ? `Complete Meeting — Rated ${rating}/10` : "Select a Rating to Finish"}
+              </button>
+            </div>
+          )}
+
+          {/* INTRODUCTIONS / GOOD NEWS */}
+          {activeIdx === 0 && (
+            <div className="fade-in">
+              {/* Attendance */}
+              <div className="card" style={{ marginBottom: 16 }}>
+                <h3 style={{ fontSize: 18, marginBottom: 4 }}>Attendance</h3>
+                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Mark who is present for today's huddle.</div>
+                {members.length === 0 && (
+                  <div style={{ color: C.textMuted, fontSize: 13 }}>No team members added yet. Add them in Settings.</div>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {members.map(m => {
+                    const status = attendance[m.id];
+                    const isPresent = status !== false;
+                    return (
+                      <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderRadius: 8, border: `1px solid ${isPresent ? "rgba(34,197,94,0.35)" : "rgba(230,51,41,0.25)"}`, background: isPresent ? "rgba(34,197,94,0.06)" : "rgba(230,51,41,0.06)", transition: "all 0.2s" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: "50%", background: isPresent ? "rgba(34,197,94,0.2)" : C.surface2, border: `2px solid ${isPresent ? C.green : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: isPresent ? C.green : C.textMuted, transition: "all 0.2s" }}>
+                            {m.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{m.name}</div>
+                            <div style={{ fontSize: 11, color: C.textMuted }}>{m.role}</div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => setAttendance(a => ({ ...a, [m.id]: true }))}
+                            style={{ padding: "6px 14px", borderRadius: 6, border: `1px solid ${isPresent ? C.green : C.border}`, background: isPresent ? "rgba(34,197,94,0.2)" : C.surface2, color: isPresent ? C.green : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer", transition: "all 0.15s" }}>
+                            ✓ Present
+                          </button>
+                          <button onClick={() => setAttendance(a => ({ ...a, [m.id]: false }))}
+                            style={{ padding: "6px 14px", borderRadius: 6, border: `1px solid ${!isPresent ? C.red : C.border}`, background: !isPresent ? "rgba(230,51,41,0.15)" : C.surface2, color: !isPresent ? C.red : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer", transition: "all 0.15s" }}>
+                            ✕ Absent
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {members.length > 0 && (
+                  <div style={{ marginTop: 12, fontSize: 12, color: C.textMuted }}>
+                    {members.filter(m => attendance[m.id] !== false).length} of {members.length} present
+                  </div>
+                )}
+              </div>
+
+              {/* Spotlight Selector */}
+              <div className="card">
+                <h3 style={{ fontSize: 18, marginBottom: 4 }}>Good News Spotlight</h3>
+                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>Randomly select a present team member to share their personal & business best from the past week.</div>
+
+                {/* Spotlight result */}
+                <div style={{ minHeight: 100, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+                  {!spotlight && !spinning && (
+                    <div style={{ textAlign: "center", color: C.textDim, fontSize: 14 }}>Hit the button to pick someone!</div>
+                  )}
+                  {(spotlight || spinning) && (
+                    <div style={{ textAlign: "center" }} className={spinning ? "" : "fade-in"}>
+                      <div style={{ width: 72, height: 72, borderRadius: "50%", background: spinning ? C.surface2 : `rgba(230,51,41,0.15)`, border: `3px solid ${spinning ? C.border : C.red}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800, color: spinning ? C.textMuted : C.red, margin: "0 auto 12px", transition: "all 0.1s", fontFamily: "'Barlow Condensed',sans-serif" }}>
+                        {spotlight ? spotlight.name.charAt(0).toUpperCase() : "?"}
+                      </div>
+                      <div style={{ fontSize: spinning ? 18 : 24, fontWeight: 800, color: spinning ? C.textMuted : C.text, fontFamily: "'Barlow Condensed',sans-serif", letterSpacing: 1, transition: "all 0.1s" }}>
+                        {spotlight ? spotlight.name : "..."}
+                      </div>
+                      {!spinning && spotlight && (
+                        <div style={{ marginTop: 10, display: "flex", gap: 24, justifyContent: "center" }}>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: C.red, marginBottom: 4 }}>Personal Best</div>
+                            <div style={{ fontSize: 12, color: C.textMuted }}>Share with the team!</div>
+                          </div>
+                          <div style={{ width: 1, background: C.border }} />
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: C.red, marginBottom: 4 }}>Business Best</div>
+                            <div style={{ fontSize: 12, color: C.textMuted }}>Share with the team!</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={autoSelect}
+                  disabled={spinning || members.filter(m => attendance[m.id] !== false).length === 0}
+                  style={{ width: "100%", padding: "14px", borderRadius: 8, border: "none", cursor: spinning ? "not-allowed" : "pointer", fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 16, letterSpacing: 2, textTransform: "uppercase", background: spinning ? C.surface2 : `linear-gradient(135deg, ${C.red}, ${C.redDark})`, color: spinning ? C.textMuted : "#fff", transition: "all 0.2s", boxShadow: spinning ? "none" : `0 4px 20px rgba(230,51,41,0.3)` }}>
+                  {spinning ? "Selecting..." : spotlight ? "🎲  Pick Again" : "🎲  Auto-Select Spotlight"}
+                </button>
+                {members.filter(m => attendance[m.id] !== false).length === 0 && members.length > 0 && (
+                  <div style={{ textAlign: "center", fontSize: 12, color: C.red, marginTop: 8 }}>Mark at least one member as present above.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Generic notes for other segments */}
+          {![0,1,2,3,4,5,6].includes(activeIdx) && (
+            <div className="card">
+              <label className="label">Notes for this segment</label>
+              <textarea placeholder="Capture notes here..." value={notes[seg.id] || ""} onChange={e => setNotes(n => ({ ...n, [seg.id]: e.target.value }))} style={{ minHeight: 120 }} />
+            </div>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
+// ─── QUARTERLY TASKS ──────────────────────────────────────────────────
+function Tasks({ company, onSave, user }) {
+  const [tab, setTab] = useState("company");
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ title: "", who: "", smart: false, status: "on" });
+  const tasks = company.quarterlyTasks || [];
+
+  const addTask = () => {
+    if (!form.title.trim()) return;
+    onSave({ quarterlyTasks: [...tasks, { id: uid(), ...form, createdAt: now() }] });
+    setForm({ title: "", who: "", smart: false, status: "on" });
+    setShowAdd(false);
+  };
+  const updateStatus = (id, status) => onSave({ quarterlyTasks: tasks.map(t => t.id === id ? { ...t, status } : t) });
+  const deleteTask = (id) => onSave({ quarterlyTasks: tasks.filter(t => t.id !== id) });
+
+  return (
+    <Layout title="Quarterly Tasks" subtitle={company.currentQuarter}
+      action={<button className="btn-primary" onClick={() => setShowAdd(true)}><Icon.plus /> Add Task</button>}>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {["company", "individual"].map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            style={{ padding: "8px 20px", borderRadius: 6, border: `1px solid ${C.border}`, cursor: "pointer", fontFamily: "'Barlow',sans-serif", fontWeight: 600, fontSize: 13, background: tab === t ? C.red : C.surface2, color: tab === t ? "#fff" : C.textMuted }}>
+            {t === "company" ? "Company Tasks" : "Individual Tasks"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "company" && (
+        <div className="card">
+          <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+            {[["on", C.green, "On Track"], ["off", C.red, "Off Track"], ["done", C.blue, "Done"]].map(([s, c, l]) => (
+              <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: C.textMuted }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />{tasks.filter(t => t.status === s).length} {l}
+              </div>
+            ))}
+          </div>
+          {tasks.length === 0 && <div className="empty-state"><div style={{ fontSize: 14 }}>No tasks yet. Add your first quarterly task!</div></div>}
+          <table className="table">
+            {tasks.length > 0 && <thead><tr><th>Task</th><th>Who</th><th>SMART</th><th>Status</th><th></th></tr></thead>}
+            <tbody>
+              {tasks.map(t => (
+                <tr key={t.id}>
+                  <td style={{ fontWeight: 500 }}>{t.title}</td>
+                  <td style={{ color: C.textMuted }}>{t.who || "—"}</td>
+                  <td>{t.smart && <span className="tag-on">SMART</span>}</td>
+                  <td>
+                    <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
+                      style={{ width: 120, padding: "6px 10px", fontSize: 12 }}>
+                      <option value="on">On Track</option>
+                      <option value="off">Off Track</option>
+                      <option value="done">Done</option>
+                    </select>
+                  </td>
+                  <td>
+                    <button className="btn-danger" style={{ padding: "6px 10px" }} onClick={() => deleteTask(t.id)}><Icon.trash /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === "individual" && (
+        <div>
+          {(company.members || []).map(member => {
+            const myTasks = (company.individualTasks || {})[member.id] || [];
+            return (
+              <div key={member.id} className="card" style={{ marginBottom: 16 }}>
+                <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>{member.name}</div>
+                {myTasks.map(t => (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                    <span style={{ fontSize: 14 }}>{t.title}</span>
+                    <span className={t.smart ? "tag-on" : ""}>{t.smart ? "SMART" : ""}</span>
+                  </div>
+                ))}
+                {!myTasks.length && <div style={{ fontSize: 13, color: C.textMuted }}>No individual tasks assigned.</div>}
+              </div>
+            );
+          })}
+          {!(company.members || []).length && <div className="card"><div className="empty-state">Add team members in Settings to assign individual tasks.</div></div>}
+        </div>
+      )}
+
+      {showAdd && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowAdd(false)}>
+          <div className="modal">
+            <h3 style={{ fontSize: 20, marginBottom: 20 }}>Add Quarterly Task</h3>
+            <div className="field">
+              <label className="label">Task Description</label>
+              <input placeholder="What needs to be accomplished this quarter?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} autoFocus />
+            </div>
+            <div className="field">
+              <label className="label">Assigned To</label>
+              <input placeholder="Name or team" value={form.who} onChange={e => setForm(f => ({ ...f, who: e.target.value }))} />
+            </div>
+            <div className="field">
+              <label className="label">Initial Status</label>
+              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                <option value="on">On Track</option>
+                <option value="off">Off Track</option>
+              </select>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+              <div className={`checkbox ${form.smart ? "checked" : ""}`} onClick={() => setForm(f => ({ ...f, smart: !f.smart }))}>
+                {form.smart && <Icon.check />}
+              </div>
+              <span style={{ fontSize: 14 }}>This task is SMART (Specific, Measurable, Achievable, Relevant, Time-bound)</span>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={addTask}>Add Task</button>
+              <button className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Layout>
+  );
+}
+
+// ─── SCORECARD ────────────────────────────────────────────────────────
+function Scorecard({ company, onSave }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [newM, setNewM] = useState({ name: "", target: "", unit: "", owner: "" });
+  const measurables = company.scorecard?.measurables || [];
+  const entries = company.scorecard?.entries || {};
+  const wk = weekKey();
+  const members = company.members || [];
+
+  const addMeasurable = () => {
+    if (!newM.name.trim()) return;
+    const m = { id: uid(), ...newM };
+    onSave({ scorecard: { ...company.scorecard, measurables: [...measurables, m] } });
+    setNewM({ name: "", target: "", unit: "", owner: "" });
+    setShowAdd(false);
+  };
+
+  const setEntry = (measId, val) => {
+    const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
+    onSave({ scorecard: { ...company.scorecard, entries: updated } });
+  };
+
+  const deleteMeasurable = (id) => {
+    onSave({ scorecard: { ...company.scorecard, measurables: measurables.filter(m => m.id !== id) } });
+  };
+
+  // Last 8 weeks
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i * 7);
+    const startOfYear = new Date(d.getFullYear(), 0, 1);
+    const week = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+    weeks.push(`${d.getFullYear()}-W${week}`);
+  }
+
+  return (
+    <Layout title="Scorecard" subtitle="Track your most important numbers"
+      action={<button className="btn-primary" onClick={() => setShowAdd(true)}><Icon.plus /> Add Measurable</button>}>
+
+      {measurables.length === 0 ? (
+        <div className="card">
+          <div className="empty-state">
+            <div style={{ fontSize: 14 }}>No measurables yet. Add the numbers that matter most to your business.</div>
+            <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => setShowAdd(true)}>Add Your First Measurable</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <div className="card">
+            <table className="table" style={{ minWidth: 700 }}>
+              <thead>
+                <tr>
+                  <th>Measurable</th>
+                  <th>Responsible</th>
+                  <th>Target</th>
+                  {weeks.map(w => <th key={w} style={{ textAlign: "center" }}>{w.split("-W")[1] ? `W${w.split("-W")[1]}` : w}</th>)}
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {measurables.map(m => (
+                  <tr key={m.id}>
+                    <td style={{ fontWeight: 600 }}>{m.name}{m.unit && <span style={{ color: C.textMuted, fontSize: 12, marginLeft: 4 }}>({m.unit})</span>}</td>
+                    <td>
+                      <select value={m.owner || ""} onChange={e => {
+                        onSave({ scorecard: { ...company.scorecard, measurables: measurables.map(x => x.id === m.id ? { ...x, owner: e.target.value } : x) } });
+                      }} style={{ width: 130, padding: "5px 8px", fontSize: 12 }}>
+                        <option value="">Unassigned</option>
+                        {members.map(mem => <option key={mem.id} value={mem.name}>{mem.name}</option>)}
+                      </select>
+                    </td>
+                    <td style={{ color: C.textMuted }}>{m.target}</td>
+                    {weeks.map(w => {
+                      const val = entries[w]?.[m.id] || "";
+                      const isCurrentWeek = w === wk;
+                      const onTarget = val && m.target && parseFloat(val) >= parseFloat(m.target);
+                      return (
+                        <td key={w} style={{ textAlign: "center" }}>
+                          {isCurrentWeek ? (
+                            <input value={val} onChange={e => setEntry(m.id, e.target.value)}
+                              style={{ width: 70, textAlign: "center", padding: "6px 8px", fontSize: 13, border: `1px solid ${C.red}` }} />
+                          ) : (
+                            <span style={{ color: val ? (onTarget ? C.green : C.red) : C.textDim, fontWeight: val ? 700 : 400 }}>
+                              {val || "—"}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    <td>
+                      <button className="btn-danger" style={{ padding: "6px 10px" }} onClick={() => deleteMeasurable(m.id)}><Icon.trash /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {showAdd && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowAdd(false)}>
+          <div className="modal">
+            <h3 style={{ fontSize: 20, marginBottom: 20 }}>Add Measurable</h3>
+            <div className="field">
+              <label className="label">Measurable Name</label>
+              <input placeholder="e.g. Revenue, Closed Jobs, NPS Score..." value={newM.name} onChange={e => setNewM(m => ({ ...m, name: e.target.value }))} autoFocus />
+            </div>
+            <div className="grid2">
+              <div className="field">
+                <label className="label">Weekly Target</label>
+                <input placeholder="10000" value={newM.target} onChange={e => setNewM(m => ({ ...m, target: e.target.value }))} />
+              </div>
+              <div className="field">
+                <label className="label">Unit (optional)</label>
+                <input placeholder="$, jobs, %" value={newM.unit} onChange={e => setNewM(m => ({ ...m, unit: e.target.value }))} />
+              </div>
+            </div>
+            <div className="field">
+              <label className="label">Who's Responsible</label>
+              <select value={newM.owner} onChange={e => setNewM(m => ({ ...m, owner: e.target.value }))}>
+                <option value="">Unassigned</option>
+                {members.map(mem => <option key={mem.id} value={mem.name}>{mem.name}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={addMeasurable}>Add</button>
+              <button className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Layout>
+  );
+}
+
+// ─── HEADLINES ────────────────────────────────────────────────────────
+function Headlines({ company, onSave }) {
+  const [form, setForm] = useState({ type: "Customer", text: "" });
+  const headlines = company.headlines || [];
+
+  const add = () => {
+    if (!form.text.trim()) return;
+    onSave({ headlines: [...headlines, { id: uid(), ...form, date: now() }] });
+    setForm(f => ({ ...f, text: "" }));
+  };
+  const del = (id) => onSave({ headlines: headlines.filter(h => h.id !== id) });
+
+  return (
+    <Layout title="Headlines" subtitle="Customer & Employee news from the week">
+      <div style={{ maxWidth: 700 }}>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h3 style={{ fontSize: 18, marginBottom: 16 }}>Add Headline</h3>
+          <div style={{ display: "flex", gap: 10 }}>
+            <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} style={{ width: 150 }}>
+              <option>Customer</option><option>Employee</option>
+            </select>
+            <input placeholder="What happened this week?" value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: 1 }} />
+            <button className="btn-primary" style={{ padding: "10px 20px" }} onClick={add}>Add</button>
+          </div>
+        </div>
+
+        <div className="card">
+          {headlines.length === 0 && <div className="empty-state"><div style={{ fontSize: 14 }}>No headlines yet. Share what's happening with customers and employees.</div></div>}
+          {[...headlines].reverse().map(h => (
+            <div key={h.id} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+              <div>
+                <span className="chip" style={{ marginRight: 10, fontSize: 10, background: h.type === "Customer" ? "rgba(59,130,246,0.15)" : "rgba(34,197,94,0.1)", borderColor: h.type === "Customer" ? "rgba(59,130,246,0.3)" : "rgba(34,197,94,0.2)", color: h.type === "Customer" ? C.blue : C.green }}>{h.type}</span>
+                <span style={{ fontSize: 14 }}>{h.text}</span>
+                <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{dateStr(new Date(h.date))}</div>
+              </div>
+              <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(h.id)}><Icon.trash /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
+// ─── ISSUES ───────────────────────────────────────────────────────────
+function Issues({ company, onSave }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ title: "", priority: "2", notes: "" });
+  const issues = company.issues || [];
+
+  const add = () => {
+    if (!form.title.trim()) return;
+    onSave({ issues: [...issues, { id: uid(), ...form, status: "open", createdAt: now() }] });
+    setForm({ title: "", priority: "2", notes: "" });
+    setShowAdd(false);
+  };
+  const resolve = (id) => onSave({ issues: issues.map(i => i.id === id ? { ...i, status: "resolved" } : i) });
+  const del = (id) => onSave({ issues: issues.filter(i => i.id !== id) });
+
+  const open = issues.filter(i => i.status !== "resolved").sort((a, b) => a.priority - b.priority);
+  const resolved = issues.filter(i => i.status === "resolved");
+
+  return (
+    <Layout title="Issues" subtitle="Identify, Discuss & Solve"
+      action={<button className="btn-primary" onClick={() => setShowAdd(true)}><Icon.plus /> Add Issue</button>}>
+
+      <div style={{ maxWidth: 700 }}>
+        {open.length === 0 && <div className="card" style={{ marginBottom: 16 }}><div className="empty-state"><div style={{ fontSize: 14 }}>No open issues. </div></div></div>}
+
+        {open.length > 0 && (
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3 style={{ fontSize: 18, marginBottom: 16 }}>Open Issues ({open.length})</h3>
+            {open.map(iss => (
+              <div key={iss.id} style={{ padding: "14px 0", borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: iss.priority == 1 ? C.red : iss.priority == 2 ? C.yellow : C.blue, background: iss.priority == 1 ? "rgba(230,51,41,0.1)" : iss.priority == 2 ? "rgba(234,179,8,0.1)" : "rgba(59,130,246,0.1)", padding: "2px 8px", borderRadius: 4 }}>
+                        PRIORITY {iss.priority}
+                      </span>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{iss.title}</span>
+                    </div>
+                    {iss.notes && <div style={{ fontSize: 13, color: C.textMuted }}>{iss.notes}</div>}
+                    <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{dateStr(new Date(iss.createdAt))}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn-ghost" style={{ fontSize: 12, color: C.green }} onClick={() => resolve(iss.id)}>✓ Resolve</button>
+                    <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(iss.id)}><Icon.trash /></button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {resolved.length > 0 && (
+          <div className="card">
+            <h3 style={{ fontSize: 18, marginBottom: 12, color: C.textMuted }}>Resolved ({resolved.length})</h3>
+            {resolved.slice(-5).reverse().map(iss => (
+              <div key={iss.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}`, opacity: 0.6 }}>
+                <span style={{ fontSize: 13, textDecoration: "line-through", color: C.textMuted }}>{iss.title}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showAdd && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowAdd(false)}>
+          <div className="modal">
+            <h3 style={{ fontSize: 20, marginBottom: 20 }}>Add Issue</h3>
+            <div className="field">
+              <label className="label">Issue</label>
+              <input placeholder="Describe the issue..." value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} autoFocus />
+            </div>
+            <div className="field">
+              <label className="label">Priority</label>
+              <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
+                <option value="1">1 — Critical</option>
+                <option value="2">2 — Important</option>
+                <option value="3">3 — Minor</option>
+              </select>
+            </div>
+            <div className="field">
+              <label className="label">Notes (optional)</label>
+              <textarea placeholder="Additional context..." value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={add}>Add Issue</button>
+              <button className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Layout>
+  );
+}
+
+// ─── TO-DOS ───────────────────────────────────────────────────────────
+function Todos({ company, onSave }) {
+  const [form, setForm] = useState({ title: "", assignee: "", dueDate: "" });
+  const todos = company.todos || [];
+
+  const add = () => {
+    if (!form.title.trim()) return;
+    onSave({ todos: [...todos, { id: uid(), ...form, done: false, createdAt: now() }] });
+    setForm({ title: "", assignee: "", dueDate: "" });
+  };
+  const toggle = (id) => onSave({ todos: todos.map(t => t.id === id ? { ...t, done: !t.done } : t) });
+  const del = (id) => onSave({ todos: todos.filter(t => t.id !== id) });
+
+  const pending = todos.filter(t => !t.done);
+  const done = todos.filter(t => t.done);
+
+  return (
+    <Layout title="To-Dos" subtitle="Weekly action items">
+      <div style={{ maxWidth: 700 }}>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h3 style={{ fontSize: 18, marginBottom: 16 }}>Add To-Do</h3>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <input placeholder="What needs to happen?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} style={{ flex: 2, minWidth: 200 }} />
+            <input placeholder="Who" value={form.assignee} onChange={e => setForm(f => ({ ...f, assignee: e.target.value }))} style={{ flex: 1, minWidth: 120 }} />
+            <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 120 }} />
+            <button className="btn-primary" style={{ padding: "10px 20px" }} onClick={add}>Add</button>
+          </div>
+        </div>
+
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize: 18, marginBottom: 12 }}>Pending ({pending.length})</h3>
+          {pending.length === 0 && <div style={{ fontSize: 13, color: C.textMuted }}>All clear! No pending to-dos.</div>}
+          {pending.map(t => (
+            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+              <div className={`checkbox ${t.done ? "checked" : ""}`} onClick={() => toggle(t.id)}>{t.done && <Icon.check />}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>{t.title}</div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>{t.assignee && `${t.assignee} · `}{t.dueDate && `Due ${dateStr(new Date(t.dueDate))}`}</div>
+              </div>
+              <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(t.id)}><Icon.trash /></button>
+            </div>
+          ))}
+        </div>
+
+        {done.length > 0 && (
+          <div className="card">
+            <h3 style={{ fontSize: 18, marginBottom: 12, color: C.textMuted }}>Completed ({done.length})</h3>
+            {done.slice(-8).reverse().map(t => (
+              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${C.border}`, opacity: 0.6 }}>
+                <div className="checkbox checked"><Icon.check /></div>
+                <div style={{ flex: 1, textDecoration: "line-through", fontSize: 14, color: C.textMuted }}>{t.title}</div>
+                <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(t.id)}><Icon.trash /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+}
+
+// ─── ORG CHART ────────────────────────────────────────────────────────
+function OrgChart({ company, onSave }) {
+  const [chart, setChart] = useState(company.orgChart || {});
+  const [saved, setSaved] = useState(false);
+  const set = (k, v) => setChart(c => ({ ...c, [k]: v }));
+
+  const save = () => { onSave({ orgChart: chart }); setSaved(true); setTimeout(() => setSaved(false), 2000); };
+
+  const Box = ({ title, items, color = C.red }) => (
+    <div style={{ background: C.surface, border: `2px solid ${color}`, borderRadius: 8, padding: "12px 16px", minWidth: 160 }}>
+      <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 16, fontWeight: 700, borderBottom: `1px solid ${C.border}`, paddingBottom: 6, marginBottom: 8 }}>{title}</div>
+      {items.map((item, i) => <div key={i} style={{ fontSize: 13, color: C.textMuted, marginBottom: 4 }}>• {item}</div>)}
+    </div>
+  );
+
+  return (
+    <Layout title="Responsibility Chart" subtitle="Define roles and accountability"
+      action={<button className="btn-primary" onClick={save}>{saved ? "✓ Saved" : "Save Chart"}</button>}>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        <div>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h3 style={{ fontSize: 18, marginBottom: 16 }}>Dreamer (Visionary)</h3>
+            <div className="field">
+              <label className="label">Name</label>
+              <input placeholder="Who is the Dreamer?" value={chart.dreamer || ""} onChange={e => set("dreamer", e.target.value)} />
+            </div>
+            <div style={{ fontSize: 13, color: C.textMuted }}>Responsibilities: Big Ideas, Strategic Thinking, Culture, R&D</div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h3 style={{ fontSize: 18, marginBottom: 16 }}>Doer (Integrator)</h3>
+            <div className="field">
+              <label className="label">Name</label>
+              <input placeholder="Who is the Doer?" value={chart.doer || ""} onChange={e => set("doer", e.target.value)} />
+            </div>
+            <div style={{ fontSize: 13, color: C.textMuted }}>Responsibilities: Fulfillment, Business Plan, Lead, Bridge Building</div>
+          </div>
+        </div>
+
+        <div>
+          {[
+            { key: "salesRoles", label: "Sales / Marketing", items: ["Marketing/Sales", "Revenue Generation", "Partner Relations"] },
+            { key: "opsRoles", label: "Operations", items: ["Field Work", "Process Mgmt", "Providing the Service", "Customer Service"] },
+            { key: "financeRoles", label: "Finance", items: ["Accounting", "Reporting", "HR/Administration"] },
+          ].map(dept => (
+            <div key={dept.key} className="card" style={{ marginBottom: 16 }}>
+              <h3 style={{ fontSize: 18, marginBottom: 16 }}>{dept.label}</h3>
+              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 12 }}>{dept.items.join(" · ")}</div>
+              <div className="field">
+                <label className="label">Team Members</label>
+                <textarea placeholder="List team members and their roles..."
+                  value={(chart[dept.key] || []).map(r => `${r.role}: ${r.members.join(", ")}`).join("\n")}
+                  onChange={e => {
+                    const lines = e.target.value.split("\n");
+                    const roles = lines.map(l => { const [r, ...m] = l.split(":"); return { role: r?.trim(), members: m.join(":").split(",").map(x => x.trim()).filter(Boolean) }; }).filter(r => r.role);
+                    set(dept.key, roles);
+                  }}
+                  style={{ minHeight: 80 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Visual preview */}
+      <div className="card" style={{ marginTop: 20 }}>
+        <h3 style={{ fontSize: 18, marginBottom: 20 }}>Chart Preview</h3>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
+          <Box title={`Dreamer${chart.dreamer ? ` — ${chart.dreamer}` : ""}`} items={["Big Ideas", "Strategic Thinking", "Culture", "R&D"]} />
+          <div style={{ width: 2, height: 24, background: C.border }} />
+          <Box title={`Doer${chart.doer ? ` — ${chart.doer}` : ""}`} items={["Fulfillment", "Business Plan", "Lead", "Bridge Building"]} />
+          <div style={{ width: 2, height: 24, background: C.border }} />
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 24, position: "relative" }}>
+            <div style={{ position: "absolute", top: 0, left: "16.5%", right: "16.5%", height: 2, background: C.border }} />
+            <Box title="Sales/Mktg" items={["Marketing/Sales", "Revenue Generation", "Partner Relations"]} color={C.blue} />
+            <Box title="Operations" items={["Field Work", "Process Mgmt", "Service Delivery", "Customer Service"]} color={C.yellow} />
+            <Box title="Finance" items={["Accounting", "Reporting", "HR/Admin"]} color={C.green} />
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
+// ─── MEETING HISTORY ──────────────────────────────────────────────────
+function MeetingHistory({ company }) {
+  const meetings = [...(company.meetings || [])].reverse();
+
+  return (
+    <Layout title="Meeting History" subtitle={`${meetings.length} meetings on record`}>
+      {meetings.length === 0 ? (
+        <div className="card"><div className="empty-state"><div>No meetings yet. Run your first Weekly Huddle to see history here.</div></div></div>
+      ) : (
+        <div style={{ maxWidth: 700 }}>
+          {meetings.map(m => (
+            <div key={m.id} className="card" style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 20, fontWeight: 700 }}>{dateStr(new Date(m.date))}</div>
+                  <div style={{ fontSize: 12, color: C.textMuted }}>Duration: ~{m.totalMinutes || "—"} minutes</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 32, fontWeight: 800, color: m.rating >= 8 ? C.green : m.rating >= 6 ? C.yellow : C.red, fontFamily: "'Barlow Condensed',sans-serif" }}>{m.rating}</div>
+                  <div style={{ fontSize: 11, color: C.textMuted }}>/ 10</div>
+                </div>
+              </div>
+              {m.notes?.conclude && (
+                <div style={{ fontSize: 13, color: C.textMuted, background: C.surface2, borderRadius: 6, padding: "10px 14px" }}>{m.notes.conclude}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Layout>
+  );
+}
+
+// ─── SETTINGS ────────────────────────────────────────────────────────
+function Settings({ company, onSave, user }) {
+  const [newMember, setNewMember] = useState({ name: "", email: "", role: "member" });
+  const [quarterLabel, setQuarterLabel] = useState(company.currentQuarter || "");
+  const [yearGoal, setYearGoal] = useState(company.yearGoal || {});
+
+  const addMember = () => {
+    if (!newMember.name.trim()) return;
+    const m = { id: uid(), ...newMember };
+    onSave({ members: [...(company.members || []), m] });
+    setNewMember({ name: "", email: "", role: "member" });
+  };
+  const delMember = (id) => onSave({ members: company.members.filter(m => m.id !== id) });
+
+  return (
+    <Layout title="Settings" subtitle={`${company.name} · Company Code: ${company.code}`}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 900 }}>
+        <div>
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3 style={{ fontSize: 18, marginBottom: 16 }}>Team Members</h3>
+            {(company.members || []).map(m => (
+              <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{m.name}</div>
+                  <div style={{ fontSize: 11, color: C.textMuted }}>{m.email} · {m.role}</div>
+                </div>
+                {m.id !== user.id && <button className="btn-danger" style={{ padding: "6px 10px" }} onClick={() => delMember(m.id)}><Icon.trash /></button>}
+              </div>
+            ))}
+            <div style={{ marginTop: 16 }}>
+              <h4 style={{ fontSize: 15, marginBottom: 10 }}>Add Team Member</h4>
+              <div className="field">
+                <input placeholder="Full name" value={newMember.name} onChange={e => setNewMember(m => ({ ...m, name: e.target.value }))} />
+              </div>
+              <div className="grid2">
+                <input placeholder="Email" value={newMember.email} onChange={e => setNewMember(m => ({ ...m, email: e.target.value }))} />
+                <select value={newMember.role} onChange={e => setNewMember(m => ({ ...m, role: e.target.value }))}>
+                  <option value="owner">Owner</option>
+                  <option value="admin">Admin</option>
+                  <option value="member">Member</option>
+                </select>
+              </div>
+              <button className="btn-primary" style={{ marginTop: 10, width: "100%" }} onClick={addMember}>Add Member</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3 style={{ fontSize: 18, marginBottom: 16 }}>Current Quarter</h3>
+            <div className="field">
+              <label className="label">Quarter Label</label>
+              <input placeholder="Q1 2025" value={quarterLabel} onChange={e => setQuarterLabel(e.target.value)} />
+            </div>
+            <button className="btn-primary" onClick={() => onSave({ currentQuarter: quarterLabel })}>Update Quarter</button>
+          </div>
+
+          <div className="card">
+            <h3 style={{ fontSize: 18, marginBottom: 16 }}>Annual Goal</h3>
+            <div className="field">
+              <label className="label">Future Date</label>
+              <input type="date" value={yearGoal.futureDate || ""} onChange={e => setYearGoal(g => ({ ...g, futureDate: e.target.value }))} />
+            </div>
+            <div className="grid2">
+              <div className="field">
+                <label className="label">Revenue Goal</label>
+                <input placeholder="$1,000,000" value={yearGoal.revenue || ""} onChange={e => setYearGoal(g => ({ ...g, revenue: e.target.value }))} />
+              </div>
+              <div className="field">
+                <label className="label">Profit Goal</label>
+                <input placeholder="$200,000" value={yearGoal.profit || ""} onChange={e => setYearGoal(g => ({ ...g, profit: e.target.value }))} />
+              </div>
+            </div>
+            <button className="btn-primary" onClick={() => onSave({ yearGoal })}>Save Goals</button>
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
+// ─── HISTORICAL QUARTERS ──────────────────────────────────────────────
+function QuarterHistory({ company }) {
+  const history = [...(company.quarterHistory || [])].reverse();
+  const [expanded, setExpanded] = useState(history[0]?.quarter || null);
+
+  if (history.length === 0) {
+    return (
+      <Layout title="Historical Quarters" subtitle="A record of every quarter's work">
+        <div className="card">
+          <div className="empty-state">
+            <div style={{ fontSize: 14 }}>No quarter history yet. Complete a Weekly Huddle meeting to start archiving quarterly data.</div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout title="Historical Quarters" subtitle={`${history.length} quarter${history.length !== 1 ? "s" : ""} archived`}>
+      <div style={{ maxWidth: 900 }}>
+        {history.map(q => {
+          const isOpen = expanded === q.quarter;
+          const avgRating = q.meetingRatings?.length
+            ? (q.meetingRatings.reduce((a, r) => a + r.rating, 0) / q.meetingRatings.length).toFixed(1)
+            : "—";
+          const solved = q.solvedProblems || [];
+          const tasks = q.tasks || [];
+          const todos = q.todos || [];
+
+          return (
+            <div key={q.quarter} className="card" style={{ marginBottom: 16 }}>
+              {/* Quarter header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
+                onClick={() => setExpanded(isOpen ? null : q.quarter)}>
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ background: C.red, color: "#fff", fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 2, padding: "6px 14px", borderRadius: 6 }}>{q.quarter}</div>
+                  <div style={{ display: "flex", gap: 20 }}>
+                    <span style={{ fontSize: 12, color: C.textMuted }}><span style={{ color: C.text, fontWeight: 700 }}>{tasks.length}</span> Tasks</span>
+                    <span style={{ fontSize: 12, color: C.textMuted }}><span style={{ color: C.text, fontWeight: 700 }}>{todos.length}</span> To-Dos</span>
+                    <span style={{ fontSize: 12, color: C.textMuted }}><span style={{ color: C.green, fontWeight: 700 }}>{solved.length}</span> Solved</span>
+                    <span style={{ fontSize: 12, color: C.textMuted }}>Avg Rating: <span style={{ color: avgRating >= 8 ? C.green : avgRating >= 6 ? C.yellow : C.red, fontWeight: 700 }}>{avgRating}</span></span>
+                  </div>
+                </div>
+                <span style={{ color: C.textMuted, fontSize: 18, transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}>›</span>
+              </div>
+
+              {isOpen && (
+                <div className="fade-in" style={{ marginTop: 20 }}>
+
+                  {/* Tasks table */}
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", color: C.red, marginBottom: 10 }}>Quarterly Tasks</div>
+                    {tasks.length === 0 ? <div style={{ fontSize: 13, color: C.textMuted }}>No tasks recorded.</div> : (
+                      <table className="table">
+                        <thead><tr><th>Task</th><th>Assigned To</th><th>Final Status</th></tr></thead>
+                        <tbody>
+                          {tasks.map((t, i) => (
+                            <tr key={i}>
+                              <td>{t.title}</td>
+                              <td style={{ color: C.textMuted }}>{t.who || "—"}</td>
+                              <td><span className={t.status === "done" ? "tag-done" : t.status === "on" ? "tag-on" : "tag-off"}>{t.status === "done" ? "Completed" : t.status === "on" ? "On Track" : "Off Track"}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
+                  {/* To-Dos table */}
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", color: C.red, marginBottom: 10 }}>To-Dos</div>
+                    {todos.length === 0 ? <div style={{ fontSize: 13, color: C.textMuted }}>No to-dos recorded.</div> : (
+                      <table className="table">
+                        <thead><tr><th>To-Do</th><th>Assigned To</th><th>Status</th></tr></thead>
+                        <tbody>
+                          {todos.map((t, i) => (
+                            <tr key={i}>
+                              <td>{t.title}</td>
+                              <td style={{ color: C.textMuted }}>{t.assignee || "—"}</td>
+                              <td><span className={t.done ? "tag-done" : "tag-off"}>{t.done ? "Done" : "Incomplete"}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
+                  {/* Solved Problems table */}
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", color: C.green, marginBottom: 10 }}>Problems Solved</div>
+                    {solved.length === 0 ? <div style={{ fontSize: 13, color: C.textMuted }}>No problems marked solved this quarter.</div> : (
+                      <table className="table">
+                        <thead><tr><th>Problem</th><th>Source</th><th>Notes</th><th>Solved</th></tr></thead>
+                        <tbody>
+                          {solved.map((s, i) => (
+                            <tr key={i}>
+                              <td style={{ fontWeight: 600 }}>{s.title}</td>
+                              <td style={{ color: C.textMuted }}>{s.sourceLabel || "—"}</td>
+                              <td style={{ color: C.textMuted, fontSize: 12, maxWidth: 280 }}>{s.notes || "—"}</td>
+                              <td style={{ color: C.textMuted, fontSize: 12, whiteSpace: "nowrap" }}>{s.solvedAt ? dateStr(new Date(s.solvedAt)) : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
+                  {/* Meeting ratings */}
+                  {q.meetingRatings?.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", color: C.textMuted, marginBottom: 10 }}>Meeting Ratings This Quarter</div>
+                      <table className="table">
+                        <thead><tr><th>Date</th><th>Rating</th></tr></thead>
+                        <tbody>
+                          {q.meetingRatings.map((r, i) => (
+                            <tr key={i}>
+                              <td style={{ color: C.textMuted }}>{dateStr(new Date(r.date))}</td>
+                              <td><span style={{ fontWeight: 800, color: r.rating >= 8 ? C.green : r.rating >= 6 ? C.yellow : C.red }}>{r.rating}/10</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Layout>
+  );
+}
+
+// ─── STYLE INJECTOR ──────────────────────────────────────────────────
+function GlobalStyles() {
+  useEffect(() => {
+    const id = "vast-global-styles";
+    if (!document.getElementById(id)) {
+      const el = document.createElement("style");
+      el.id = id;
+      el.textContent = STYLE;
+      document.head.appendChild(el);
+    }
+    return () => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    };
+  }, []);
+  return null;
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────
+export default function VASTApp() {
+  const [user, setUser] = useState(null);
+  const [company, setCompanyState] = useState(null);
+  const [view, setView] = useState("dashboard");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (userData) => {
+    setLoading(true);
+    const data = await loadCompany(userData.companyId);
+    setUser(userData);
+    setCompanyState(data);
+    setLoading(false);
+  };
+
+  const handleSave = useCallback(async (updates) => {
+    if (!company || !user) return;
+    const updated = { ...company, ...updates };
+    setCompanyState(updated);
+    await saveCompany(user.companyId, updated);
+  }, [company, user]);
+
+  const handleLogout = () => { setUser(null); setCompanyState(null); setView("dashboard"); };
+
+  if (loading) return (
+    <><GlobalStyles />
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center" }}>
+        <VASTLogo size="lg" />
+        <div style={{ marginTop: 16, color: C.textMuted, fontSize: 14 }}>Loading...</div>
+      </div>
+    </div></>
+  );
+
+  if (!user || !company) return <><GlobalStyles /><AuthScreen onLogin={handleLogin} /></>;
+
+  const viewProps = { company, onSave: handleSave, user };
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg }}>
+      <GlobalStyles />
+      <Sidebar view={view} setView={setView} user={user} company={company} onLogout={handleLogout} />
+      {view === "dashboard" && <Dashboard {...viewProps} setView={setView} />}
+      {view === "navigator" && <Navigator {...viewProps} />}
+      {view === "huddle" && <WeeklyHuddle {...viewProps} />}
+      {view === "tasks" && <Tasks {...viewProps} />}
+      {view === "scorecard" && <Scorecard {...viewProps} />}
+      {view === "headlines" && <Headlines {...viewProps} />}
+      {view === "issues" && <Issues {...viewProps} />}
+      {view === "todos" && <Todos {...viewProps} />}
+      {view === "orgchart" && <OrgChart {...viewProps} />}
+      {view === "history" && <MeetingHistory {...viewProps} />}
+      {view === "quarterhistory" && <QuarterHistory {...viewProps} />}
+      {view === "settings" && <Settings {...viewProps} />}
+    </div>
+  );
+}
