@@ -630,6 +630,10 @@ const AGENDA = [
 ];
 
 function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
+  // Build agenda using per-huddle custom durations if set
+  const customMins = ((company.huddles || []).find(h => h.id === huddleId) || {}).agendaMins || {};
+  const agenda = AGENDA.map(a => ({ ...a, minutes: customMins[a.id] ?? a.minutes }));
+
   const [started, setStarted] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -656,8 +660,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const spinRef = useRef(null);
   // Only show members assigned to this huddle (or all if huddle has no member list yet)
   const allMembers = company.members || [];
-  const huddleObj = (company.huddles || []).find(h => h.id === huddleId);
-  const huddleMemberIds = huddleObj?.memberIds;
+  const huddleObj = (company.huddles || []).find(h => h.id === huddleId) || {};
+  const huddleMemberIds = huddleObj.memberIds;
   const members = huddleMemberIds && huddleMemberIds.length > 0
     ? allMembers.filter(m => huddleMemberIds.includes(m.id))
     : allMembers;
@@ -667,7 +671,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
     if (pq.find(p => p.id === item.id)) return; // already in queue
     onSave({ problemQueue: [...pq, item] });
   };
-  const seg = AGENDA[activeIdx];
+  const seg = agenda[activeIdx];
   const segLimit = seg.minutes * 60;
 
   useEffect(() => {
@@ -684,7 +688,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const over = segElapsed > segLimit;
 
   const next = () => {
-    if (activeIdx < AGENDA.length - 1) { setActiveIdx(i => i + 1); setSegElapsed(0); }
+    if (activeIdx < agenda.length - 1) { setActiveIdx(i => i + 1); setSegElapsed(0); }
   };
   const prev = () => {
     if (activeIdx > 0) { setActiveIdx(i => i - 1); setSegElapsed(0); }
@@ -923,21 +927,40 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
   if (!started) {
     return (
-      <Layout title={huddleName} subtitle="60–90 minute structured team meeting">
+      <Layout title={huddleName} subtitle={`${agenda.reduce((s,a)=>s+a.minutes,0)} min · Adjust times before starting`}>
         <div style={{ maxWidth: 600, margin: "0 auto" }}>
           <div className="card" style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 20, marginBottom: 16 }}>Meeting Agenda</h3>
-            {AGENDA.map((a, i) => (
-              <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 12, fontStyle: "italic" }}>Click any time to adjust — saved as your default for this huddle.</div>
+            {agenda.map((a, i) => (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: 28, height: 28, background: C.surface2, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.red }}>{i + 1}</div>
                   <span style={{ fontSize: 15 }}>{a.label}</span>
                 </div>
-                <span style={{ fontSize: 13, color: C.textMuted, fontWeight: 600 }}>{a.minutes} min</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    type="number"
+                    min="1"
+                    max="180"
+                    value={a.minutes}
+                    onChange={e => {
+                      const val = Math.max(1, parseInt(e.target.value) || 1);
+                      const allHuddles = company.huddles || [];
+                      const updated = allHuddles.map(h => h.id === huddleId
+                        ? { ...h, agendaMins: { ...(h.agendaMins || {}), [a.id]: val } }
+                        : h
+                      );
+                      onSave({ huddles: updated });
+                    }}
+                    style={{ width: 52, textAlign: "center", padding: "5px 6px", fontSize: 13, fontWeight: 700, border: `1px solid ${C.border}`, borderRadius: 6, background: C.surface2, color: C.text, fontFamily: "'Barlow',sans-serif" }}
+                  />
+                  <span style={{ fontSize: 13, color: C.textMuted }}>min</span>
+                </div>
               </div>
             ))}
             <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", color: C.textMuted, fontSize: 14 }}>
-              <span>Total</span><span style={{ fontWeight: 700 }}>60 min</span>
+              <span>Total</span><span style={{ fontWeight: 700, color: C.text }}>{agenda.reduce((s, a) => s + a.minutes, 0)} min</span>
             </div>
           </div>
           <button className="btn-primary" style={{ width: "100%", padding: "16px", fontSize: 16 }} onClick={() => setStarted(true)}>
@@ -960,7 +983,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
               {over && <div style={{ color: C.red, fontSize: 11, fontWeight: 700, marginTop: 4 }}>OVERTIME</div>}
             </div>
           </div>
-          {AGENDA.map((a, i) => (
+          {agenda.map((a, i) => (
             <div key={a.id} className={`huddle-item ${i === activeIdx ? "active" : ""} ${i < activeIdx ? "done" : ""}`}
               onClick={() => { setActiveIdx(i); setSegElapsed(0); }}>
               <div style={{ width: 22, height: 22, background: i < activeIdx ? C.green : i === activeIdx ? C.red : C.surface2, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
