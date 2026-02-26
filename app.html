@@ -152,6 +152,8 @@ const makeSTYLE = (C) => `
 const uid = () => Math.random().toString(36).slice(2, 9);
 const now = () => new Date().toISOString();
 const dateStr = (d = new Date()) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+// Normalize todo assignees — supports both old string and new array format
+const getAssignees = (t) => t.assignees ? t.assignees : (t.assignee ? [t.assignee] : []);
 const weekKey = () => weekKeyFromDate(new Date());
 const weekKeyFromDate = (d) => {
   const startOfYear = new Date(d.getFullYear(), 0, 1);
@@ -631,7 +633,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const [notes, setNotes] = useState({});
   const [newHeadline, setNewHeadline] = useState({ type: "Customer", text: "", huddleId: huddleId || "" });
   const defaultDueDate = () => new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10);
-  const [newTodo, setNewTodo] = useState({ title: "", assignee: "", dueDate: defaultDueDate() });
+  const [newTodo, setNewTodo] = useState({ title: "", assignees: [], dueDate: defaultDueDate() });
   const [newIssue, setNewIssue] = useState({ title: "", priority: "2" });
   const [rating, setRating] = useState(0); // final computed average
   const [memberRatings, setMemberRatings] = useState({}); // { memberId: score }
@@ -692,7 +694,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   };
   const addTodo = () => {
     if (!newTodo.title.trim()) return;
-    const t = { id: uid(), title: newTodo.title, assignee: newTodo.assignee, dueDate: newTodo.dueDate, done: false, createdAt: now() };
+    const t = { id: uid(), title: newTodo.title, assignees: newTodo.assignees, dueDate: newTodo.dueDate, done: false, createdAt: now() };
     onSave({ todos: [...(company.todos || []), t] });
     setNewTodo({ title: "", assignee: "", dueDate: defaultDueDate() });
   };
@@ -767,9 +769,16 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
       // Group by assignee
       const grouped = {};
       allOpen.forEach(t => {
-        const key = t.assignee || "Unassigned";
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push(t);
+        const assignees = getAssignees(t);
+        if (assignees.length === 0) {
+          if (!grouped["Unassigned"]) grouped["Unassigned"] = [];
+          grouped["Unassigned"].push(t);
+        } else {
+          assignees.forEach(name => {
+            if (!grouped[name]) grouped[name] = [];
+            grouped[name].push(t);
+          });
+        }
       });
       Object.entries(grouped).sort(([a],[b]) => a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : a.localeCompare(b)).forEach(([name, items]) => {
         lines.push(`  ${name}:`);
@@ -1167,8 +1176,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 500 }}>{t.title}</div>
                         <div style={{ fontSize: 11, color: isOverdue ? C.red : C.textMuted, marginTop: 2 }}>
-                          {t.assignee && <span>{t.assignee}</span>}
-                          {t.assignee && t.dueDate && <span> · </span>}
+                          {getAssignees(t).length > 0 && <span>{getAssignees(t).join(", ")}</span>}
+                          {getAssignees(t).length > 0 && t.dueDate && <span> · </span>}
                           {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "⚠ Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
                         </div>
                       </div>
@@ -1187,12 +1196,35 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                 })}
                 <div style={{ marginTop: 16 }}>
                   <h4 style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted, marginBottom: 10 }}>Add New To-Do</h4>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: members.length ? 8 : 0 }}>
                     <input placeholder="Task..." value={newTodo.title} onChange={e => setNewTodo(n => ({ ...n, title: e.target.value }))} style={{ flex: 2, minWidth: 160 }} />
-                    <input placeholder="Who" value={newTodo.assignee} onChange={e => setNewTodo(n => ({ ...n, assignee: e.target.value }))} style={{ flex: 1, minWidth: 100 }} />
                     <input type="date" value={newTodo.dueDate} onChange={e => setNewTodo(n => ({ ...n, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 130 }} />
                     <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addTodo}>Add</button>
                   </div>
+                  {members.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 11, color: C.textMuted, marginRight: 2 }}>Assign to:</span>
+                      {members.map(m => {
+                        const sel = (newTodo.assignees || []).includes(m.name);
+                        return (
+                          <button key={m.id} onClick={() => setNewTodo(n => ({ ...n, assignees: sel ? n.assignees.filter(a => a !== m.name) : [...(n.assignees||[]), m.name] }))}
+                            style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Barlow',sans-serif", transition: "all 0.15s",
+                              background: sel ? "rgba(230,51,41,0.15)" : C.surface2,
+                              color: sel ? C.red : C.textMuted,
+                              border: `1px solid ${sel ? "rgba(230,51,41,0.4)" : C.border}` }}>
+                            {sel ? "✓ " : ""}{m.name}
+                          </button>
+                        );
+                      })}
+                      <button onClick={() => {
+                        const allNames = members.map(m => m.name);
+                        const allSel = allNames.every(n => (newTodo.assignees||[]).includes(n));
+                        setNewTodo(n => ({ ...n, assignees: allSel ? [] : allNames }));
+                      }} style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Barlow',sans-serif", background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
+                        {members.every(m => (newTodo.assignees||[]).includes(m.name)) ? "✓ Everyone" : "Everyone"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -2160,15 +2192,15 @@ function Issues({ company, onSave }) {
 // ─── TO-DOS ───────────────────────────────────────────────────────────
 function Todos({ company, onSave }) {
   const todoDueDefault = () => new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10);
-  const [form, setForm] = useState({ title: "", assignee: "", dueDate: todoDueDefault(), huddleId: "" });
+  const [form, setForm] = useState({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: "" });
   const todos = company.todos || [];
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
 
   const add = () => {
     if (!form.title.trim()) return;
-    onSave({ todos: [...todos, { id: uid(), ...form, done: false, createdAt: now() }] });
-    setForm({ title: "", assignee: "", dueDate: todoDueDefault(), huddleId: "" });
+    onSave({ todos: [...todos, { id: uid(), title: form.title, assignees: form.assignees, dueDate: form.dueDate, huddleId: form.huddleId, done: false, createdAt: now() }] });
+    setForm({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: "" });
   };
   const toggle = (id) => onSave({ todos: todos.map(t => t.id === id ? { ...t, done: !t.done } : t) });
   const del = (id) => onSave({ todos: todos.filter(t => t.id !== id) });
@@ -2183,23 +2215,44 @@ function Todos({ company, onSave }) {
       <div style={{ maxWidth: 700 }}>
         <div className="card" style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: 18, marginBottom: 16 }}>Add To-Do</h3>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <input placeholder="What needs to happen?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} style={{ flex: 2, minWidth: 200 }} />
-{(company.members || []).length > 0 ? (
-              <select value={form.assignee} onChange={e => setForm(f => ({ ...f, assignee: e.target.value }))} style={{ flex: 1, minWidth: 140 }}>
-                <option value="">Unassigned</option>
-                {(company.members || []).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-              </select>
-            ) : (
-              <input placeholder="Who" value={form.assignee} onChange={e => setForm(f => ({ ...f, assignee: e.target.value }))} style={{ flex: 1, minWidth: 120 }} />
-            )}
-            <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 120 }} />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: (company.members||[]).length ? 10 : 0 }}>
+            <input placeholder="What needs to happen?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: 2, minWidth: 200 }} />
+            <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 130 }} />
             <select value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ flex: 1, minWidth: 140 }}>
               <option value="">No Huddle</option>
               {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
             </select>
             <button className="btn-primary" style={{ padding: "10px 20px" }} onClick={add}>Add</button>
           </div>
+          {(company.members || []).length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: C.textMuted, marginRight: 2 }}>Assign to:</span>
+              {(company.members || []).map(m => {
+                const sel = (form.assignees || []).includes(m.name);
+                return (
+                  <button key={m.id} onClick={() => setForm(f => ({ ...f, assignees: sel ? f.assignees.filter(a => a !== m.name) : [...(f.assignees||[]), m.name] }))}
+                    style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Barlow',sans-serif", transition: "all 0.15s",
+                      background: sel ? "rgba(230,51,41,0.15)" : C.surface2,
+                      color: sel ? C.red : C.textMuted,
+                      border: `1px solid ${sel ? "rgba(230,51,41,0.4)" : C.border}` }}>
+                    {sel ? "✓ " : ""}{m.name}
+                  </button>
+                );
+              })}
+              <button onClick={() => {
+                const allNames = (company.members||[]).map(m => m.name);
+                const allSel = allNames.every(n => (form.assignees||[]).includes(n));
+                setForm(f => ({ ...f, assignees: allSel ? [] : allNames }));
+              }} style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Barlow',sans-serif", background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
+                {(company.members||[]).every(m => (form.assignees||[]).includes(m.name)) ? "✓ Everyone" : "Everyone"}
+              </button>
+              {(form.assignees||[]).length > 0 && (
+                <span style={{ fontSize: 11, color: C.textMuted, marginLeft: 4 }}>
+                  → {form.assignees.join(", ")}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
@@ -2221,8 +2274,8 @@ function Todos({ company, onSave }) {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 500 }}>{t.title}</div>
                   <div style={{ fontSize: 11, color: isOverdue ? C.red : C.textMuted, marginTop: 2 }}>
-                    {t.assignee && <span>{t.assignee}</span>}
-                    {t.assignee && t.dueDate && <span> · </span>}
+                    {getAssignees(t).length > 0 && <span>{getAssignees(t).join(", ")}</span>}
+                    {getAssignees(t).length > 0 && t.dueDate && <span> · </span>}
                     {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "⚠ Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
                     {t.huddleId && <span> · {huddles.find(x => x.id === t.huddleId)?.name || ""}</span>}
                   </div>
