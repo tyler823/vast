@@ -629,7 +629,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const [elapsed, setElapsed] = useState(0);
   const [segElapsed, setSegElapsed] = useState(0);
   const [notes, setNotes] = useState({});
-  const [newHeadline, setNewHeadline] = useState({ type: "Customer", text: "" });
+  const [newHeadline, setNewHeadline] = useState({ type: "Customer", text: "", huddleId: huddleId || "" });
   const defaultDueDate = () => new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10);
   const [newTodo, setNewTodo] = useState({ title: "", assignee: "", dueDate: defaultDueDate() });
   const [newIssue, setNewIssue] = useState({ title: "", priority: "2" });
@@ -686,7 +686,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
   const addHeadline = () => {
     if (!newHeadline.text.trim()) return;
-    const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, date: now() };
+    const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, huddleId: newHeadline.huddleId || "", date: now() };
     onSave({ headlines: [...(company.headlines || []), h] });
     setNewHeadline(n => ({ ...n, text: "" }));
   };
@@ -1126,11 +1126,15 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                 ))}
                 <div style={{ marginTop: 16 }}>
                   <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: C.textMuted, letterSpacing: 1, textTransform: "uppercase", fontSize: 11 }}>Add New Headline</h4>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 140 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 130, flexShrink: 0 }}>
                       <option>Customer</option><option>Employee</option>
                     </select>
-                    <input placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && addHeadline()} style={{ flex: 1 }} />
+                    <select value={newHeadline.huddleId || ""} onChange={e => setNewHeadline(n => ({ ...n, huddleId: e.target.value }))} style={{ width: 150, flexShrink: 0 }}>
+                      <option value="">No Huddle</option>
+                      {(company.huddles || []).map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                    </select>
+                    <input placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && addHeadline()} style={{ flex: 1, minWidth: 160 }} />
                     <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addHeadline}>Add</button>
                   </div>
                 </div>
