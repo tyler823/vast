@@ -209,6 +209,7 @@ function defaultCompany(name, code) {
     quarterStart: new Date().toISOString().slice(0, 10),
     quarterEnd: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10),
     yearGoal: { futureDate: "", revenue: "", profit: "", goals: ["", "", "", "", ""] },
+    annualGoals: [{ id: "goal-1", name: "Annual Goal", futureDate: "", revenue: "", profit: "" }],
     problemQueue: [],
     quarterHistory: []
   };
@@ -2254,6 +2255,8 @@ function Settings({ company, onSave }) {
   const [quarterStart, setQuarterStart] = useState(company.quarterStart || new Date().toISOString().slice(0,10));
   const [quarterEnd, setQuarterEnd] = useState(company.quarterEnd || new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10));
   const [yearGoal, setYearGoal] = useState(company.yearGoal || {});
+  const [annualGoals, setAnnualGoals] = useState(company.annualGoals || [{ id: "goal-1", name: "Annual Goal", futureDate: "", revenue: "", profit: "" }]);
+  const [newGoalName, setNewGoalName] = useState("");
   const [companyName, setCompanyName] = useState(company.name || "");
   const [newHuddleName, setNewHuddleName] = useState("");
   const [newNavName, setNewNavName] = useState("");
@@ -2454,22 +2457,77 @@ function Settings({ company, onSave }) {
           </div>
 
           <div className="card">
-            <h3 style={{ fontSize: 18, marginBottom: 16 }}>Annual Goal</h3>
-            <div className="field">
-              <label className="label">Future Date</label>
-              <input type="date" value={yearGoal.futureDate || ""} onChange={e => setYearGoal(g => ({ ...g, futureDate: e.target.value }))} />
-            </div>
-            <div className="grid2">
-              <div className="field">
-                <label className="label">Revenue Goal</label>
-                <input placeholder="$1,000,000" value={yearGoal.revenue || ""} onChange={e => setYearGoal(g => ({ ...g, revenue: e.target.value }))} />
+            <h3 style={{ fontSize: 18, marginBottom: 4 }}>Annual Goals</h3>
+            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 16 }}>Set goals for each company or division. Each can have its own label, target date, revenue, and profit goal.</div>
+
+            {annualGoals.map((g, i) => (
+              <div key={g.id} style={{ marginBottom: 20, paddingBottom: 20, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <input
+                    value={g.name}
+                    onChange={e => {
+                      const updated = annualGoals.map(x => x.id === g.id ? { ...x, name: e.target.value } : x);
+                      setAnnualGoals(updated);
+                      onSave({ annualGoals: updated });
+                    }}
+                    style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, fontSize: 15, fontWeight: 700, padding: "4px 0", outline: "none", fontFamily: "'Barlow Condensed',sans-serif", letterSpacing: 0.5 }}
+                  />
+                  {annualGoals.length > 1 && (
+                    <button className="btn-danger" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => {
+                      const updated = annualGoals.filter(x => x.id !== g.id);
+                      setAnnualGoals(updated);
+                      onSave({ annualGoals: updated });
+                    }}><Icon.trash /></button>
+                  )}
+                </div>
+                <div className="field">
+                  <label className="label">Target Date</label>
+                  <input type="date" value={g.futureDate || ""} onChange={e => {
+                    const updated = annualGoals.map(x => x.id === g.id ? { ...x, futureDate: e.target.value } : x);
+                    setAnnualGoals(updated);
+                    onSave({ annualGoals: updated });
+                  }} />
+                </div>
+                <div className="grid2">
+                  <div className="field">
+                    <label className="label">Revenue Goal</label>
+                    <input placeholder="$1,000,000" value={g.revenue || ""} onChange={e => {
+                      const updated = annualGoals.map(x => x.id === g.id ? { ...x, revenue: e.target.value } : x);
+                      setAnnualGoals(updated);
+                      onSave({ annualGoals: updated });
+                    }} />
+                  </div>
+                  <div className="field">
+                    <label className="label">Profit Goal</label>
+                    <input placeholder="$200,000" value={g.profit || ""} onChange={e => {
+                      const updated = annualGoals.map(x => x.id === g.id ? { ...x, profit: e.target.value } : x);
+                      setAnnualGoals(updated);
+                      onSave({ annualGoals: updated });
+                    }} />
+                  </div>
+                </div>
               </div>
-              <div className="field">
-                <label className="label">Profit Goal</label>
-                <input placeholder="$200,000" value={yearGoal.profit || ""} onChange={e => setYearGoal(g => ({ ...g, profit: e.target.value }))} />
-              </div>
+            ))}
+
+            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+              <input placeholder="New goal label (e.g. Subsidiary A)..." value={newGoalName} onChange={e => setNewGoalName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && newGoalName.trim()) {
+                    const updated = [...annualGoals, { id: "goal-" + uid(), name: newGoalName.trim(), futureDate: "", revenue: "", profit: "" }];
+                    setAnnualGoals(updated);
+                    onSave({ annualGoals: updated });
+                    setNewGoalName("");
+                  }
+                }}
+                style={{ flex: 1 }} />
+              <button className="btn-primary" style={{ padding: "8px 14px" }} onClick={() => {
+                if (!newGoalName.trim()) return;
+                const updated = [...annualGoals, { id: "goal-" + uid(), name: newGoalName.trim(), futureDate: "", revenue: "", profit: "" }];
+                setAnnualGoals(updated);
+                onSave({ annualGoals: updated });
+                setNewGoalName("");
+              }}>+ Add</button>
             </div>
-            <button className="btn-primary" onClick={() => onSave({ yearGoal })}>Save Goals</button>
           </div>
         </div>
       </div>
@@ -2654,6 +2712,7 @@ function VASTApp() {
         if (!raw.huddles) raw.huddles = [{ id: "huddle-1", name: "Weekly Huddle" }];
         if (!raw.navigators) raw.navigators = [{ id: "nav-1", name: "Navigator", coreValues: raw.navigator?.coreValues || ["","",""], purpose: raw.navigator?.purpose || "", avenue: raw.navigator?.avenue || "", targetMarket: raw.navigator?.targetMarket || "", different: raw.navigator?.different || "", proof: raw.navigator?.proof || "", promise: raw.navigator?.promise || "", futureDate: raw.navigator?.futureDate || "", revenue: raw.navigator?.revenue || "", profit: raw.navigator?.profit || "", whatLooksLike: raw.navigator?.whatLooksLike || "", majorMotivator: raw.navigator?.majorMotivator || "" }];
         if (!raw.orgCharts) raw.orgCharts = [{ id: "org-1", name: "Responsibility Chart", ...(raw.orgChart || { dreamer: "", doer: "", salesRoles: [{ role: "Sales/Mktg", members: [""] }], opsRoles: [{ role: "Operations", members: [""] }], financeRoles: [{ role: "Finance", members: [""] }] }) }];
+        if (!raw.annualGoals) raw.annualGoals = [{ id: "goal-1", name: "Annual Goal", futureDate: raw.yearGoal?.futureDate || "", revenue: raw.yearGoal?.revenue || "", profit: raw.yearGoal?.profit || "" }];
         if (!raw.quarterStart) raw.quarterStart = new Date().toISOString().slice(0,10);
         if (!raw.quarterEnd) raw.quarterEnd = new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10);
       }
