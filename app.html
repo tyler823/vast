@@ -980,11 +980,17 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
               onSave({ scorecard: { ...company.scorecard, entries: updated } });
             };
 
-            const meetsGoal = (val, target) => {
+            const meetsGoal = (val, m) => {
               if (val === "" || val === undefined || val === null) return null;
-              const v = parseFloat(val), t = parseFloat(target);
+              const v = parseFloat(val), t = parseFloat(m.target);
               if (isNaN(v) || isNaN(t)) return null;
-              return v >= t;
+              const op = m.operator || "gte";
+              if (op === "gte") return v >= t;
+              if (op === "lte") return v <= t;
+              if (op === "gt")  return v > t;
+              if (op === "lt")  return v < t;
+              if (op === "eq")  return v === t;
+              return null;
             };
 
             if (measurables.length === 0) return (
@@ -1020,10 +1026,10 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                             <div>{m.name}</div>
                             {m.owner && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{m.owner}</div>}
                           </td>
-                          <td style={{ textAlign: "center", padding: "10px 8px", color: C.textMuted, fontSize: 12, borderBottom: `1px solid ${C.border}` }}>{m.target}{m.unit ? ` ${m.unit}` : ""}</td>
+                          <td style={{ textAlign: "center", padding: "10px 8px", color: C.textMuted, fontSize: 12, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{({gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="})[m.operator||"gte"]} {m.target}{m.unit ? ` ${m.unit}` : ""}</td>
                           {weeks.map(wk => {
                             const val = entries[wk]?.[m.id] ?? "";
-                            const met = meetsGoal(val, m.target);
+                            const met = meetsGoal(val, m);
                             const isCur = wk === curWk;
                             return (
                               <td key={wk} style={{ textAlign: "center", padding: "6px 4px", borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${isCur ? "rgba(230,51,41,0.3)" : C.border}`, background: isCur ? `rgba(230,51,41,0.05)` : "transparent" }}>
@@ -1764,7 +1770,7 @@ function Tasks({ company, onSave }) {
 // ─── SCORECARD ────────────────────────────────────────────────────────
 function Scorecard({ company, onSave }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [newM, setNewM] = useState({ name: "", target: "", unit: "", owner: "", huddleId: "" });
+  const [newM, setNewM] = useState({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: "" });
   const measurables = company.scorecard?.measurables || [];
   const entries = company.scorecard?.entries || {};
   const wk = weekKey();
@@ -1777,7 +1783,7 @@ function Scorecard({ company, onSave }) {
     if (!newM.name.trim()) return;
     const m = { id: uid(), ...newM };
     onSave({ scorecard: { ...company.scorecard, measurables: [...measurables, m] } });
-    setNewM({ name: "", target: "", unit: "", owner: "" });
+    setNewM({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: "" });
     setShowAdd(false);
   };
 
@@ -1841,18 +1847,32 @@ function Scorecard({ company, onSave }) {
                         {members.map(mem => <option key={mem.id} value={mem.name}>{mem.name}</option>)}
                       </select>
                     </td>
-                    <td style={{ color: C.textMuted }}>{m.target}</td>
+                    <td style={{ color: C.textMuted, whiteSpace: "nowrap" }}>
+                      {m.operator && m.operator !== "gte" ? {gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="}[m.operator] : "≥"} {m.target}{m.unit ? ` ${m.unit}` : ""}
+                    </td>
                     {weeks.map(w => {
                       const val = entries[w]?.[m.id] || "";
                       const isCurrentWeek = w === wk;
-                      const onTarget = val && m.target && parseFloat(val) >= parseFloat(m.target);
+                      const checkTarget = (val, m) => {
+                      if (!val || !m.target) return null;
+                      const v = parseFloat(val), t = parseFloat(m.target);
+                      if (isNaN(v) || isNaN(t)) return null;
+                      const op = m.operator || "gte";
+                      if (op === "gte") return v >= t;
+                      if (op === "lte") return v <= t;
+                      if (op === "gt")  return v > t;
+                      if (op === "lt")  return v < t;
+                      if (op === "eq")  return v === t;
+                      return null;
+                    };
+                    const onTarget = checkTarget(val, m);
                       return (
                         <td key={w} style={{ textAlign: "center" }}>
                           {isCurrentWeek ? (
                             <input value={val} onChange={e => setEntry(m.id, e.target.value)}
                               style={{ width: 70, textAlign: "center", padding: "6px 8px", fontSize: 13, border: `1px solid ${C.red}` }} />
                           ) : (
-                            <span style={{ color: val ? (onTarget ? C.green : C.red) : C.textDim, fontWeight: val ? 700 : 400 }}>
+                            <span style={{ color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.textMuted) : C.textDim, fontWeight: val ? 700 : 400 }}>
                               {val || "—"}
                             </span>
                           )}
@@ -1878,14 +1898,22 @@ function Scorecard({ company, onSave }) {
               <label className="label">Measurable Name</label>
               <input placeholder="e.g. Revenue, Closed Jobs, NPS Score..." value={newM.name} onChange={e => setNewM(m => ({ ...m, name: e.target.value }))} autoFocus />
             </div>
-            <div className="grid2">
-              <div className="field">
-                <label className="label">Weekly Target</label>
-                <input placeholder="10000" value={newM.target} onChange={e => setNewM(m => ({ ...m, target: e.target.value }))} />
+            <div className="field">
+              <label className="label">Weekly Target</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <select value={newM.operator || "gte"} onChange={e => setNewM(m => ({ ...m, operator: e.target.value }))}
+                  style={{ width: 90, flexShrink: 0 }}>
+                  <option value="gte">≥ (at least)</option>
+                  <option value="lte">≤ (at most)</option>
+                  <option value="gt">&gt; (more than)</option>
+                  <option value="lt">&lt; (less than)</option>
+                  <option value="eq">= (exactly)</option>
+                </select>
+                <input placeholder="e.g. 50000" value={newM.target} onChange={e => setNewM(m => ({ ...m, target: e.target.value }))} style={{ flex: 1 }} />
+                <input placeholder="unit ($, jobs, %)" value={newM.unit} onChange={e => setNewM(m => ({ ...m, unit: e.target.value }))} style={{ width: 110, flexShrink: 0 }} />
               </div>
-              <div className="field">
-                <label className="label">Unit (optional)</label>
-                <input placeholder="$, jobs, %" value={newM.unit} onChange={e => setNewM(m => ({ ...m, unit: e.target.value }))} />
+              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 5 }}>
+                e.g. <strong>≥ 50000 $</strong> for revenue, <strong>≤ 1000 $</strong> for fuel costs
               </div>
             </div>
             <div className="field">
