@@ -895,7 +895,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const addToProblemQueue = (item) => {
     const pq = company.problemQueue || [];
     if (pq.find(p => p.id === item.id)) return; // already in queue
-    onSave({ problemQueue: [...pq, item] });
+    onSave({ problemQueue: [...pq, { ...item, huddleId: huddleId }] });
   };
   const seg = agenda[activeIdx];
   const segLimit = seg.minutes * 60;
@@ -922,7 +922,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
   const addHeadline = () => {
     if (!newHeadline.text.trim()) return;
-    const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, huddleId: newHeadline.huddleId || "", date: now() };
+    const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, huddleId: huddleId, date: now() };
     onSave({ headlines: [...(company.headlines || []), h] });
     setNewHeadline(n => ({ ...n, text: "" }));
   };
@@ -934,7 +934,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   };
   const addIssue = () => {
     if (!newIssue.title.trim()) return;
-    const iss = { id: uid(), title: newIssue.title, priority: newIssue.priority, status: "open", createdAt: now() };
+    const iss = { id: uid(), title: newIssue.title, priority: newIssue.priority, status: "open", huddleId: huddleId, createdAt: now() };
     onSave({ issues: [...(company.issues || []), iss] });
     setNewIssue({ title: "", priority: "2" });
   };
@@ -1236,7 +1236,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
           {/* SCORING segment */}
           {activeIdx === 1 && (() => {
-            const measurables = company.scorecard?.measurables || [];
+            const allMeasurables = company.scorecard?.measurables || [];
+            const measurables = allMeasurables.filter(m => m.huddleId === huddleId);
             const entries = company.scorecard?.entries || {};
             // Build week list for this quarter
             const qStart = company.quarterStart ? new Date(company.quarterStart) : new Date(Date.now() - 12 * 7 * 86400000);
@@ -1264,7 +1265,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
             if (measurables.length === 0) return (
               <div className="card">
-                <div style={{ color: C.textMuted, fontSize: 14 }}>No measurables set up yet. Add them in the Scorecard section.</div>
+                <div style={{ color: C.textMuted, fontSize: 14 }}>No measurables assigned to <strong>{huddleName}</strong>. Add and assign them in the Scorecard section.</div>
               </div>
             );
 
@@ -1366,14 +1367,14 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
           {/* HEADLINES */}
           {activeIdx === 3 && (() => {
-            const unreviewed = (company.headlines || []).filter(h => !h.reviewed);
+            const unreviewed = (company.headlines || []).filter(h => !h.reviewed && h.huddleId === huddleId);
             const markReviewed = (id) => onSave({ headlines: company.headlines.map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h) });
             return (
               <div className="card">
                 <h3 style={{ fontSize: 18, marginBottom: 4 }}>Headlines</h3>
-                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Mark reviewed to remove from active list. Reviewed headlines stay in meeting history.</div>
+                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Showing headlines for <strong>{huddleName}</strong>. Mark reviewed to remove from active list.</div>
                 {unreviewed.length === 0 && (
-                  <div style={{ color: C.textMuted, fontSize: 13, padding: "12px 0", marginBottom: 12 }}>All headlines reviewed. Add new ones below.</div>
+                  <div style={{ color: C.textMuted, fontSize: 13, padding: "12px 0", marginBottom: 12 }}>No active headlines for this huddle. Add one below.</div>
                 )}
                 {unreviewed.map(h => (
                   <div key={h.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}`, gap: 8 }}>
@@ -1394,14 +1395,10 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                   </div>
                 ))}
                 <div style={{ marginTop: 16 }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: C.textMuted, letterSpacing: 1, textTransform: "uppercase", fontSize: 11 }}>Add New Headline</h4>
+                  <h4 style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, color: C.textMuted, letterSpacing: 1, textTransform: "uppercase" }}>Add New Headline</h4>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 130, flexShrink: 0 }}>
                       <option>Customer</option><option>Employee</option>
-                    </select>
-                    <select value={newHeadline.huddleId || ""} onChange={e => setNewHeadline(n => ({ ...n, huddleId: e.target.value }))} style={{ width: 150, flexShrink: 0 }}>
-                      <option value="">No Huddle</option>
-                      {(company.huddles || []).map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                     </select>
                     <input placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && addHeadline()} style={{ flex: 1, minWidth: 160 }} />
                     <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addHeadline}>Add</button>
@@ -1486,8 +1483,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
           {/* PROBLEM SOLVING */}
           {activeIdx === 5 && (() => {
-            const pq = company.problemQueue || [];
-            const openIssues = (company.issues || []).filter(i => i.status !== "resolved");
+            const pq = (company.problemQueue || []).filter(p => p.huddleId === huddleId);
+            const openIssues = (company.issues || []).filter(i => i.status !== "resolved" && i.huddleId === huddleId);
             // All items available for problem solving (queue + open issues not already in queue)
             const allItems = [
               ...pq,
@@ -1508,7 +1505,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
               setSolvedThisSession(s => [...s, { ...item, notes: issueNotes[item.id] || "", solvedAt: now() }]);
               setFocusQueue(q => q.filter(f => f.id !== item.id));
               // remove from problemQueue in company data
-              onSave({ problemQueue: pq.filter(p => p.id !== item.id) });
+              onSave({ problemQueue: (company.problemQueue || []).filter(p => p.id !== item.id) });
               const next = inFocus.find(f => f.id !== item.id);
               setActiveIssueId(next ? next.id : null);
             };
@@ -1522,7 +1519,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
               <div className="fade-in">
                 {/* Add new issue */}
                 <div className="card" style={{ marginBottom: 16 }}>
-                  <h3 style={{ fontSize: 18, marginBottom: 12 }}>Problem Solving — IDS</h3>
+                  <h3 style={{ fontSize: 18, marginBottom: 12 }}>Problem Solving — IDS · <span style={{ fontSize: 13, fontWeight: 400, color: C.textMuted }}>{huddleName}</span></h3>
                   <div style={{ display: "flex", gap: 8 }}>
                     <input placeholder="Identify a new issue..." value={newIssue.title} onChange={e => setNewIssue(n => ({ ...n, title: e.target.value }))} style={{ flex: 1 }} onKeyDown={e => e.key === "Enter" && addIssue()} />
                     <select value={newIssue.priority} onChange={e => setNewIssue(n => ({ ...n, priority: e.target.value }))} style={{ width: 110 }}>
