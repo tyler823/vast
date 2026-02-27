@@ -198,63 +198,90 @@ const weeksInRange = (startDate, endDate) => {
 };
 
 // ─── Storage Helpers (Memberstack cloud) ─────────────────────────────
-// Data is stored in the member's JSON under the key "vastData".
-// localStorage is used only as a write-behind cache so the UI never
-// blocks waiting for the network, and as a fallback when MS is unavailable.
+// Data stored in member's JSON as { vastData: {...} }
+// localStorage used as instant write-behind cache only.
 
 let _saveTimer = null;
 
+// Wait for Memberstack SDK AND confirmed authenticated session
+function waitForMemberstack(timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const check = setInterval(async () => {
+      if (Date.now() - start > timeout) {
+        clearInterval(check);
+        reject(new Error("Memberstack session timeout"));
+        return;
+      }
+      const ms = window.$memberstackDom;
+      if (!ms) return;
+      try {
+        const res = await ms.getCurrentMember();
+        if (res && res.data) {
+          clearInterval(check);
+          resolve(ms);
+        }
+      } catch {}
+    }, 150);
+  });
+}
+
 async function loadCompany() {
   try {
-    const ms = window.$memberstackDom;
-    if (ms) {
-      const res = await ms.getMemberJSON();
-      const cloud = res?.data?.vastData;
-      if (cloud) {
-        // Keep local cache in sync
-        try { localStorage.setItem("vast:cloud-cache", JSON.stringify(cloud)); } catch {}
-        return cloud;
-      }
+    const ms = await waitForMemberstack();
+    const res = await ms.getMemberJSON();
+    console.log("[VAST] getMemberJSON result:", res);
+    const cloud = res?.data?.vastData;
+    if (cloud) {
+      try { localStorage.setItem("vast:cloud-cache", JSON.stringify(cloud)); } catch {}
+      console.log("[VAST] Loaded data from Memberstack cloud.");
+      return cloud;
     }
-  } catch(e) { console.warn("Memberstack load failed, falling back to cache", e); }
+    console.log("[VAST] No cloud data found (vastData is empty).");
+  } catch(e) { console.warn("[VAST] Memberstack load failed, falling back to cache:", e); }
 
-  // Fallback: local cache written by previous saves
+  // Fallback: local cache
   try {
     const cached = localStorage.getItem("vast:cloud-cache");
-    if (cached) return JSON.parse(cached);
+    if (cached) { console.log("[VAST] Loaded from local cache fallback."); return JSON.parse(cached); }
   } catch {}
   return null;
 }
 
 function saveCompany(data) {
-  // 1. Write to local cache immediately so the UI never lags
+  // Write to local cache instantly
   try { localStorage.setItem("vast:cloud-cache", JSON.stringify(data)); } catch {}
 
-  // 2. Debounce the cloud write — 1.5s after the last change
+  // Debounce cloud write 1.5s
   if (_saveTimer) clearTimeout(_saveTimer);
   _saveTimer = setTimeout(async () => {
     try {
-      const ms = window.$memberstackDom;
-      if (ms) {
-        await ms.updateMemberJSON({ json: { vastData: data } });
-      }
-    } catch(e) { console.error("Memberstack save failed", e); }
+      const ms = await waitForMemberstack();
+      await ms.updateMemberJSON({ json: { vastData: data } });
+      console.log("[VAST] Saved to Memberstack cloud.");
+    } catch(e) { console.error("[VAST] Memberstack save failed:", e); }
   }, 1500);
 }
 
-// One-time migration: if old per-member localStorage key exists, push it to cloud
-async function migrateLocalStorageToCloud(memberId) {
+// One-time migration: scan ALL old localStorage keys and push to cloud
+async function migrateLocalStorageToCloud() {
   try {
-    const oldKey = "vast:company:" + memberId;
+    // Find any old vast:company:* key
+    const oldKeys = Object.keys(localStorage).filter(k => k.startsWith("vast:company:"));
+    if (oldKeys.length === 0) return null;
+
+    const oldKey = oldKeys[0]; // take the first (there should only be one)
     const old = localStorage.getItem(oldKey);
     if (!old) return null;
+
     const parsed = JSON.parse(old);
-    console.log("Migrating localStorage data to Memberstack cloud...");
-    await window.$memberstackDom?.updateMemberJSON({ json: { vastData: parsed } });
+    console.log("[VAST] Migrating localStorage data to cloud, key:", oldKey);
+    const ms = await waitForMemberstack();
+    await ms.updateMemberJSON({ json: { vastData: parsed } });
     localStorage.removeItem(oldKey);
-    console.log("Migration complete.");
+    console.log("[VAST] Migration complete.");
     return parsed;
-  } catch(e) { console.warn("Migration failed", e); return null; }
+  } catch(e) { console.warn("[VAST] Migration failed:", e); return null; }
 }
 
 // ─── Default Company Data ─────────────────────────────────────────────
@@ -3237,15 +3264,10 @@ function VASTApp() {
 
   useEffect(() => {
     const init = async () => {
-      // Get member ID for migration check
-      let memberId = "default";
-      try { const ms = await window.$memberstackDom?.getMemberJSON(); if (ms?.data?.id) memberId = ms.data.id; } catch {}
-      window._vastMemberId = memberId;
+      // Migrate any old localStorage data to cloud (no-op if already done)
+      let raw = await migrateLocalStorageToCloud();
 
-      // Try migration first (no-op if already migrated)
-      let raw = await migrateLocalStorageToCloud(memberId);
-
-      // If no migration data, load from cloud
+      // Load from Memberstack cloud (falls back to local cache if needed)
       if (!raw) raw = await loadCompany();
 
       if (raw) {
