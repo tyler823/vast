@@ -902,6 +902,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const segLimit = seg.minutes * 60;
   const segElapsed = segTimes[activeIdx] || 0;
   const over = segElapsed > segLimit;
+  const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   useEffect(() => {
     if (started && !done) {
