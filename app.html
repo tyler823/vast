@@ -1809,121 +1809,112 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
           })()}
 
           {/* INTRODUCTIONS / GOOD NEWS */}
-          {activeIdx === 0 && (
-            <div className="fade-in">
-              {/* Attendance */}
-              <div className="card" style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: 18, marginBottom: 4 }}>Attendance</h3>
-                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Mark who is present for today's huddle.</div>
-                {members.length === 0 && (
-                  <div style={{ color: C.textMuted, fontSize: 13 }}>No team members added yet. Add them in Settings.</div>
-                )}
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {members.map(m => {
-                    const status = attendance[m.id];
-                    const isPresent = status !== false;
-                    return (
-                      <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderRadius: 8, border: `1px solid ${isPresent ? "rgba(34,197,94,0.35)" : "rgba(230,51,41,0.25)"}`, background: isPresent ? "rgba(34,197,94,0.06)" : "rgba(230,51,41,0.06)", transition: "all 0.2s" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <div style={{ width: 36, height: 36, borderRadius: "50%", background: isPresent ? "rgba(34,197,94,0.2)" : C.surface2, border: `2px solid ${isPresent ? C.green : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: isPresent ? C.green : C.textMuted, transition: "all 0.2s" }}>
-                            {m.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{m.name}</div>
-                            <div style={{ fontSize: 11, color: C.textMuted }}>{m.role}</div>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => setAttendance(a => ({ ...a, [m.id]: true }))}
-                            style={{ padding: "6px 14px", borderRadius: 6, border: `1px solid ${isPresent ? C.green : C.border}`, background: isPresent ? "rgba(34,197,94,0.2)" : C.surface2, color: isPresent ? C.green : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer", transition: "all 0.15s" }}>
-                            ✓ Present
-                          </button>
-                          <button onClick={() => setAttendance(a => ({ ...a, [m.id]: false }))}
-                            style={{ padding: "6px 14px", borderRadius: 6, border: `1px solid ${!isPresent ? C.red : C.border}`, background: !isPresent ? "rgba(230,51,41,0.15)" : C.surface2, color: !isPresent ? C.red : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer", transition: "all 0.15s" }}>
-                            ✕ Absent
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {members.length > 0 && (
-                  <div style={{ marginTop: 12, fontSize: 12, color: C.textMuted }}>
-                    {members.filter(m => attendance[m.id] !== false).length} of {members.length} present
-                  </div>
-                )}
-              </div>
-
-              {/* Spotlight Selector */}
-              <div className="card">
-                <h3 style={{ fontSize: 18, marginBottom: 4 }}>Good News Spotlight</h3>
-                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>Randomly select a present team member to share their personal & business best from the past week.</div>
-
-                {/* Spotlight result */}
-                <div style={{ minHeight: 100, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-                  {!spotlight && !spinning && (
-                    <div style={{ textAlign: "center", color: C.textDim, fontSize: 14 }}>Hit the button to pick someone!</div>
-                  )}
-                  {(spotlight || spinning) && (
-                    <div style={{ textAlign: "center" }} className={spinning ? "" : "fade-in"}>
-                      <div style={{ width: 72, height: 72, borderRadius: "50%", background: spinning ? C.surface2 : `rgba(230,51,41,0.15)`, border: `3px solid ${spinning ? C.border : C.red}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800, color: spinning ? C.textMuted : C.red, margin: "0 auto 12px", transition: "all 0.1s", fontFamily: "'Barlow Condensed',sans-serif" }}>
-                        {spotlight ? spotlight.name.charAt(0).toUpperCase() : "?"}
-                      </div>
-                      <div style={{ fontSize: spinning ? 18 : 24, fontWeight: 800, color: spinning ? C.textMuted : C.text, fontFamily: "'Barlow Condensed',sans-serif", letterSpacing: 1, transition: "all 0.1s" }}>
-                        {spotlight ? spotlight.name : "..."}
-                      </div>
-                      {!spinning && spotlight && (
-                        <div style={{ marginTop: 10, display: "flex", gap: 24, justifyContent: "center" }}>
-                          <div style={{ textAlign: "center" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: C.red, marginBottom: 4 }}>Personal Best</div>
-                            <div style={{ fontSize: 12, color: C.textMuted }}>Share with the team!</div>
-                          </div>
-                          <div style={{ width: 1, background: C.border }} />
-                          <div style={{ textAlign: "center" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: C.red, marginBottom: 4 }}>Business Best</div>
-                            <div style={{ fontSize: 12, color: C.textMuted }}>Share with the team!</div>
-                          </div>
-                        </div>
+          {activeIdx === 0 && (() => {
+            const present = members.filter(m => attendance[m.id] !== false);
+            const pool = present.filter(m => !alreadySelected.includes(m.id));
+            const allDone = present.length > 0 && pool.length === 0;
+            // Pastel avatar colors
+            const avatarColors = ["#FDEBD0","#FADBD8","#D5F5E3","#D6EAF8","#F9EBEA","#E8DAEF","#D1F2EB","#FEF9E7"];
+            const textColors   = ["#C0392B","#A93226","#1E8449","#1A5276","#C0392B","#6C3483","#148F77","#B7950B"];
+            return (
+              <div className="fade-in">
+                <div className="card">
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+                    <div>
+                      <h3 style={{ fontSize: 18, marginBottom: 2 }}>Segue — Good News</h3>
+                      <div style={{ fontSize: 12, color: C.textMuted }}>Tap a circle to mark absent · {present.length} of {members.length} present</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      {allDone && (
+                        <button onClick={() => { setAlreadySelected([]); setSpotlight(null); }}
+                          style={{ fontSize: 12, padding: "8px 14px", borderRadius: 6, border: `1px solid ${C.green}`, background: "transparent", color: C.green, cursor: "pointer", fontFamily: "'Barlow',sans-serif", fontWeight: 700 }}>
+                          ↺ Reset Pool
+                        </button>
                       )}
+                      <button onClick={autoSelect} disabled={spinning || pool.length === 0}
+                        style={{ padding: "10px 22px", borderRadius: 8, border: "none", cursor: (spinning || pool.length === 0) ? "not-allowed" : "pointer",
+                          fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 1.5, textTransform: "uppercase",
+                          background: (spinning || pool.length === 0) ? C.surface2 : `linear-gradient(135deg, ${C.red}, ${C.redDark})`,
+                          color: (spinning || pool.length === 0) ? C.textMuted : "#fff", transition: "all 0.2s",
+                          boxShadow: (spinning || pool.length === 0) ? "none" : "0 4px 16px rgba(230,51,41,0.35)" }}>
+                        {spinning ? "Selecting..." : spotlight ? "🎲 Pick Again" : "🎲 Auto Pick Next"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {!allDone && alreadySelected.length > 0 && (
+                    <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 12 }}>
+                      {pool.length} of {present.length} remaining · <button onClick={() => { setAlreadySelected([]); setSpotlight(null); }} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 11, cursor: "pointer", textDecoration: "underline", padding: 0, fontFamily: "'Barlow',sans-serif" }}>Reset</button>
                     </div>
                   )}
-                </div>
 
-                {(() => {
-                  const present = members.filter(m => attendance[m.id] !== false);
-                  const pool = present.filter(m => !alreadySelected.includes(m.id));
-                  const allDone = present.length > 0 && pool.length === 0;
-                  return (
-                    <>
-                      {allDone && (
-                        <div style={{ textAlign: "center", padding: "12px", marginBottom: 12, background: "rgba(34,197,94,0.08)", border: `1px solid rgba(34,197,94,0.25)`, borderRadius: 8 }}>
-                          <div style={{ fontSize: 13, color: C.green, fontWeight: 700, marginBottom: 6 }}>🎉 Everyone has been selected!</div>
-                          <button onClick={() => { setAlreadySelected([]); setSpotlight(null); }}
-                            style={{ fontSize: 12, padding: "6px 14px", borderRadius: 6, border: `1px solid ${C.green}`, background: "transparent", color: C.green, cursor: "pointer", fontFamily: "'Barlow',sans-serif", fontWeight: 700 }}>
-                            ↺ Reset Selection Pool
-                          </button>
+                  {members.length === 0 && (
+                    <div style={{ color: C.textMuted, fontSize: 13, padding: "16px 0" }}>No team members added yet. Add them in Settings.</div>
+                  )}
+
+                  {/* Member circles */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "center", padding: "8px 0 4px" }}>
+                    {members.map((m, idx) => {
+                      const isAbsent = attendance[m.id] === false;
+                      const isSpotlit = spotlight && spotlight.id === m.id;
+                      const isSpinTarget = spinning && spotlight && spotlight.id === m.id;
+                      const wasSelected = alreadySelected.includes(m.id) && !isSpotlit;
+                      const bg = avatarColors[idx % avatarColors.length];
+                      const tc = textColors[idx % textColors.length];
+                      const initials = m.name.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
+                      const size = isSpotlit ? 100 : 68;
+                      return (
+                        <div key={m.id} className={isSpotlit ? "fade-in" : ""} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer", transition: "all 0.2s" }}
+                          onClick={() => setAttendance(a => ({ ...a, [m.id]: isAbsent ? true : false }))}>
+                          <div style={{
+                            width: size, height: size, borderRadius: "50%",
+                            background: isAbsent ? C.surface2 : isSpotlit ? `rgba(230,51,41,0.15)` : bg,
+                            border: isSpotlit ? `3px solid ${C.red}` : isAbsent ? `2px dashed ${C.border}` : `2px solid transparent`,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: isSpotlit ? 32 : 20, fontWeight: 800,
+                            color: isAbsent ? C.textDim : isSpotlit ? C.red : tc,
+                            opacity: isAbsent ? 0.4 : wasSelected ? 0.55 : 1,
+                            transition: "all 0.25s",
+                            boxShadow: isSpotlit ? `0 0 0 4px rgba(230,51,41,0.2)` : "none",
+                            fontFamily: "'Barlow Condensed',sans-serif",
+                            position: "relative"
+                          }}>
+                            {initials}
+                            {wasSelected && !isAbsent && (
+                              <div style={{ position: "absolute", top: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: C.green, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <svg width="9" height="9" viewBox="0 0 12 12"><polyline points="1,6 4,9 11,2" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ fontSize: isSpotlit ? 13 : 11, fontWeight: isSpotlit ? 800 : 600, color: isAbsent ? C.textDim : C.text, textAlign: "center", maxWidth: 80, lineHeight: 1.2 }}>{m.name}</div>
+                          {isSpotlit && !spinning && (
+                            <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+                              <div style={{ textAlign: "center" }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.red }}>Personal Best</div>
+                              </div>
+                              <div style={{ fontSize: 9, color: C.border }}>|</div>
+                              <div style={{ textAlign: "center" }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.red }}>Business Best</div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {!allDone && alreadySelected.length > 0 && (
-                        <div style={{ fontSize: 11, color: C.textMuted, textAlign: "center", marginBottom: 10 }}>
-                          {pool.length} of {present.length} remaining · <button onClick={() => { setAlreadySelected([]); setSpotlight(null); }} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 11, cursor: "pointer", textDecoration: "underline", padding: 0, fontFamily: "'Barlow',sans-serif" }}>Reset</button>
-                        </div>
-                      )}
-                      <button
-                        onClick={autoSelect}
-                        disabled={spinning || pool.length === 0}
-                        style={{ width: "100%", padding: "14px", borderRadius: 8, border: "none", cursor: (spinning || pool.length === 0) ? "not-allowed" : "pointer", fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 16, letterSpacing: 2, textTransform: "uppercase", background: (spinning || pool.length === 0) ? C.surface2 : `linear-gradient(135deg, ${C.red}, ${C.redDark})`, color: (spinning || pool.length === 0) ? C.textMuted : "#fff", transition: "all 0.2s", boxShadow: (spinning || pool.length === 0) ? "none" : `0 4px 20px rgba(230,51,41,0.3)` }}>
-                        {spinning ? "Selecting..." : spotlight ? "🎲  Pick Again" : "🎲  Auto-Select Spotlight"}
-                      </button>
-                      {present.length === 0 && members.length > 0 && (
-                        <div style={{ textAlign: "center", fontSize: 12, color: C.red, marginTop: 8 }}>Mark at least one member as present above.</div>
-                      )}
-                    </>
-                  );
-                })()}
+                      );
+                    })}
+                  </div>
+
+                  {allDone && (
+                    <div style={{ textAlign: "center", marginTop: 20, padding: "12px", background: "rgba(34,197,94,0.08)", border: `1px solid rgba(34,197,94,0.25)`, borderRadius: 8 }}>
+                      <div style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>🎉 Everyone has shared their good news!</div>
+                    </div>
+                  )}
+                  {present.length === 0 && members.length > 0 && (
+                    <div style={{ textAlign: "center", fontSize: 12, color: C.red, marginTop: 12 }}>All members marked absent — tap a circle to mark present.</div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Generic notes for other segments */}
           {![0,1,2,3,4,5,6].includes(activeIdx) && (
