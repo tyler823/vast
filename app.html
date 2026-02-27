@@ -235,17 +235,27 @@ async function loadCompany() {
   try {
     const ms = await waitForMemberstack();
     const res = await ms.getMemberJSON();
-    console.log("[VAST] getMemberJSON raw response:", JSON.stringify(res));
+    console.log("[VAST] getMemberJSON raw response:", JSON.stringify(res).slice(0, 500));
 
-    // Try res.data.vastData first, then res.data directly if it looks like company data
-    let cloud = res?.data?.vastData;
-    if (!cloud && res?.data?.name) cloud = res.data; // legacy: data stored at root
+    // Data is stored at root of member JSON (res.data IS the company object)
+    // Check for our company data by looking for a known field (e.g. "name")
+    let cloud = null;
+    if (res?.data && typeof res.data === "object") {
+      // Handle both storage shapes: root-level and legacy vastData wrapper
+      if (res.data.vastData && typeof res.data.vastData === "object") {
+        cloud = res.data.vastData; // old nested shape
+        console.log("[VAST] Found data under vastData key (legacy shape).");
+      } else if (res.data.name || res.data.members || res.data.quarterlyTasks) {
+        cloud = res.data; // new root-level shape
+        console.log("[VAST] Found data at root of member JSON.");
+      }
+    }
+
     if (cloud) {
       try { localStorage.setItem("vast:cloud-cache", JSON.stringify(cloud)); } catch {}
-      console.log("[VAST] Loaded from Memberstack cloud.");
       return cloud;
     }
-    console.log("[VAST] getMemberJSON returned no vastData. Full res.data:", res?.data);
+    console.log("[VAST] No recognizable company data in member JSON. res.data =", res?.data);
   } catch(e) { console.warn("[VAST] getMemberJSON failed:", e); }
 
   // Fallback: local cache
@@ -275,7 +285,13 @@ async function flushSave() {
   const data = _pendingData;
   try {
     const ms = await waitForMemberstack(5000);
-    await ms.updateMemberJSON({ json: { vastData: data } });
+    // Store at root of member JSON (not nested under vastData key)
+    await ms.updateMemberJSON({ json: data });
+    
+    // Immediately read back to verify it actually saved
+    const verify = await ms.getMemberJSON();
+    console.log("[VAST] Save verification - getMemberJSON returned:", JSON.stringify(verify).slice(0, 300));
+    
     console.log("[VAST] Saved to Memberstack cloud successfully.");
     setSyncStatus("saved");
     setTimeout(() => setSyncStatus("idle"), 3000);
@@ -290,10 +306,9 @@ async function flushSave() {
 window.addEventListener("beforeunload", () => {
   if (_saveTimer) { clearTimeout(_saveTimer); }
   if (_pendingData) {
-    // Best-effort sync flush (navigator.sendBeacon not applicable here, use sync XHR fallback)
     try {
       const ms = window.$memberstackDom;
-      if (ms) ms.updateMemberJSON({ json: { vastData: _pendingData } });
+      if (ms) ms.updateMemberJSON({ json: _pendingData });
     } catch {}
   }
 });
@@ -308,7 +323,7 @@ async function migrateLocalStorageToCloud() {
     const parsed = JSON.parse(old);
     console.log("[VAST] Migrating old localStorage data to cloud...");
     const ms = await waitForMemberstack();
-    await ms.updateMemberJSON({ json: { vastData: parsed } });
+    await ms.updateMemberJSON({ json: parsed });
     localStorage.removeItem(oldKeys[0]);
     console.log("[VAST] Migration complete.");
     return parsed;
