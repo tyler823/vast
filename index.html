@@ -145,8 +145,7 @@
       display: flex;
       align-items: center;
       position: relative;
-      overflow: hidden;
-      padding: 120px 48px 80px;
+      padding: 120px 48px 160px;
     }
 
     .hero-bg {
@@ -184,7 +183,6 @@
       position: relative;
       z-index: 1;
       max-width: 760px;
-      padding-bottom: 120px;
     }
 
     .hero-eyebrow {
@@ -715,9 +713,14 @@
     }
 
     .reveal {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .reveal.hidden {
       opacity: 0;
       transform: translateY(32px);
-      transition: opacity 0.6s ease, transform 0.6s ease;
     }
 
     .reveal.visible {
@@ -1220,12 +1223,14 @@
     </ul>
   </footer>
 
-  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+  <script>
     // Scroll reveal
     const reveals = document.querySelectorAll('.reveal');
+    reveals.forEach(el => el.classList.add('hidden'));
     const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry, i) => {
+      entries.forEach((entry) => {
         if (entry.isIntersecting) {
+          entry.target.classList.remove('hidden');
           entry.target.classList.add('visible');
           observer.unobserve(entry.target);
         }
