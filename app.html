@@ -863,7 +863,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const [started, setStarted] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [elapsed, setElapsed] = useState(0);
-  const [segElapsed, setSegElapsed] = useState(0);
+  const [segTimes, setSegTimes] = useState({}); // { [segIdx]: seconds accumulated }
+  const [quickAdd, setQuickAdd] = useState(null); // null | "headline" | "todo" | "issue"
   const [notes, setNotes] = useState({});
   const [newHeadline, setNewHeadline] = useState({ type: "Customer", text: "", huddleId: huddleId || "" });
   const defaultDueDate = () => new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10);
@@ -899,25 +900,24 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   };
   const seg = agenda[activeIdx];
   const segLimit = seg.minutes * 60;
+  const segElapsed = segTimes[activeIdx] || 0;
+  const over = segElapsed > segLimit;
 
   useEffect(() => {
     if (started && !done) {
       timerRef.current = setInterval(() => {
         setElapsed(e => e + 1);
-        setSegElapsed(e => e + 1);
+        setSegTimes(t => ({ ...t, [activeIdx]: (t[activeIdx] || 0) + 1 }));
       }, 1000);
     }
     return () => clearInterval(timerRef.current);
   }, [started, activeIdx, done]);
 
-  const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-  const over = segElapsed > segLimit;
-
   const next = () => {
-    if (activeIdx < agenda.length - 1) { setActiveIdx(i => i + 1); setSegElapsed(0); }
+    if (activeIdx < agenda.length - 1) setActiveIdx(i => i + 1);
   };
   const prev = () => {
-    if (activeIdx > 0) { setActiveIdx(i => i - 1); setSegElapsed(0); }
+    if (activeIdx > 0) setActiveIdx(i => i - 1);
   };
 
   const addHeadline = () => {
@@ -1105,7 +1105,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
   if (done) {
     const recap = buildRecap({ date: now() }, rating);
-    const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegElapsed(0); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); clearTimeout(spinRef.current); };
+    const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegTimes({}); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); clearTimeout(spinRef.current); };
     return (
       <Layout title="Meeting Complete!" subtitle="Great work — keep the momentum going">
         <div style={{ maxWidth: 680, margin: "0 auto" }} className="fade-in">
@@ -1211,7 +1211,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
           </div>
           {agenda.map((a, i) => (
             <div key={a.id} className={`huddle-item ${i === activeIdx ? "active" : ""} ${i < activeIdx ? "done" : ""}`}
-              onClick={() => { setActiveIdx(i); setSegElapsed(0); }}>
+              onClick={() => setActiveIdx(i)}>
               <div style={{ width: 22, height: 22, background: i < activeIdx ? C.green : i === activeIdx ? C.red : C.surface2, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {i < activeIdx ? <Icon.check /> : <span style={{ fontSize: 10, fontWeight: 700 }}>{i + 1}</span>}
               </div>
@@ -1227,8 +1227,137 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
           </div>
         </div>
 
+        {/* Agenda sidebar */}
+        <div>
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ textAlign: "center" }}>
+              <div className="timer-display" style={{ color: over ? C.red : C.text }}>{fmt(segElapsed)}</div>
+              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>/ {seg.minutes}:00 allocated</div>
+              {over && <div style={{ color: C.red, fontSize: 11, fontWeight: 700, marginTop: 4 }}>⚠ OVERTIME</div>}
+            </div>
+          </div>
+          {agenda.map((a, i) => {
+            const t = segTimes[i] || 0;
+            const limit = a.minutes * 60;
+            const isOver = t > limit;
+            const isDone = i < activeIdx;
+            const isActive = i === activeIdx;
+            return (
+              <div key={a.id} className={`huddle-item ${isActive ? "active" : ""} ${isDone ? "done" : ""}`}
+                onClick={() => setActiveIdx(i)}
+                style={{ borderLeft: isOver ? `3px solid ${C.red}` : undefined }}>
+                <div style={{ width: 22, height: 22, background: isDone ? C.green : isActive ? C.red : C.surface2, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {isDone ? <Icon.check /> : <span style={{ fontSize: 10, fontWeight: 700 }}>{i + 1}</span>}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</div>
+                  <div style={{ fontSize: 11, color: isOver ? C.red : C.textMuted, fontWeight: isOver ? 700 : 400 }}>
+                    {t > 0 ? fmt(t) : a.minutes + ":00"}{isOver ? " ⚠" : ""} / {a.minutes}:00
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button className="btn-secondary" style={{ flex: 1 }} onClick={prev} disabled={activeIdx === 0}>← Back</button>
+            <button className="btn-primary" style={{ flex: 1 }} onClick={next} disabled={activeIdx === AGENDA.length - 1}>Next →</button>
+          </div>
+        </div>
+
         {/* Content area */}
-        <div className="fade-in" key={activeIdx}>
+        <div style={{ position: "relative" }}>
+          {/* Floating quick-add bar */}
+          {started && !done && (() => {
+            const closeQuickAdd = () => setQuickAdd(null);
+            return (
+              <div style={{ position: "sticky", top: 12, zIndex: 100, marginBottom: 12 }}>
+                {/* Popover form */}
+                {quickAdd && (
+                  <div className="card fade-in" style={{ marginBottom: 8, padding: "14px 16px", border: `1px solid ${C.red}`, background: C.surface }}>
+                    {quickAdd === "headline" && (
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.red, marginBottom: 8 }}>Quick Add Headline</div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 120, flexShrink: 0 }}>
+                            <option>Customer</option><option>Employee</option>
+                          </select>
+                          <input autoFocus placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))}
+                            onKeyDown={e => { if (e.key === "Enter") { addHeadline(); closeQuickAdd(); } if (e.key === "Escape") closeQuickAdd(); }}
+                            style={{ flex: 1, minWidth: 180 }} />
+                          <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={() => { addHeadline(); closeQuickAdd(); }}>Add</button>
+                          <button className="btn-ghost" style={{ padding: "10px 12px" }} onClick={closeQuickAdd}>✕</button>
+                        </div>
+                      </div>
+                    )}
+                    {quickAdd === "todo" && (
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.red, marginBottom: 8 }}>Quick Add To-Do</div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: members.length ? 8 : 0 }}>
+                          <input autoFocus placeholder="What needs to happen?" value={newTodo.title} onChange={e => setNewTodo(n => ({ ...n, title: e.target.value }))}
+                            onKeyDown={e => { if (e.key === "Enter") { addTodo(); closeQuickAdd(); } if (e.key === "Escape") closeQuickAdd(); }}
+                            style={{ flex: 2, minWidth: 180 }} />
+                          <input type="date" value={newTodo.dueDate} onChange={e => setNewTodo(n => ({ ...n, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 130 }} />
+                          <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={() => { addTodo(); closeQuickAdd(); }}>Add</button>
+                          <button className="btn-ghost" style={{ padding: "10px 12px" }} onClick={closeQuickAdd}>✕</button>
+                        </div>
+                        {members.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                            <span style={{ fontSize: 11, color: C.textMuted }}>Assign:</span>
+                            {members.map(m => {
+                              const sel = (newTodo.assignees || []).includes(m.name);
+                              return (
+                                <button key={m.id} onClick={() => setNewTodo(n => ({ ...n, assignees: sel ? n.assignees.filter(a => a !== m.name) : [...(n.assignees||[]), m.name] }))}
+                                  style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Barlow',sans-serif",
+                                    background: sel ? "rgba(230,51,41,0.15)" : C.surface2, color: sel ? C.red : C.textMuted, border: `1px solid ${sel ? "rgba(230,51,41,0.4)" : C.border}` }}>
+                                  {sel ? "✓ " : ""}{m.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {quickAdd === "issue" && (
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.red, marginBottom: 8 }}>Quick Add Issue</div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <input autoFocus placeholder="What's the issue?" value={newIssue.title} onChange={e => setNewIssue(n => ({ ...n, title: e.target.value }))}
+                            onKeyDown={e => { if (e.key === "Enter") { addIssue(); closeQuickAdd(); } if (e.key === "Escape") closeQuickAdd(); }}
+                            style={{ flex: 1, minWidth: 180 }} />
+                          <select value={newIssue.priority} onChange={e => setNewIssue(n => ({ ...n, priority: e.target.value }))} style={{ width: 120, flexShrink: 0 }}>
+                            <option value="1">Priority 1</option>
+                            <option value="2">Priority 2</option>
+                            <option value="3">Priority 3</option>
+                          </select>
+                          <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={() => { addIssue(); closeQuickAdd(); }}>Add</button>
+                          <button className="btn-ghost" style={{ padding: "10px 12px" }} onClick={closeQuickAdd}>✕</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Floating button bar */}
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  {[
+                    { key: "headline", label: "📰 Headline", color: C.blue },
+                    { key: "todo", label: "✅ To-Do", color: C.green },
+                    { key: "issue", label: "⚑ Issue", color: C.red },
+                  ].map(btn => (
+                    <button key={btn.key} onClick={() => setQuickAdd(q => q === btn.key ? null : btn.key)}
+                      style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${quickAdd === btn.key ? btn.color : C.border}`,
+                        background: quickAdd === btn.key ? `${btn.color}22` : C.surface2,
+                        color: quickAdd === btn.key ? btn.color : C.textMuted,
+                        fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer",
+                        transition: "all 0.15s", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          <div className="fade-in" key={activeIdx}>
           <div className="card" style={{ marginBottom: 16 }}>
             <h2 style={{ fontSize: 24, marginBottom: 4 }}>{seg.label}</h2>
             <div style={{ fontSize: 13, color: C.textMuted }}>{seg.minutes} minutes allocated</div>
@@ -1830,6 +1959,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
             </div>
           )}
         </div>
+        </div>{/* end position:relative content wrapper */}
       </div>
     </Layout>
   );
@@ -2170,18 +2300,16 @@ function Scorecard({ company, onSave }) {
               <thead>
                 <tr>
                   <th>Measurable</th>
-                  <th>Huddle</th>
                   <th>Responsible</th>
                   <th>Target</th>
                   {weeks.map(w => <th key={w} style={{ textAlign: "center" }}>{w.split("-W")[1] ? `W${w.split("-W")[1]}` : w}</th>)}
-                  <th></th>
+                  <th>Huddle</th>
                 </tr>
               </thead>
               <tbody>
-                {measurables.map(m => (
+                {filtered.map(m => (
                   <tr key={m.id}>
                     <td style={{ fontWeight: 600 }}>{m.name}{m.unit && <span style={{ color: C.textMuted, fontSize: 12, marginLeft: 4 }}>({m.unit})</span>}</td>
-                    <td style={{ fontSize: 12, color: C.textMuted }}>{m.huddleId ? (huddles.find(x => x.id === m.huddleId)?.name || "—") : "—"}</td>
                     <td>
                       <select value={m.owner || ""} onChange={e => {
                         onSave({ scorecard: { ...company.scorecard, measurables: measurables.map(x => x.id === m.id ? { ...x, owner: e.target.value } : x) } });
@@ -2223,7 +2351,14 @@ function Scorecard({ company, onSave }) {
                       );
                     })}
                     <td>
-                      <button className="btn-danger" style={{ padding: "6px 10px" }} onClick={() => deleteMeasurable(m.id)}><Icon.trash /></button>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <select value={m.huddleId || ""} onChange={e => onSave({ scorecard: { ...company.scorecard, measurables: measurables.map(x => x.id === m.id ? { ...x, huddleId: e.target.value } : x) } })}
+                          style={{ fontSize: 11, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textMuted, maxWidth: 130 }}>
+                          <option value="">No Huddle</option>
+                          {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                        </select>
+                        <button className="btn-danger" style={{ padding: "6px 10px" }} onClick={() => deleteMeasurable(m.id)}><Icon.trash /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}
