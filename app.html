@@ -883,6 +883,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const [activeIssueId, setActiveIssueId] = useState(null);
   const [issueNotes, setIssueNotes] = useState({});
   const [solvedThisSession, setSolvedThisSession] = useState([]);
+  const [noteOpen, setNoteOpen] = useState({}); // { [itemId]: bool }
+  const toggleNote = (id) => setNoteOpen(s => ({ ...s, [id]: !s[id] }));
   const timerRef = useRef(null);
   const spinRef = useRef(null);
   // Only show members assigned to this huddle (or all if huddle has no member list yet)
@@ -1437,31 +1439,49 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
               <h3 style={{ fontSize: 18, marginBottom: 4 }}>Quarterly Task Review</h3>
               <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Showing tasks for <strong>{huddleName}</strong>. Update each task's status for this week.</div>
               {((company.quarterlyTasks || []).filter(t => t.huddleId === huddleId)).map(t => (
-                <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}`, gap: 12 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
-                    {t.who && <div style={{ fontSize: 12, color: C.textMuted }}>{t.who}</div>}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                    {["on","off","done"].map(s => {
-                      const isActive = t.status === s;
-                      const bg = isActive ? (s === "off" ? "rgba(230,51,41,0.2)" : "rgba(34,197,94,0.2)") : C.surface2;
-                      const col = isActive ? (s === "off" ? C.red : C.green) : C.textMuted;
-                      const bor = isActive ? (s === "off" ? C.red : C.green) : C.border;
-                      return (
-                        <button key={s} onClick={() => onSave({ quarterlyTasks: (company.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s } : x) })}
-                          style={{ padding: "5px 12px", borderRadius: 5, fontSize: 11, fontWeight: 700, fontFamily: "'Barlow',sans-serif", cursor: "pointer", border: `1px solid ${bor}`, background: bg, color: col }}>
-                          {s === "on" ? "On Track" : s === "off" ? "Off Track" : "Done"}
+                <div key={t.id} style={{ padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
+                      {t.who && <div style={{ fontSize: 12, color: C.textMuted }}>{t.who}</div>}
+                      {t.notes && !noteOpen[t.id] && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📝 {t.notes}</div>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      {[["on","On Track"],["off","Off Track"],["done","Done"]].map(([s, label]) => {
+                        const isActive = t.status === s;
+                        const bg = isActive ? (s === "off" ? "rgba(230,51,41,0.2)" : "rgba(34,197,94,0.2)") : C.surface2;
+                        const col = isActive ? (s === "off" ? C.red : C.green) : C.textMuted;
+                        const bor = isActive ? (s === "off" ? C.red : C.green) : C.border;
+                        return (
+                          <button key={s} onClick={() => onSave({ quarterlyTasks: (company.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s } : x) })}
+                            style={{ padding: "5px 12px", borderRadius: 5, fontSize: 11, fontWeight: 700, fontFamily: "'Barlow',sans-serif", cursor: "pointer", border: `1px solid ${bor}`, background: bg, color: col }}>
+                            {label}
+                          </button>
+                        );
+                      })}
+                      {t.status === "off" && (
+                        <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
+                          style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                          {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "⚑ Problem Solve"}
                         </button>
-                      );
-                    })}
-                    {t.status === "off" && (
-                      <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
-                        style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                        {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "⚑ Problem Solve"}
+                      )}
+                      <button onClick={() => toggleNote(t.id)}
+                        style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid ${noteOpen[t.id] || t.notes ? C.blue : C.border}`, background: noteOpen[t.id] ? `rgba(59,130,246,0.1)` : C.surface2, color: noteOpen[t.id] || t.notes ? C.blue : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                        📝{t.notes && !noteOpen[t.id] ? " ●" : ""}
                       </button>
-                    )}
+                    </div>
                   </div>
+                  {noteOpen[t.id] && (
+                    <div style={{ marginTop: 10 }} className="fade-in">
+                      <textarea
+                        autoFocus
+                        placeholder="Add notes about this task..."
+                        value={t.notes || ""}
+                        onChange={e => onSave({ quarterlyTasks: (company.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, notes: e.target.value } : x) })}
+                        style={{ width: "100%", minHeight: 72, fontSize: 13, padding: "8px 10px", borderRadius: 6, border: `1px solid ${C.blue}`, background: `rgba(59,130,246,0.05)`, color: C.text, resize: "vertical", fontFamily: "'Barlow',sans-serif", boxSizing: "border-box" }}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
               {!((company.quarterlyTasks || []).filter(t => t.huddleId === huddleId)).length && <div style={{ color: C.textMuted, padding: "16px 0" }}>No tasks assigned to this huddle. Assign tasks in Quarterly Tasks.</div>}
@@ -1480,21 +1500,39 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                   <div style={{ color: C.textMuted, fontSize: 13, padding: "12px 0", marginBottom: 12 }}>No active headlines for this huddle. Add one below.</div>
                 )}
                 {unreviewed.map(h => (
-                  <div key={h.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}`, gap: 8 }}>
-                    <div style={{ fontSize: 14, flex: 1 }}>
-                      <span className="chip" style={{ marginRight: 8, fontSize: 10, background: h.type === "Customer" ? "rgba(59,130,246,0.15)" : "rgba(34,197,94,0.1)", borderColor: h.type === "Customer" ? "rgba(59,130,246,0.3)" : "rgba(34,197,94,0.2)", color: h.type === "Customer" ? C.blue : C.green }}>{h.type}</span>
-                      {h.text}
+                  <div key={h.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <div style={{ fontSize: 14, flex: 1 }}>
+                        <span className="chip" style={{ marginRight: 8, fontSize: 10, background: h.type === "Customer" ? "rgba(59,130,246,0.15)" : "rgba(34,197,94,0.1)", borderColor: h.type === "Customer" ? "rgba(59,130,246,0.3)" : "rgba(34,197,94,0.2)", color: h.type === "Customer" ? C.blue : C.green }}>{h.type}</span>
+                        {h.text}
+                        {h.notes && !noteOpen[h.id] && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, fontStyle: "italic" }}>📝 {h.notes}</div>}
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <button onClick={() => markReviewed(h.id)}
+                          style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(34,197,94,0.4)`, background: "rgba(34,197,94,0.1)", color: C.green, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                          ✓ Reviewed
+                        </button>
+                        <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
+                          style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===h.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===h.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                          {(company.problemQueue||[]).find(p=>p.id===h.id) ? "✓ Queued" : "⚑ Problem Solve"}
+                        </button>
+                        <button onClick={() => toggleNote(h.id)}
+                          style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${noteOpen[h.id] || h.notes ? C.blue : C.border}`, background: noteOpen[h.id] ? `rgba(59,130,246,0.1)` : C.surface2, color: noteOpen[h.id] || h.notes ? C.blue : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                          📝{h.notes && !noteOpen[h.id] ? " ●" : ""}
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      <button onClick={() => markReviewed(h.id)}
-                        style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(34,197,94,0.4)`, background: "rgba(34,197,94,0.1)", color: C.green, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                        ✓ Reviewed
-                      </button>
-                      <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
-                        style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===h.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===h.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                        {(company.problemQueue||[]).find(p=>p.id===h.id) ? "✓ Queued" : "⚑ Problem Solve"}
-                      </button>
-                    </div>
+                    {noteOpen[h.id] && (
+                      <div style={{ marginTop: 10 }} className="fade-in">
+                        <textarea
+                          autoFocus
+                          placeholder="Add notes about this headline..."
+                          value={h.notes || ""}
+                          onChange={e => onSave({ headlines: (company.headlines||[]).map(x => x.id === h.id ? { ...x, notes: e.target.value } : x) })}
+                          style={{ width: "100%", minHeight: 72, fontSize: 13, padding: "8px 10px", borderRadius: 6, border: `1px solid ${C.blue}`, background: `rgba(59,130,246,0.05)`, color: C.text, resize: "vertical", fontFamily: "'Barlow',sans-serif", boxSizing: "border-box" }}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
                 <div style={{ marginTop: 16 }}>
@@ -1526,25 +1564,43 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                 {pending.map(t => {
                   const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
                   return (
-                    <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 500 }}>{t.title}</div>
-                        <div style={{ fontSize: 11, color: isOverdue ? C.red : C.textMuted, marginTop: 2 }}>
-                          {getAssignees(t).length > 0 && <span>{getAssignees(t).join(", ")}</span>}
-                          {getAssignees(t).length > 0 && t.dueDate && <span> · </span>}
-                          {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "⚠ Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
+                    <div key={t.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 500 }}>{t.title}</div>
+                          <div style={{ fontSize: 11, color: isOverdue ? C.red : C.textMuted, marginTop: 2 }}>
+                            {getAssignees(t).length > 0 && <span>{getAssignees(t).join(", ")}</span>}
+                            {getAssignees(t).length > 0 && t.dueDate && <span> · </span>}
+                            {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "⚠ Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
+                          </div>
+                          {t.notes && !noteOpen[t.id] && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, fontStyle: "italic" }}>📝 {t.notes}</div>}
+                        </div>
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                          <button onClick={() => completeTodo(t.id)}
+                            style={{ padding: "5px 12px", borderRadius: 5, border: `1px solid rgba(34,197,94,0.4)`, background: "rgba(34,197,94,0.1)", color: C.green, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                            ✓ Complete
+                          </button>
+                          <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
+                            style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                            {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "⚑ Problem Solve"}
+                          </button>
+                          <button onClick={() => toggleNote(t.id)}
+                            style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid ${noteOpen[t.id] || t.notes ? C.blue : C.border}`, background: noteOpen[t.id] ? `rgba(59,130,246,0.1)` : C.surface2, color: noteOpen[t.id] || t.notes ? C.blue : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                            📝{t.notes && !noteOpen[t.id] ? " ●" : ""}
+                          </button>
                         </div>
                       </div>
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        <button onClick={() => completeTodo(t.id)}
-                          style={{ padding: "5px 12px", borderRadius: 5, border: `1px solid rgba(34,197,94,0.4)`, background: "rgba(34,197,94,0.1)", color: C.green, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                          ✓ Complete
-                        </button>
-                        <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
-                          style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                          {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "⚑ Problem Solve"}
-                        </button>
-                      </div>
+                      {noteOpen[t.id] && (
+                        <div style={{ marginTop: 10 }} className="fade-in">
+                          <textarea
+                            autoFocus
+                            placeholder="Add notes about this to-do..."
+                            value={t.notes || ""}
+                            onChange={e => onSave({ todos: (company.todos||[]).map(x => x.id === t.id ? { ...x, notes: e.target.value } : x) })}
+                            style={{ width: "100%", minHeight: 72, fontSize: 13, padding: "8px 10px", borderRadius: 6, border: `1px solid ${C.blue}`, background: `rgba(59,130,246,0.05)`, color: C.text, resize: "vertical", fontFamily: "'Barlow',sans-serif", boxSizing: "border-box" }}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
