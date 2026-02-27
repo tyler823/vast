@@ -1207,33 +1207,6 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
             <div style={{ textAlign: "center" }}>
               <div className="timer-display" style={{ color: over ? C.red : C.text }}>{fmt(segElapsed)}</div>
               <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>/ {seg.minutes}:00 allocated</div>
-              {over && <div style={{ color: C.red, fontSize: 11, fontWeight: 700, marginTop: 4 }}>OVERTIME</div>}
-            </div>
-          </div>
-          {agenda.map((a, i) => (
-            <div key={a.id} className={`huddle-item ${i === activeIdx ? "active" : ""} ${i < activeIdx ? "done" : ""}`}
-              onClick={() => setActiveIdx(i)}>
-              <div style={{ width: 22, height: 22, background: i < activeIdx ? C.green : i === activeIdx ? C.red : C.surface2, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                {i < activeIdx ? <Icon.check /> : <span style={{ fontSize: 10, fontWeight: 700 }}>{i + 1}</span>}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</div>
-                <div style={{ fontSize: 11, color: C.textMuted }}>{a.minutes} min</div>
-              </div>
-            </div>
-          ))}
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button className="btn-secondary" style={{ flex: 1 }} onClick={prev} disabled={activeIdx === 0}>← Back</button>
-            <button className="btn-primary" style={{ flex: 1 }} onClick={next} disabled={activeIdx === AGENDA.length - 1}>Next →</button>
-          </div>
-        </div>
-
-        {/* Agenda sidebar */}
-        <div>
-          <div className="card" style={{ marginBottom: 12 }}>
-            <div style={{ textAlign: "center" }}>
-              <div className="timer-display" style={{ color: over ? C.red : C.text }}>{fmt(segElapsed)}</div>
-              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>/ {seg.minutes}:00 allocated</div>
               {over && <div style={{ color: C.red, fontSize: 11, fontWeight: 700, marginTop: 4 }}>⚠ OVERTIME</div>}
             </div>
           </div>
