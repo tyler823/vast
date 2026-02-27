@@ -232,31 +232,29 @@ function setSyncStatus(s) {
 }
 
 async function loadCompany() {
-  try {
-    const ms = await waitForMemberstack();
-    const res = await ms.getMemberJSON();
-    console.log("[VAST] getMemberJSON raw response:", JSON.stringify(res).slice(0, 500));
+  // Retry up to 3 times — on a fresh login the session token can take a moment
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const ms = await waitForMemberstack();
+      const res = await ms.getMemberJSON();
+      console.log(`[VAST] getMemberJSON attempt ${attempt}:`, JSON.stringify(res).slice(0, 200));
 
-    // Data is stored at root of member JSON (res.data IS the company object)
-    // Check for our company data by looking for a known field (e.g. "name")
-    let cloud = null;
-    if (res?.data && typeof res.data === "object") {
-      // Handle both storage shapes: root-level and legacy vastData wrapper
-      if (res.data.vastData && typeof res.data.vastData === "object") {
-        cloud = res.data.vastData; // old nested shape
-        console.log("[VAST] Found data under vastData key (legacy shape).");
-      } else if (res.data.name || res.data.members || res.data.quarterlyTasks) {
-        cloud = res.data; // new root-level shape
-        console.log("[VAST] Found data at root of member JSON.");
+      const cloud = res?.data?.vastData;
+      if (cloud && typeof cloud === "object" && (cloud.name || cloud.members || cloud.huddles)) {
+        try { localStorage.setItem("vast:cloud-cache", JSON.stringify(cloud)); } catch {}
+        console.log("[VAST] Loaded from Memberstack cloud.");
+        return cloud;
       }
-    }
 
-    if (cloud) {
-      try { localStorage.setItem("vast:cloud-cache", JSON.stringify(cloud)); } catch {}
-      return cloud;
+      if (attempt < 3) {
+        console.log(`[VAST] No data yet on attempt ${attempt}, retrying in 1s...`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    } catch(e) {
+      console.warn(`[VAST] getMemberJSON attempt ${attempt} failed:`, e);
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000));
     }
-    console.log("[VAST] No recognizable company data in member JSON. res.data =", res?.data);
-  } catch(e) { console.warn("[VAST] getMemberJSON failed:", e); }
+  }
 
   // Fallback: local cache
   try {
@@ -271,11 +269,8 @@ let _pendingData = null;
 
 function saveCompany(data) {
   _pendingData = data;
-  // Write to local cache immediately
   try { localStorage.setItem("vast:cloud-cache", JSON.stringify(data)); } catch {}
   setSyncStatus("saving");
-
-  // Debounce cloud write 800ms (shorter = more reliable on tab close)
   if (_saveTimer) clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => flushSave(), 800);
 }
@@ -285,13 +280,7 @@ async function flushSave() {
   const data = _pendingData;
   try {
     const ms = await waitForMemberstack(5000);
-    // Store at root of member JSON (not nested under vastData key)
-    await ms.updateMemberJSON({ json: data });
-    
-    // Immediately read back to verify it actually saved
-    const verify = await ms.getMemberJSON();
-    console.log("[VAST] Save verification - getMemberJSON returned:", JSON.stringify(verify).slice(0, 300));
-    
+    await ms.updateMemberJSON({ json: { vastData: data } });
     console.log("[VAST] Saved to Memberstack cloud successfully.");
     setSyncStatus("saved");
     setTimeout(() => setSyncStatus("idle"), 3000);
@@ -302,13 +291,13 @@ async function flushSave() {
   }
 }
 
-// Flush on tab close / navigate away
+// Flush on tab close
 window.addEventListener("beforeunload", () => {
-  if (_saveTimer) { clearTimeout(_saveTimer); }
+  if (_saveTimer) clearTimeout(_saveTimer);
   if (_pendingData) {
     try {
       const ms = window.$memberstackDom;
-      if (ms) ms.updateMemberJSON({ json: _pendingData });
+      if (ms) ms.updateMemberJSON({ json: { vastData: _pendingData } });
     } catch {}
   }
 });
@@ -323,7 +312,7 @@ async function migrateLocalStorageToCloud() {
     const parsed = JSON.parse(old);
     console.log("[VAST] Migrating old localStorage data to cloud...");
     const ms = await waitForMemberstack();
-    await ms.updateMemberJSON({ json: parsed });
+    await ms.updateMemberJSON({ json: { vastData: parsed } });
     localStorage.removeItem(oldKeys[0]);
     console.log("[VAST] Migration complete.");
     return parsed;
