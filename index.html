@@ -184,6 +184,7 @@
       position: relative;
       z-index: 1;
       max-width: 760px;
+      padding-bottom: 120px;
     }
 
     .hero-eyebrow {
@@ -1002,7 +1003,7 @@
         <h2 class="section-title">Your Blueprint<br/>on One Page</h2>
         <p class="section-sub">Most business owners have their vision locked in their heads. The Navigator gets it out and into a shared document your entire team can see, understand, and execute toward.</p>
         <p class="section-sub" style="margin-top: 16px;">From your core values to your 2-year revenue target, every critical element of your business strategy lives in one place — accessible to every team member, always up to date.</p>
-        <a href="/app.html" class="btn-outline" style="margin-top: 36px; display: inline-flex;">Build Your Navigator →</a>
+        <a href="#" onclick="openSignup(event)" class="btn-outline" style="margin-top: 36px; display: inline-flex;">Build Your Navigator →</a>
       </div>
       <div class="nav-blocks reveal" style="transition-delay: 0.15s;">
         <div class="nav-block">
@@ -1128,7 +1129,7 @@
             <p style="font-size: 12px; color: var(--muted); line-height: 1.6; margin: 0;"><b style="color: var(--text);">1-year minimum commitment.</b> The coaching program is designed to produce real, lasting change — not a quick fix. We work alongside your team for a full year to build the systems, habits, and clarity your business needs to run without you in every decision.</p>
           </div>
 
-          <a href="mailto:info@job-dox.com?subject=VAST%20Coaching%20Program%20%E2%80%94%20Application&body=Hi%20there%2C%0A%0AI%27m%20interested%20in%20applying%20for%20the%20VAST%20Coaching%20Program.%0A%0AMy%20name%3A%0AMy%20business%3A%0AMy%20trade%2Findustry%3A%0ANumber%20of%20employees%3A%0ABest%20number%20to%20reach%20me%3A%0A%0AA%20little%20about%20what%20I%27m%20hoping%20to%20accomplish%3A%0A%0ALooking%20forward%20to%20connecting!" class="btn-primary" style="width: 100%; justify-content: center; font-size: 15px; padding: 14px;">
+          <a href="/cdn-cgi/l/email-protection#8be2e5ede4cbe1e4e9a6efe4f3a5e8e4e6b4f8fee9e1eee8ffb6ddcad8dfaeb9bbc8e4eae8e3e2e5ecaeb9bbdbf9e4ecf9eae6aeb9bbaeceb9aeb3bbaeb2bfaeb9bbcafbfbe7e2e8eaffe2e4e5ade9e4eff2b6c3e2aeb9bbffe3eef9eeaeb9c8aebbcaaebbcac2aeb9bce6aeb9bbe2e5ffeef9eef8ffeeefaeb9bbe2e5aeb9bbeafbfbe7f2e2e5ecaeb9bbede4f9aeb9bbffe3eeaeb9bbddcad8dfaeb9bbc8e4eae8e3e2e5ecaeb9bbdbf9e4ecf9eae6a5aebbcaaebbcac6f2aeb9bbe5eae6eeaeb8caaebbcac6f2aeb9bbe9fef8e2e5eef8f8aeb8caaebbcac6f2aeb9bbfff9eaefeeaeb9cde2e5effef8fff9f2aeb8caaebbcac5fee6e9eef9aeb9bbe4edaeb9bbeee6fbe7e4f2eeeef8aeb8caaebbcac9eef8ffaeb9bbe5fee6e9eef9aeb9bbffe4aeb9bbf9eeeae8e3aeb9bbe6eeaeb8caaebbcaaebbcacaaeb9bbe7e2ffffe7eeaeb9bbeae9e4feffaeb9bbfce3eaffaeb9bbc2aeb9bce6aeb9bbe3e4fbe2e5ecaeb9bbffe4aeb9bbeae8e8e4e6fbe7e2f8e3aeb8caaebbcaaebbcac7e4e4e0e2e5ecaeb9bbede4f9fceaf9efaeb9bbffe4aeb9bbe8e4e5e5eee8ffe2e5ecaa" class="btn-primary" style="width: 100%; justify-content: center; font-size: 15px; padding: 14px;">
             Apply for Coaching →
           </a>
           <p style="text-align: center; font-size: 11px; color: var(--dim); margin-top: 12px;">Limited spots available. Schedule a call to get started.</p>
@@ -1219,7 +1220,7 @@
     </ul>
   </footer>
 
-  <script>
+  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
     // Scroll reveal
     const reveals = document.querySelectorAll('.reveal');
     const observer = new IntersectionObserver((entries) => {
@@ -1253,21 +1254,3 @@
     const countObserver = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && !counted) {
         counted = true;
-        counters.forEach((counter, i) => {
-          const target = targets[i];
-          let count = 0;
-          const step = Math.ceil(target / 30);
-          const timer = setInterval(() => {
-            count = Math.min(count + step, target);
-            counter.textContent = count;
-            if (count >= target) clearInterval(timer);
-          }, 40);
-        });
-      }
-    }, { threshold: 0.5 });
-
-    const heroStats = document.querySelector('.hero-stats');
-    if (heroStats) countObserver.observe(heroStats);
-  </script>
-</body>
-</html>
