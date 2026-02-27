@@ -928,9 +928,9 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   };
   const addTodo = () => {
     if (!newTodo.title.trim()) return;
-    const t = { id: uid(), title: newTodo.title, assignees: newTodo.assignees, dueDate: newTodo.dueDate, done: false, createdAt: now() };
+    const t = { id: uid(), title: newTodo.title, assignees: newTodo.assignees || [], dueDate: newTodo.dueDate, huddleId: huddleId, done: false, createdAt: now() };
     onSave({ todos: [...(company.todos || []), t] });
-    setNewTodo({ title: "", assignee: "", dueDate: defaultDueDate() });
+    setNewTodo({ title: "", assignees: [], dueDate: defaultDueDate() });
   };
   const addIssue = () => {
     if (!newIssue.title.trim()) return;
@@ -1331,8 +1331,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
           {activeIdx === 2 && (
             <div className="card">
               <h3 style={{ fontSize: 18, marginBottom: 4 }}>Quarterly Task Review</h3>
-              <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Update each task's status for this week.</div>
-              {(company.quarterlyTasks || []).map(t => (
+              <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Showing tasks for <strong>{huddleName}</strong>. Update each task's status for this week.</div>
+              {((company.quarterlyTasks || []).filter(t => t.huddleId === huddleId)).map(t => (
                 <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}`, gap: 12 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
@@ -1360,7 +1360,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                   </div>
                 </div>
               ))}
-              {!company.quarterlyTasks?.length && <div style={{ color: C.textMuted, padding: "16px 0" }}>No tasks yet. Add them in Quarterly Tasks.</div>}
+              {!((company.quarterlyTasks || []).filter(t => t.huddleId === huddleId)).length && <div style={{ color: C.textMuted, padding: "16px 0" }}>No tasks assigned to this huddle. Assign tasks in Quarterly Tasks.</div>}
             </div>
           )}
 
@@ -1413,14 +1413,15 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
           {/* TO-DOS */}
           {activeIdx === 4 && (() => {
-            const pending = (company.todos || []).filter(t => !t.done);
+            // Only show todos assigned to THIS huddle
+            const pending = (company.todos || []).filter(t => !t.done && t.huddleId === huddleId);
             const completeTodo = (id) => onSave({ todos: company.todos.map(x => x.id === id ? { ...x, done: true, completedAt: now() } : x) });
             return (
               <div className="card">
                 <h3 style={{ fontSize: 18, marginBottom: 4 }}>To-Do Review</h3>
-                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Mark complete to remove from active list. Completed to-dos are saved to history.</div>
+                <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Showing to-dos for <strong>{huddleName}</strong>. Mark complete to remove from active list.</div>
                 {pending.length === 0 && (
-                  <div style={{ color: C.textMuted, fontSize: 13, padding: "12px 0", marginBottom: 12 }}>All to-dos complete! Add new ones below.</div>
+                  <div style={{ color: C.textMuted, fontSize: 13, padding: "12px 0", marginBottom: 12 }}>No pending to-dos for this huddle. Add one below.</div>
                 )}
                 {pending.map(t => {
                   const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
@@ -1855,6 +1856,8 @@ function Tasks({ company, onSave }) {
   const [tab, setTab] = useState("company");
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title: "", who: "", smart: false, status: "on", huddleId: "", target: "", operator: "" });
+  const [editId, setEditId] = useState(null);
+  const [editFields, setEditFields] = useState({});
   const tasks = company.quarterlyTasks || [];
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
@@ -1868,8 +1871,17 @@ function Tasks({ company, onSave }) {
   const updateStatus = (id, status) => onSave({ quarterlyTasks: tasks.map(t => t.id === id ? { ...t, status } : t) });
   const deleteTask = (id) => onSave({ quarterlyTasks: tasks.filter(t => t.id !== id) });
 
-  const companyTasks = tasks.filter(t => !t.who || t.who === "");
+  const startEdit = (t) => {
+    setEditId(t.id);
+    setEditFields({ title: t.title, who: t.who || "", huddleId: t.huddleId || "" });
+  };
+  const saveEdit = (id) => {
+    onSave({ quarterlyTasks: tasks.map(t => t.id === id ? { ...t, ...editFields } : t) });
+    setEditId(null);
+  };
+
   const filtered = (arr) => huddleFilter === "all" ? arr : arr.filter(t => t.huddleId === huddleFilter);
+  const visibleTasks = filtered(tasks);
 
   return (
     <Layout title="Quarterly Tasks" subtitle={(() => {
@@ -1902,51 +1914,88 @@ function Tasks({ company, onSave }) {
           <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
             {[["on", C.green, "On Track"], ["off", C.red, "Off Track"], ["done", C.blue, "Done"]].map(([s, c, l]) => (
               <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: C.textMuted }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />{tasks.filter(t => t.status === s).length} {l}
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />{visibleTasks.filter(t => t.status === s).length} {l}
               </div>
             ))}
+            {huddleFilter !== "all" && <div style={{ fontSize: 12, color: C.textMuted, marginLeft: "auto" }}>Showing: <strong>{huddles.find(h => h.id === huddleFilter)?.name}</strong></div>}
           </div>
-          {tasks.length === 0 && <div className="empty-state"><div style={{ fontSize: 14 }}>No tasks yet. Add your first quarterly task!</div></div>}
+          {visibleTasks.length === 0 && <div className="empty-state"><div style={{ fontSize: 14 }}>{huddleFilter !== "all" ? "No tasks assigned to this huddle." : "No tasks yet. Add your first quarterly task!"}</div></div>}
           <table className="table">
-            {tasks.length > 0 && <thead><tr><th>Task</th><th>Who</th><th>SMART</th><th>Status</th><th></th></tr></thead>}
+            {visibleTasks.length > 0 && <thead><tr><th>Task</th><th>Who</th><th>Huddle</th><th>SMART</th><th>Status</th><th></th></tr></thead>}
             <tbody>
-              {tasks.map(t => (
-                <tr key={t.id}>
-                  <td style={{ fontWeight: 500 }}>
-                    {t.title}
-                    {t.operator && t.target && (
-                      <span style={{ marginLeft: 8, fontSize: 11, color: C.textMuted, fontWeight: 400 }}>
-                        {OPERATORS[t.operator]} {t.target}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ color: C.textMuted }}>{t.who || "—"}</td>
-                  <td>{t.smart && <span className="tag-on">SMART</span>}</td>
-                  <td>
-                    {(() => {
-                      const met = meetsTarget(t);
-                      const colors = {
-                        on: { bg: "rgba(34,197,94,0.12)", color: C.green, border: "rgba(34,197,94,0.3)" },
-                        off: { bg: "rgba(230,51,41,0.12)", color: C.red, border: "rgba(230,51,41,0.3)" },
-                        done: { bg: "rgba(59,130,246,0.12)", color: C.blue, border: "rgba(59,130,246,0.3)" },
-                      };
-                      // If criterion set, override on/done → green, off → red
-                      const effectiveColor = met === true ? colors.done : met === false ? colors.off : colors[t.status] || colors.on;
-                      return (
-                        <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
-                          style={{ width: 120, padding: "6px 10px", fontSize: 12, background: effectiveColor.bg, color: effectiveColor.color, border: `1px solid ${effectiveColor.border}`, borderRadius: 6, fontWeight: 700 }}>
-                          <option value="on">On Track</option>
-                          <option value="off">Off Track</option>
-                          <option value="done">Done</option>
+              {visibleTasks.map(t => {
+                if (editId === t.id) {
+                  return (
+                    <tr key={t.id} style={{ background: C.redGlow }}>
+                      <td>
+                        <input value={editFields.title} onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))} style={{ width: "100%", minWidth: 180 }} autoFocus />
+                      </td>
+                      <td>
+                        {(company.members||[]).length > 0 ? (
+                          <select value={editFields.who} onChange={e => setEditFields(f => ({ ...f, who: e.target.value }))} style={{ width: "100%" }}>
+                            <option value="">Unassigned</option>
+                            {(company.members||[]).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                          </select>
+                        ) : (
+                          <input value={editFields.who} onChange={e => setEditFields(f => ({ ...f, who: e.target.value }))} style={{ width: "100%" }} />
+                        )}
+                      </td>
+                      <td>
+                        <select value={editFields.huddleId} onChange={e => setEditFields(f => ({ ...f, huddleId: e.target.value }))} style={{ width: "100%" }}>
+                          <option value="">No Huddle</option>
+                          {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                         </select>
-                      );
-                    })()}
-                  </td>
-                  <td>
-                    <button className="btn-danger" style={{ padding: "6px 10px" }} onClick={() => deleteTask(t.id)}><Icon.trash /></button>
-                  </td>
-                </tr>
-              ))}
+                      </td>
+                      <td colSpan={2}>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button className="btn-primary" style={{ padding: "6px 14px", fontSize: 12 }} onClick={() => saveEdit(t.id)}>Save</button>
+                          <button className="btn-ghost" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => setEditId(null)}>Cancel</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                return (
+                  <tr key={t.id}>
+                    <td style={{ fontWeight: 500 }}>
+                      {t.title}
+                      {t.operator && t.target && (
+                        <span style={{ marginLeft: 8, fontSize: 11, color: C.textMuted, fontWeight: 400 }}>
+                          {OPERATORS[t.operator]} {t.target}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ color: C.textMuted }}>{t.who || "—"}</td>
+                    <td style={{ fontSize: 12, color: C.textMuted }}>{t.huddleId ? (huddles.find(h => h.id === t.huddleId)?.name || "—") : "—"}</td>
+                    <td>{t.smart && <span className="tag-on">SMART</span>}</td>
+                    <td>
+                      {(() => {
+                        const met = meetsTarget(t);
+                        const colors = {
+                          on: { bg: "rgba(34,197,94,0.12)", color: C.green, border: "rgba(34,197,94,0.3)" },
+                          off: { bg: "rgba(230,51,41,0.12)", color: C.red, border: "rgba(230,51,41,0.3)" },
+                          done: { bg: "rgba(59,130,246,0.12)", color: C.blue, border: "rgba(59,130,246,0.3)" },
+                        };
+                        const effectiveColor = met === true ? colors.done : met === false ? colors.off : colors[t.status] || colors.on;
+                        return (
+                          <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
+                            style={{ width: 120, padding: "6px 10px", fontSize: 12, background: effectiveColor.bg, color: effectiveColor.color, border: `1px solid ${effectiveColor.border}`, borderRadius: 6, fontWeight: 700 }}>
+                            <option value="on">On Track</option>
+                            <option value="off">Off Track</option>
+                            <option value="done">Done</option>
+                          </select>
+                        );
+                      })()}
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button className="btn-ghost" style={{ padding: "6px 8px", fontSize: 13 }} onClick={() => startEdit(t)}>✏</button>
+                        <button className="btn-danger" style={{ padding: "6px 10px" }} onClick={() => deleteTask(t.id)}><Icon.trash /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1956,7 +2005,7 @@ function Tasks({ company, onSave }) {
         <div>
           {(company.members || []).map(member => {
             const legacyTasks = (company.individualTasks || {})[member.id] || [];
-            const assignedTasks = (company.quarterlyTasks || []).filter(t => t.who === member.name);
+            const assignedTasks = filtered((company.quarterlyTasks || []).filter(t => t.who === member.name));
             const allTasks = [...assignedTasks, ...legacyTasks.filter(lt => !assignedTasks.find(at => at.id === lt.id))];
             return (
               <div key={member.id} className="card" style={{ marginBottom: 16 }}>
@@ -1972,6 +2021,7 @@ function Tasks({ company, onSave }) {
                         {t.operator && t.target && (
                           <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{OPERATORS[t.operator]} {t.target}</div>
                         )}
+                        {t.huddleId && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>{huddles.find(h => h.id === t.huddleId)?.name}</div>}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                         {t.smart && <span className="tag-on">SMART</span>}
@@ -1986,7 +2036,7 @@ function Tasks({ company, onSave }) {
                     </div>
                   );
                 })}
-                {!allTasks.length && <div style={{ fontSize: 13, color: C.textMuted }}>No tasks assigned to {member.name}.</div>}
+                {!allTasks.length && <div style={{ fontSize: 13, color: C.textMuted }}>No tasks assigned to {member.name}{huddleFilter !== "all" ? " for this huddle" : ""}.</div>}
               </div>
             );
           })}
@@ -2446,6 +2496,8 @@ function Issues({ company, onSave }) {
 function Todos({ company, onSave }) {
   const todoDueDefault = () => new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10);
   const [form, setForm] = useState({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: "" });
+  const [editId, setEditId] = useState(null);
+  const [editFields, setEditFields] = useState({});
   const todos = company.todos || [];
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
@@ -2453,15 +2505,81 @@ function Todos({ company, onSave }) {
   const add = () => {
     if (!form.title.trim()) return;
     onSave({ todos: [...todos, { id: uid(), title: form.title, assignees: form.assignees, dueDate: form.dueDate, huddleId: form.huddleId, done: false, createdAt: now() }] });
-    setForm({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: "" });
+    setForm({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: form.huddleId });
   };
   const toggle = (id) => onSave({ todos: todos.map(t => t.id === id ? { ...t, done: !t.done } : t) });
   const del = (id) => onSave({ todos: todos.filter(t => t.id !== id) });
+
+  const startEdit = (t) => {
+    setEditId(t.id);
+    setEditFields({ title: t.title, dueDate: t.dueDate || "", huddleId: t.huddleId || "" });
+  };
+  const saveEdit = (id) => {
+    onSave({ todos: todos.map(t => t.id === id ? { ...t, ...editFields } : t) });
+    setEditId(null);
+  };
+  const cancelEdit = () => setEditId(null);
 
   const allPending = todos.filter(t => !t.done);
   const allDone = todos.filter(t => t.done);
   const pending = huddleFilter === "all" ? allPending : allPending.filter(t => t.huddleId === huddleFilter);
   const done = huddleFilter === "all" ? allDone : allDone.filter(t => t.huddleId === huddleFilter);
+
+  const TodoRow = ({ t }) => {
+    const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
+    const huddleName = huddles.find(h => h.id === t.huddleId)?.name;
+    const isEditing = editId === t.id;
+
+    if (isEditing) {
+      return (
+        <div style={{ padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+            <input
+              value={editFields.title}
+              onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))}
+              style={{ flex: 2, minWidth: 180 }}
+              autoFocus
+            />
+            <input
+              type="date"
+              value={editFields.dueDate}
+              onChange={e => setEditFields(f => ({ ...f, dueDate: e.target.value }))}
+              style={{ flex: 1, minWidth: 130 }}
+            />
+            <select
+              value={editFields.huddleId}
+              onChange={e => setEditFields(f => ({ ...f, huddleId: e.target.value }))}
+              style={{ flex: 1, minWidth: 140 }}
+            >
+              <option value="">No Huddle</option>
+              {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn-primary" style={{ padding: "6px 16px", fontSize: 12 }} onClick={() => saveEdit(t.id)}>Save</button>
+            <button className="btn-ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={cancelEdit}>Cancel</button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+        <div className={`checkbox ${t.done ? "checked" : ""}`} onClick={() => toggle(t.id)}>{t.done && <Icon.check />}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>{t.title}</div>
+          <div style={{ fontSize: 11, color: isOverdue ? C.red : C.textMuted, marginTop: 2 }}>
+            {getAssignees(t).length > 0 && <span>{getAssignees(t).join(", ")}</span>}
+            {getAssignees(t).length > 0 && (t.dueDate || huddleName) && <span> · </span>}
+            {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "⚠ Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
+            {huddleName && <span style={{ color: C.textDim }}> · {huddleName}</span>}
+          </div>
+        </div>
+        <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim, fontSize: 11 }} onClick={() => startEdit(t)}>✏</button>
+        <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(t.id)}><Icon.trash /></button>
+      </div>
+    );
+  };
 
   return (
     <Layout title="To-Dos" subtitle="Weekly action items">
@@ -2499,11 +2617,6 @@ function Todos({ company, onSave }) {
               }} style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Barlow',sans-serif", background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
                 {(company.members||[]).every(m => (form.assignees||[]).includes(m.name)) ? "✓ Everyone" : "Everyone"}
               </button>
-              {(form.assignees||[]).length > 0 && (
-                <span style={{ fontSize: 11, color: C.textMuted, marginLeft: 4 }}>
-                  → {form.assignees.join(", ")}
-                </span>
-              )}
             </div>
           )}
         </div>
@@ -2518,25 +2631,8 @@ function Todos({ company, onSave }) {
 
         <div className="card" style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 18, marginBottom: 12 }}>Pending ({pending.length})</h3>
-          {pending.length === 0 && <div style={{ fontSize: 13, color: C.textMuted }}>All clear! No pending to-dos.</div>}
-          {pending.map(t => {
-            const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
-            return (
-              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
-                <div className={`checkbox ${t.done ? "checked" : ""}`} onClick={() => toggle(t.id)}>{t.done && <Icon.check />}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500 }}>{t.title}</div>
-                  <div style={{ fontSize: 11, color: isOverdue ? C.red : C.textMuted, marginTop: 2 }}>
-                    {getAssignees(t).length > 0 && <span>{getAssignees(t).join(", ")}</span>}
-                    {getAssignees(t).length > 0 && t.dueDate && <span> · </span>}
-                    {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "⚠ Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
-                    {t.huddleId && <span> · {huddles.find(x => x.id === t.huddleId)?.name || ""}</span>}
-                  </div>
-                </div>
-                <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(t.id)}><Icon.trash /></button>
-              </div>
-            );
-          })}
+          {pending.length === 0 && <div style={{ fontSize: 13, color: C.textMuted }}>No pending to-dos{huddleFilter !== "all" ? " for this huddle" : ""}.</div>}
+          {pending.map(t => <TodoRow key={t.id} t={t} />)}
         </div>
 
         {done.length > 0 && (
