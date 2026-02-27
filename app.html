@@ -197,22 +197,64 @@ const weeksInRange = (startDate, endDate) => {
   return keys;
 };
 
-// ─── Storage Helpers ─────────────────────────────────────────────────
-function loadCompany(companyId) {
+// ─── Storage Helpers (Memberstack cloud) ─────────────────────────────
+// Data is stored in the member's JSON under the key "vastData".
+// localStorage is used only as a write-behind cache so the UI never
+// blocks waiting for the network, and as a fallback when MS is unavailable.
+
+let _saveTimer = null;
+
+async function loadCompany() {
   try {
-    const raw = localStorage.getItem("vast:company:" + companyId);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+    const ms = window.$memberstackDom;
+    if (ms) {
+      const res = await ms.getMemberJSON();
+      const cloud = res?.data?.vastData;
+      if (cloud) {
+        // Keep local cache in sync
+        try { localStorage.setItem("vast:cloud-cache", JSON.stringify(cloud)); } catch {}
+        return cloud;
+      }
+    }
+  } catch(e) { console.warn("Memberstack load failed, falling back to cache", e); }
+
+  // Fallback: local cache written by previous saves
+  try {
+    const cached = localStorage.getItem("vast:cloud-cache");
+    if (cached) return JSON.parse(cached);
+  } catch {}
+  return null;
 }
-function saveCompany(companyId, data) {
-  try {
-    localStorage.setItem("vast:company:" + companyId, JSON.stringify(data));
-  } catch(e) { console.error(e); }
+
+function saveCompany(data) {
+  // 1. Write to local cache immediately so the UI never lags
+  try { localStorage.setItem("vast:cloud-cache", JSON.stringify(data)); } catch {}
+
+  // 2. Debounce the cloud write — 1.5s after the last change
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    try {
+      const ms = window.$memberstackDom;
+      if (ms) {
+        await ms.updateMemberJSON({ json: { vastData: data } });
+      }
+    } catch(e) { console.error("Memberstack save failed", e); }
+  }, 1500);
 }
-function listCompanies() {
+
+// One-time migration: if old per-member localStorage key exists, push it to cloud
+async function migrateLocalStorageToCloud(memberId) {
   try {
-    return Object.keys(localStorage).filter(k => k.startsWith("vast:company:"));
-  } catch { return []; }
+    const oldKey = "vast:company:" + memberId;
+    const old = localStorage.getItem(oldKey);
+    if (!old) return null;
+    const parsed = JSON.parse(old);
+    console.log("Migrating localStorage data to Memberstack cloud...");
+    await window.$memberstackDom?.updateMemberJSON({ json: { vastData: parsed } });
+    localStorage.removeItem(oldKey);
+    console.log("Migration complete.");
+    return parsed;
+  } catch(e) { console.warn("Migration failed", e); return null; }
 }
 
 // ─── Default Company Data ─────────────────────────────────────────────
@@ -301,9 +343,9 @@ function VASTLogo({ size = "md" }) {
 
 // ─── MOBILE HOOK ─────────────────────────────────────────────────────
 function useMobile() {
-  const [mobile, setMobile] = React.useState(() => window.innerWidth <= 768);
+  const [mobile, setMobile] = React.useState(() => window.innerWidth <= 640);
   React.useEffect(() => {
-    const fn = () => setMobile(window.innerWidth <= 768);
+    const fn = () => setMobile(window.innerWidth <= 640);
     window.addEventListener("resize", fn);
     return () => window.removeEventListener("resize", fn);
   }, []);
@@ -311,20 +353,32 @@ function useMobile() {
 }
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────
-function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMobileOpen }) {
+function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMobileOpen, collapsed, setCollapsed }) {
   const openIssues = company.issues?.filter(i => i.status !== "resolved").length || 0;
   const pendingTodos = company.todos?.filter(t => !t.done).length || 0;
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const navigators = company.navigators || [{ id: "nav-1", name: "Navigator" }];
   const orgCharts = company.orgCharts || [{ id: "org-1", name: "Responsibility Chart" }];
+  const isMobile = useMobile();
+  const w = collapsed && !isMobile ? 56 : 220;
 
-  const SectionLabel = ({ label }) => (
+  const SectionLabel = ({ label }) => collapsed && !isMobile ? null : (
     <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: C.textMuted, marginTop: 6 }}>{label}</div>
   );
+
   const Link = ({ id, icon: Ico, label, badge }) => (
-    <button className={`sidebar-link ${view === id ? "active" : ""}`} onClick={() => setView(id)}>
-      <Ico /><span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-      {badge > 0 && <span className="badge">{badge}</span>}
+    <button
+      className={`sidebar-link ${view === id ? "active" : ""}`}
+      onClick={() => setView(id)}
+      title={collapsed && !isMobile ? label : undefined}
+      style={{ justifyContent: collapsed && !isMobile ? "center" : undefined, padding: collapsed && !isMobile ? "9px 0" : undefined }}
+    >
+      <Ico />
+      {!(collapsed && !isMobile) && <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>}
+      {!(collapsed && !isMobile) && badge > 0 && <span className="badge">{badge}</span>}
+      {(collapsed && !isMobile) && badge > 0 && (
+        <span style={{ position: "absolute", top: 4, right: 4, background: C.red, color: "#fff", borderRadius: "50%", fontSize: 9, width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{badge}</span>
+      )}
     </button>
   );
 
@@ -350,57 +404,90 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
   );
 
   const footer = (
-    <div style={{ padding: "12px 8px", borderTop: `1px solid ${C.border}` }}>
+    <div style={{ padding: collapsed && !isMobile ? "12px 4px" : "12px 8px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+      {!(collapsed && !isMobile) && (
+        <button
+          onClick={() => { window.location.href = "mailto:info@job-dox.com?subject=VAST%20Coaching%20Program%20-%20Application&body=Hi%20there%2C%0A%0AI%27m%20interested%20in%20applying%20for%20the%20VAST%20Coaching%20Program.%0A%0AMy%20name%3A%0AMy%20business%3A%0AMy%20trade%20%2F%20industry%3A%0ANumber%20of%20employees%3A%0ABest%20number%20to%20reach%20me%3A%0A%0AA%20little%20about%20what%20I%27m%20hoping%20to%20accomplish%3A%0A%0ALooking%20forward%20to%20connecting!"; }}
+          style={{
+            display: "flex", alignItems: "center", gap: 8, width: "100%",
+            background: C.red, color: "#fff", border: "none", cursor: "pointer",
+            borderRadius: 8, padding: "9px 12px", marginBottom: 8,
+            fontSize: 13, fontWeight: 700, letterSpacing: "0.01em", lineHeight: 1.2
+          }}
+        >
+          <span style={{ fontSize: 15 }}>&#x1F680;</span>
+          <span>Apply for Coaching</span>
+        </button>
+      )}
       <button
-        onClick={() => { window.location.href = "mailto:info@job-dox.com?subject=VAST%20Coaching%20Program%20-%20Application&body=Hi%20there%2C%0A%0AI%27m%20interested%20in%20applying%20for%20the%20VAST%20Coaching%20Program.%0A%0AMy%20name%3A%0AMy%20business%3A%0AMy%20trade%20%2F%20industry%3A%0ANumber%20of%20employees%3A%0ABest%20number%20to%20reach%20me%3A%0A%0AA%20little%20about%20what%20I%27m%20hoping%20to%20accomplish%3A%0A%0ALooking%20forward%20to%20connecting!"; }}
-        style={{
-          display: "flex", alignItems: "center", gap: 8, width: "100%",
-          background: C.red, color: "#fff", border: "none", cursor: "pointer",
-          borderRadius: 8, padding: "9px 12px", marginBottom: 8,
-          fontSize: 13, fontWeight: 700, letterSpacing: "0.01em", lineHeight: 1.2
-        }}
+        className="sidebar-link"
+        onClick={toggleTheme}
+        title={collapsed && !isMobile ? (theme === "dark" ? "Light Mode" : "Dark Mode") : undefined}
+        style={{ marginBottom: 4, justifyContent: collapsed && !isMobile ? "center" : undefined, padding: collapsed && !isMobile ? "9px 0" : undefined }}
       >
-        <span style={{ fontSize: 15 }}>&#x1F680;</span>
-        <span>Apply for Coaching</span>
-      </button>
-      <button className="sidebar-link" onClick={toggleTheme} style={{ marginBottom: 4 }}>
         <span style={{ fontSize: 15 }}>{theme === "dark" ? "☀️" : "🌙"}</span>
-        <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+        {!(collapsed && !isMobile) && <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>}
       </button>
-      <button className="sidebar-link" onClick={() => window.$memberstackDom?.logout().then(() => { window.location.href = "/index.html"; })}><Icon.logout /> Sign Out</button>
+      <button
+        className="sidebar-link"
+        onClick={() => window.$memberstackDom?.logout().then(() => { window.location.href = "/index.html"; })}
+        title={collapsed && !isMobile ? "Sign Out" : undefined}
+        style={{ justifyContent: collapsed && !isMobile ? "center" : undefined, padding: collapsed && !isMobile ? "9px 0" : undefined }}
+      >
+        <Icon.logout />
+        {!(collapsed && !isMobile) && <span>Sign Out</span>}
+      </button>
     </div>
   );
 
-  // Desktop sidebar
   return (
     <>
-      {/* Mobile: overlay backdrop */}
+      {/* Mobile overlay backdrop */}
       {mobileOpen && (
         <div onClick={() => setMobileOpen(false)}
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 49 }} />
       )}
 
-      {/* Sidebar panel — fixed on desktop, slide-in drawer on mobile */}
+      {/* Sidebar panel */}
       <div style={{
-        width: 220, minHeight: "100vh", background: C.surface,
+        width: w, height: "100vh", background: C.surface,
         borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column",
         position: "fixed", left: 0, top: 0, zIndex: 50,
-        transform: typeof mobileOpen !== "undefined" && window.innerWidth <= 768
-          ? (mobileOpen ? "translateX(0)" : "translateX(-100%)")
-          : "translateX(0)",
-        transition: "transform 0.25s ease",
+        transform: isMobile ? (mobileOpen ? "translateX(0)" : "translateX(-100%)") : "translateX(0)",
+        transition: "width 0.2s ease, transform 0.25s ease",
+        overflow: "hidden",
       }}>
-        <div style={{ padding: "16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <VASTLogo size="md" />
-            <div style={{ marginTop: 6, fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{company.name}</div>
-          </div>
-          {mobileOpen && (
+        {/* Header */}
+        <div style={{ padding: collapsed && !isMobile ? "14px 8px" : "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: collapsed && !isMobile ? "center" : "space-between", flexShrink: 0 }}>
+          {!(collapsed && !isMobile) && (
+            <div style={{ minWidth: 0 }}>
+              <VASTLogo size="md" />
+              <div style={{ marginTop: 6, fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{company.name}</div>
+            </div>
+          )}
+          {isMobile ? (
             <button onClick={() => setMobileOpen(false)}
               style={{ background: "none", border: "none", color: C.textMuted, fontSize: 22, cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}>✕</button>
+          ) : (
+            <button
+              onClick={() => { const next = !collapsed; setCollapsed(next); localStorage.setItem("vast-sidebar-collapsed", next ? "1" : "0"); }}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", padding: 4, lineHeight: 1, display: "flex", alignItems: "center", borderRadius: 6, flexShrink: 0 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                {collapsed
+                  ? <><polyline points="9 18 15 12 9 6" /><line x1="3" y1="12" x2="15" y2="12" /></>
+                  : <><polyline points="15 18 9 12 15 6" /><line x1="21" y1="12" x2="9" y2="12" /></>
+                }
+              </svg>
+            </button>
           )}
         </div>
-        <nav style={{ flex: 1, padding: "12px 8px", overflowY: "auto" }}>{navItems}</nav>
+
+        {/* Scrollable nav */}
+        <nav style={{ flex: 1, padding: collapsed && !isMobile ? "12px 4px" : "12px 8px", overflowY: "auto", overflowX: "hidden" }}>{navItems}</nav>
+
+        {/* Footer — always visible */}
         {footer}
       </div>
     </>
@@ -409,12 +496,15 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
 
 // ─── MAIN LAYOUT ──────────────────────────────────────────────────────
 const MobileMenuContext = React.createContext(() => {});
+const SidebarCollapsedContext = React.createContext(false);
 
 function Layout({ children, title, subtitle, action }) {
   const mobile = useMobile();
   const openMobileMenu = React.useContext(MobileMenuContext);
+  const sidebarCollapsed = React.useContext(SidebarCollapsedContext);
+  const ml = mobile ? 0 : (sidebarCollapsed ? 56 : 220);
   return (
-    <div style={{ marginLeft: mobile ? 0 : 220, minHeight: "100vh", background: C.bg, paddingBottom: mobile ? 16 : 0 }}>
+    <div style={{ marginLeft: ml, minHeight: "100vh", background: C.bg, paddingBottom: mobile ? 16 : 0, transition: "margin-left 0.2s ease" }}>
       {/* Header */}
       <div style={{ borderBottom: `1px solid ${C.border}`, padding: mobile ? "14px 16px" : "20px 32px", background: C.surface, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, position: "sticky", top: 0, zIndex: 40 }}>
         <div style={{ display: "flex", alignItems: "center", gap: mobile ? 10 : 0, minWidth: 0 }}>
@@ -3134,6 +3224,7 @@ function VASTApp() {
   const [view, setView] = useState("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("vast-theme") || "dark");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("vast-sidebar-collapsed") === "1");
 
   // Reassign global C before every render so all children pick up current theme
   C = theme === "light" ? LIGHT_THEME : DARK_THEME;
@@ -3146,10 +3237,17 @@ function VASTApp() {
 
   useEffect(() => {
     const init = async () => {
+      // Get member ID for migration check
       let memberId = "default";
       try { const ms = await window.$memberstackDom?.getMemberJSON(); if (ms?.data?.id) memberId = ms.data.id; } catch {}
       window._vastMemberId = memberId;
-      const raw = loadCompany(memberId);
+
+      // Try migration first (no-op if already migrated)
+      let raw = await migrateLocalStorageToCloud(memberId);
+
+      // If no migration data, load from cloud
+      if (!raw) raw = await loadCompany();
+
       if (raw) {
         // Migrate existing data that's missing new array fields
         if (!raw.huddles) raw.huddles = [{ id: "huddle-1", name: "Weekly Huddle" }];
@@ -3168,8 +3266,7 @@ function VASTApp() {
     if (!company) return;
     const updated = { ...company, ...updates };
     setCompanyState(updated);
-    const memberId = window._vastMemberId || "default";
-    saveCompany(memberId, updated);
+    saveCompany(updated);
   }, [company]);
 
   if (!company) return (
@@ -3185,10 +3282,11 @@ function VASTApp() {
   const viewProps = { company, onSave: handleSave };
 
   return (
+    <SidebarCollapsedContext.Provider value={sidebarCollapsed}>
     <div style={{ minHeight: "100vh", background: C.bg }}>
       <GlobalStyles theme={theme} />
       <MobileMenuContext.Provider value={() => setMobileOpen(true)}>
-      <Sidebar view={view} setView={v => { setView(v); setMobileOpen(false); }} company={company} theme={theme} toggleTheme={toggleTheme} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+      <Sidebar view={view} setView={v => { setView(v); setMobileOpen(false); }} company={company} theme={theme} toggleTheme={toggleTheme} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
       {view === "dashboard" && <Dashboard {...viewProps} setView={setView} />}
       {view.startsWith("navigator:") && (() => {
         const nid = view.slice(10);
@@ -3215,6 +3313,7 @@ function VASTApp() {
       {view === "settings" && <Settings {...viewProps} />}
       </MobileMenuContext.Provider>
     </div>
+    </SidebarCollapsedContext.Provider>
   );
 }
 
