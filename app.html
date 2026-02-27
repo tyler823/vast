@@ -351,6 +351,18 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
 
   const footer = (
     <div style={{ padding: "12px 8px", borderTop: `1px solid ${C.border}` }}>
+      <button
+        onClick={() => { window.location.href = "mailto:info@job-dox.com?subject=VAST%20Coaching%20Program%20-%20Application&body=Hi%20there%2C%0A%0AI%27m%20interested%20in%20applying%20for%20the%20VAST%20Coaching%20Program.%0A%0AMy%20name%3A%0AMy%20business%3A%0AMy%20trade%20%2F%20industry%3A%0ANumber%20of%20employees%3A%0ABest%20number%20to%20reach%20me%3A%0A%0AA%20little%20about%20what%20I%27m%20hoping%20to%20accomplish%3A%0A%0ALooking%20forward%20to%20connecting!"; }}
+        style={{
+          display: "flex", alignItems: "center", gap: 8, width: "100%",
+          background: C.red, color: "#fff", border: "none", cursor: "pointer",
+          borderRadius: 8, padding: "9px 12px", marginBottom: 8,
+          fontSize: 13, fontWeight: 700, letterSpacing: "0.01em", lineHeight: 1.2
+        }}
+      >
+        <span style={{ fontSize: 15 }}>&#x1F680;</span>
+        <span>Apply for Coaching</span>
+      </button>
       <button className="sidebar-link" onClick={toggleTheme} style={{ marginBottom: 4 }}>
         <span style={{ fontSize: 15 }}>{theme === "dark" ? "☀️" : "🌙"}</span>
         <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
@@ -3201,6 +3213,7 @@ function VASTApp() {
       {view === "history" && <MeetingHistory {...viewProps} />}
       {view === "quarterhistory" && <QuarterHistory {...viewProps} />}
       {view === "settings" && <Settings {...viewProps} />}
+      </MobileMenuContext.Provider>
     </div>
   );
 }
