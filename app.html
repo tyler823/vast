@@ -198,10 +198,6 @@ const weeksInRange = (startDate, endDate) => {
 };
 
 // ─── Storage Helpers (Memberstack cloud) ─────────────────────────────
-// Data stored in member's JSON as { vastData: {...} }
-// localStorage used as instant write-behind cache only.
-
-let _saveTimer = null;
 
 // Wait for Memberstack SDK AND confirmed authenticated session
 function waitForMemberstack(timeout = 10000) {
@@ -217,28 +213,40 @@ function waitForMemberstack(timeout = 10000) {
       if (!ms) return;
       try {
         const res = await ms.getCurrentMember();
-        if (res && res.data) {
-          clearInterval(check);
-          resolve(ms);
-        }
+        if (res && res.data) { clearInterval(check); resolve(ms); }
       } catch {}
     }, 150);
   });
+}
+
+// Sync status indicator (shown in sidebar footer area)
+let _syncStatus = "idle"; // "idle" | "saving" | "saved" | "error"
+function setSyncStatus(s) {
+  _syncStatus = s;
+  const el = document.getElementById("vast-sync-status");
+  if (!el) return;
+  const map = { idle: "", saving: "⏳ Syncing...", saved: "✓ Saved to cloud", error: "⚠ Sync failed" };
+  const col = { idle: "", saving: "#888", saved: "#22c55e", error: "#E63329" };
+  el.textContent = map[s] || "";
+  el.style.color = col[s] || "";
 }
 
 async function loadCompany() {
   try {
     const ms = await waitForMemberstack();
     const res = await ms.getMemberJSON();
-    console.log("[VAST] getMemberJSON result:", res);
-    const cloud = res?.data?.vastData;
+    console.log("[VAST] getMemberJSON raw response:", JSON.stringify(res));
+
+    // Try res.data.vastData first, then res.data directly if it looks like company data
+    let cloud = res?.data?.vastData;
+    if (!cloud && res?.data?.name) cloud = res.data; // legacy: data stored at root
     if (cloud) {
       try { localStorage.setItem("vast:cloud-cache", JSON.stringify(cloud)); } catch {}
-      console.log("[VAST] Loaded data from Memberstack cloud.");
+      console.log("[VAST] Loaded from Memberstack cloud.");
       return cloud;
     }
-    console.log("[VAST] No cloud data found (vastData is empty).");
-  } catch(e) { console.warn("[VAST] Memberstack load failed, falling back to cache:", e); }
+    console.log("[VAST] getMemberJSON returned no vastData. Full res.data:", res?.data);
+  } catch(e) { console.warn("[VAST] getMemberJSON failed:", e); }
 
   // Fallback: local cache
   try {
@@ -248,37 +256,60 @@ async function loadCompany() {
   return null;
 }
 
-function saveCompany(data) {
-  // Write to local cache instantly
-  try { localStorage.setItem("vast:cloud-cache", JSON.stringify(data)); } catch {}
+let _saveTimer = null;
+let _pendingData = null;
 
-  // Debounce cloud write 1.5s
+function saveCompany(data) {
+  _pendingData = data;
+  // Write to local cache immediately
+  try { localStorage.setItem("vast:cloud-cache", JSON.stringify(data)); } catch {}
+  setSyncStatus("saving");
+
+  // Debounce cloud write 800ms (shorter = more reliable on tab close)
   if (_saveTimer) clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(async () => {
-    try {
-      const ms = await waitForMemberstack();
-      await ms.updateMemberJSON({ json: { vastData: data } });
-      console.log("[VAST] Saved to Memberstack cloud.");
-    } catch(e) { console.error("[VAST] Memberstack save failed:", e); }
-  }, 1500);
+  _saveTimer = setTimeout(() => flushSave(), 800);
 }
 
-// One-time migration: scan ALL old localStorage keys and push to cloud
+async function flushSave() {
+  if (!_pendingData) return;
+  const data = _pendingData;
+  try {
+    const ms = await waitForMemberstack(5000);
+    await ms.updateMemberJSON({ json: { vastData: data } });
+    console.log("[VAST] Saved to Memberstack cloud successfully.");
+    setSyncStatus("saved");
+    setTimeout(() => setSyncStatus("idle"), 3000);
+    _pendingData = null;
+  } catch(e) {
+    console.error("[VAST] Memberstack save failed:", e);
+    setSyncStatus("error");
+  }
+}
+
+// Flush on tab close / navigate away
+window.addEventListener("beforeunload", () => {
+  if (_saveTimer) { clearTimeout(_saveTimer); }
+  if (_pendingData) {
+    // Best-effort sync flush (navigator.sendBeacon not applicable here, use sync XHR fallback)
+    try {
+      const ms = window.$memberstackDom;
+      if (ms) ms.updateMemberJSON({ json: { vastData: _pendingData } });
+    } catch {}
+  }
+});
+
+// One-time migration: move old localStorage data to cloud
 async function migrateLocalStorageToCloud() {
   try {
-    // Find any old vast:company:* key
     const oldKeys = Object.keys(localStorage).filter(k => k.startsWith("vast:company:"));
     if (oldKeys.length === 0) return null;
-
-    const oldKey = oldKeys[0]; // take the first (there should only be one)
-    const old = localStorage.getItem(oldKey);
+    const old = localStorage.getItem(oldKeys[0]);
     if (!old) return null;
-
     const parsed = JSON.parse(old);
-    console.log("[VAST] Migrating localStorage data to cloud, key:", oldKey);
+    console.log("[VAST] Migrating old localStorage data to cloud...");
     const ms = await waitForMemberstack();
     await ms.updateMemberJSON({ json: { vastData: parsed } });
-    localStorage.removeItem(oldKey);
+    localStorage.removeItem(oldKeys[0]);
     console.log("[VAST] Migration complete.");
     return parsed;
   } catch(e) { console.warn("[VAST] Migration failed:", e); return null; }
@@ -464,6 +495,9 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
         <Icon.logout />
         {!(collapsed && !isMobile) && <span>Sign Out</span>}
       </button>
+      {!(collapsed && !isMobile) && (
+        <div id="vast-sync-status" style={{ fontSize: 10, textAlign: "center", marginTop: 6, height: 14, transition: "color 0.3s" }}></div>
+      )}
     </div>
   );
 
