@@ -1064,13 +1064,16 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
     const scores = Object.values(memberRatings).filter(Boolean);
     const avgRating = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : rating;
     if (!avgRating) return;
+    const recapText = buildRecap({ date: now() }, avgRating);
     const mtg = {
       id: uid(), date: now(), rating: avgRating, memberRatings, totalMinutes: Math.round(elapsed / 60),
+      huddleId, huddleName,
       notes, headlines: (company.headlines || []).filter(h => !h.reviewed).slice(-5),
       reviewedHeadlines: (company.headlines || []).filter(h => h.reviewed).slice(-20),
       completedTodos: (company.todos || []).filter(t => t.done).slice(-20),
       todos: (company.todos || []).filter(t => !t.done).slice(-5),
-      solvedProblems: solvedThisSession
+      solvedProblems: solvedThisSession,
+      recapText
     };
     // Archive quarter snapshot (once per quarter, keyed by currentQuarter)
     const qh = company.quarterHistory || [];
@@ -3068,6 +3071,15 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
 // ─── MEETING HISTORY ──────────────────────────────────────────────────
 function MeetingHistory({ company }) {
   const meetings = [...(company.meetings || [])].reverse();
+  const [expanded, setExpanded] = React.useState(null);
+  const [copied, setCopied] = React.useState(null);
+  const huddles = company.huddles || [];
+
+  const copyRecap = (m) => {
+    navigator.clipboard.writeText(m.recapText).catch(() => {});
+    setCopied(m.id);
+    setTimeout(() => setCopied(null), 2000);
+  };
 
   return (
     <Layout title="Meeting History" subtitle={`${meetings.length} meetings on record`}>
@@ -3075,23 +3087,55 @@ function MeetingHistory({ company }) {
         <div className="card"><div className="empty-state"><div>No meetings yet. Run your first Weekly Huddle to see history here.</div></div></div>
       ) : (
         <div style={{ maxWidth: 700 }}>
-          {meetings.map(m => (
-            <div key={m.id} className="card" style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 20, fontWeight: 700 }}>{dateStr(new Date(m.date))}</div>
-                  <div style={{ fontSize: 12, color: C.textMuted }}>Duration: ~{m.totalMinutes || "—"} minutes</div>
+          {meetings.map(m => {
+            const isOpen = expanded === m.id;
+            const huddleLabel = m.huddleName || (huddles.find(h => h.id === m.huddleId)?.name) || null;
+            return (
+              <div key={m.id} className="card" style={{ marginBottom: 16 }}>
+                {/* Header row — always visible, click to expand */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
+                  onClick={() => setExpanded(isOpen ? null : m.id)}>
+                  <div>
+                    <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 20, fontWeight: 700 }}>{dateStr(new Date(m.date))}</div>
+                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                      {huddleLabel && <span style={{ marginRight: 10 }}>📋 {huddleLabel}</span>}
+                      ~{m.totalMinutes || "—"} min
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: m.rating >= 8 ? C.green : m.rating >= 6 ? C.yellow : C.red, fontFamily: "'Barlow Condensed',sans-serif", lineHeight: 1 }}>{m.rating}</div>
+                      <div style={{ fontSize: 11, color: C.textMuted }}>/ 10</div>
+                    </div>
+                    <span style={{ color: C.textMuted, fontSize: 18, transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}>›</span>
+                  </div>
                 </div>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: m.rating >= 8 ? C.green : m.rating >= 6 ? C.yellow : C.red, fontFamily: "'Barlow Condensed',sans-serif" }}>{m.rating}</div>
-                  <div style={{ fontSize: 11, color: C.textMuted }}>/ 10</div>
-                </div>
+
+                {/* Expanded recap */}
+                {isOpen && (
+                  <div className="fade-in" style={{ marginTop: 16 }}>
+                    {m.notes?.conclude && (
+                      <div style={{ fontSize: 13, color: C.textMuted, background: C.surface2, borderRadius: 6, padding: "10px 14px", marginBottom: 12 }}>{m.notes.conclude}</div>
+                    )}
+                    {m.recapText ? (
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted }}>Meeting Recap</span>
+                          <button onClick={e => { e.stopPropagation(); copyRecap(m); }}
+                            style={{ padding: "6px 14px", borderRadius: 6, border: `1px solid ${C.border}`, background: copied === m.id ? "rgba(34,197,94,0.15)" : C.surface2, color: copied === m.id ? C.green : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                            {copied === m.id ? "✓ Copied!" : "📋 Copy Recap"}
+                          </button>
+                        </div>
+                        <pre style={{ fontSize: 12, lineHeight: 1.7, color: C.textMuted, whiteSpace: "pre-wrap", fontFamily: "'Barlow',sans-serif", background: C.surface2, borderRadius: 6, padding: "16px", maxHeight: 400, overflowY: "auto" }}>{m.recapText}</pre>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 13, color: C.textDim, fontStyle: "italic" }}>No recap stored for this meeting. Recaps are saved automatically going forward.</div>
+                    )}
+                  </div>
+                )}
               </div>
-              {m.notes?.conclude && (
-                <div style={{ fontSize: 13, color: C.textMuted, background: C.surface2, borderRadius: 6, padding: "10px 14px" }}>{m.notes.conclude}</div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </Layout>
