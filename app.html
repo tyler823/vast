@@ -982,7 +982,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
     }
 
     // Headlines
-    const activeHeadlines = (company.headlines || []).filter(h => !h.reviewed);
+    const activeHeadlines = (company.headlines || []).filter(h => !h.reviewed && h.huddleId === huddleId);
     if (activeHeadlines.length) {
       lines.push("HEADLINES FROM THE WEEK");
       activeHeadlines.forEach(h => lines.push(`  [${h.type.toUpperCase()}] ${h.text}`));
@@ -990,7 +990,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
     }
 
     // Quarterly tasks — off track
-    const offTrack = (company.quarterlyTasks || []).filter(t => t.status === "off");
+    const offTrack = (company.quarterlyTasks || []).filter(t => t.status === "off" && t.huddleId === huddleId);
     if (offTrack.length) {
       lines.push("OFF-TRACK QUARTERLY TASKS");
       offTrack.forEach(t => lines.push(`  ✗ ${t.title}${t.who ? ` (${t.who})` : ""}`));
@@ -1000,7 +1000,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
     // All open to-dos grouped by assignee
     const today = new Date(); today.setHours(0,0,0,0);
     const todayStr = new Date().toISOString().slice(0,10);
-    const allOpen = (company.todos || []).filter(t => !t.done);
+    const allOpen = (company.todos || []).filter(t => !t.done && t.huddleId === huddleId);
     if (allOpen.length) {
       lines.push("OPEN TO-DOS BY TEAM MEMBER");
       // Group by assignee
@@ -1398,8 +1398,25 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                       {measurables.map((m, mi) => (
                         <tr key={m.id} style={{ background: mi % 2 === 0 ? "transparent" : `${C.surface2}55` }}>
                           <td style={{ padding: "10px 16px", fontWeight: 600, fontSize: 13, position: "sticky", left: 0, background: mi % 2 === 0 ? C.surface : C.surface2, zIndex: 1, borderBottom: `1px solid ${C.border}` }}>
-                            <div>{m.name}</div>
-                            {m.owner && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{m.owner}</div>}
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ flex: 1 }}>
+                                <div>{m.name}</div>
+                                {m.owner && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{m.owner}</div>}
+                              </div>
+                              {(() => {
+                                const curVal = entries[curWk]?.[m.id] ?? "";
+                                const met = meetsGoal(curVal, m);
+                                if (met !== false) return null;
+                                const alreadyQueued = (company.problemQueue || []).find(p => p.id === m.id);
+                                return (
+                                  <button onClick={() => addToProblemQueue({ id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })}
+                                    title={alreadyQueued ? "Already in problem queue" : "Send to Problem Solving"}
+                                    style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${alreadyQueued ? "rgba(230,51,41,0.4)" : "rgba(230,51,41,0.3)"}`, background: alreadyQueued ? "rgba(230,51,41,0.2)" : C.surface3, color: alreadyQueued ? C.red : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 10, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                                    {alreadyQueued ? "✓ Queued" : "⚑"}
+                                  </button>
+                                );
+                              })()}
+                            </div>
                           </td>
                           <td style={{ textAlign: "center", padding: "10px 8px", color: C.textMuted, fontSize: 12, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{({gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="})[m.operator||"gte"]} {m.target}{m.unit ? ` ${m.unit}` : ""}</td>
                           {weeks.map(wk => {
@@ -1770,6 +1787,21 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                             onChange={e => setIssueNotes(n => ({ ...n, [activeItem.id]: e.target.value }))}
                             style={{ minHeight: 140 }}
                           />
+                        </div>
+                        {/* Quick-add from active problem */}
+                        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                          <button onClick={() => {
+                            const h = { id: uid(), type: "Customer", text: activeItem.title, huddleId: huddleId, date: now() };
+                            onSave({ headlines: [...(company.headlines || []), h] });
+                          }} style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid rgba(59,130,246,0.4)`, background: "rgba(59,130,246,0.08)", color: C.blue, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                            + Add as Headline
+                          </button>
+                          <button onClick={() => {
+                            const t = { id: uid(), title: activeItem.title, assignees: [], dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10), huddleId: huddleId, done: false, createdAt: now() };
+                            onSave({ todos: [...(company.todos || []), t] });
+                          }} style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid rgba(34,197,94,0.4)`, background: "rgba(34,197,94,0.08)", color: C.green, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                            + Add as To-Do
+                          </button>
                         </div>
                         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                           <button onClick={() => markSolved(activeItem)}
