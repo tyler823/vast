@@ -7,6 +7,23 @@
   <title>VAST Platform</title>
   <!-- Memberstack webflow package -->
   <script data-memberstack-app="app_cmm3lt2s8006c0ss17f1u2kyk" src="https://static.memberstack.com/scripts/v2/memberstack.js" type="text/javascript"></script>
+  <!-- Firebase compat SDK (no bundler needed) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script>
+    const _fbConfig = {
+      apiKey: "AIzaSyBeQ2oixMCr3QnqwWeA_EXmaYzvEXBLe0M",
+      authDomain: "vast-b56bd.firebaseapp.com",
+      databaseURL: "https://vast-b56bd-default-rtdb.firebaseio.com",
+      projectId: "vast-b56bd",
+      storageBucket: "vast-b56bd.firebasestorage.app",
+      messagingSenderId: "977733171083",
+      appId: "1:977733171083:web:6b93f241f32d0f42a8e18e"
+    };
+    firebase.initializeApp(_fbConfig);
+    window._fbDb = firebase.database();
+    console.log("[VAST] Firebase initialized");
+  </script>
   <script>
     // Gate: redirect to marketing page if not an active member
     document.addEventListener("DOMContentLoaded", function() {
@@ -197,18 +214,14 @@ const weeksInRange = (startDate, endDate) => {
   return keys;
 };
 
-// ─── Storage Helpers (Memberstack cloud) ─────────────────────────────
+// ─── Storage Helpers (Firebase + Memberstack) ────────────────────────
 
 // Wait for Memberstack SDK AND confirmed authenticated session
 function waitForMemberstack(timeout = 10000) {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const check = setInterval(async () => {
-      if (Date.now() - start > timeout) {
-        clearInterval(check);
-        reject(new Error("Memberstack session timeout"));
-        return;
-      }
+      if (Date.now() - start > timeout) { clearInterval(check); reject(new Error("Memberstack session timeout")); return; }
       const ms = window.$memberstackDom;
       if (!ms) return;
       try {
@@ -219,44 +232,53 @@ function waitForMemberstack(timeout = 10000) {
   });
 }
 
-// Sync status indicator (shown in sidebar footer area)
-let _syncStatus = "idle"; // "idle" | "saving" | "saved" | "error"
+// Get current member with full custom field data
+async function getCurrentMember() {
+  const ms = await waitForMemberstack();
+  const res = await ms.getCurrentMember();
+  return res?.data || null;
+}
+
+// Generate a short random invite / company code
+function genCode(len = 6) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+// Sync status indicator
+let _syncStatus = "idle";
 function setSyncStatus(s) {
   _syncStatus = s;
   const el = document.getElementById("vast-sync-status");
   if (!el) return;
-  const map = { idle: "", saving: "⏳ Syncing...", saved: "✓ Saved to cloud", error: "⚠ Sync failed" };
+  const map = { idle: "", saving: "⏳ Syncing...", saved: "✓ Saved", error: "⚠ Sync failed" };
   const col = { idle: "", saving: "#888", saved: "#22c55e", error: "#E63329" };
   el.textContent = map[s] || "";
   el.style.color = col[s] || "";
 }
 
-async function loadCompany() {
-  // Retry up to 3 times — on a fresh login the session token can take a moment
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const ms = await waitForMemberstack();
-      const res = await ms.getMemberJSON();
-      console.log(`[VAST] getMemberJSON attempt ${attempt}:`, JSON.stringify(res).slice(0, 200));
+// ── Firebase helpers ───────────────────────────────────────────────────────
+function fbRef(path) { return window._fbDb.ref(path); }
 
-      const cloud = res?.data?.vastData;
-      if (cloud && typeof cloud === "object" && (cloud.name || cloud.members || cloud.huddles)) {
-        try { localStorage.setItem("vast:cloud-cache", JSON.stringify(cloud)); } catch {}
-        console.log("[VAST] Loaded from Memberstack cloud.");
-        return cloud;
-      }
+async function fbGet(path) {
+  const snap = await fbRef(path).once("value");
+  return snap.exists() ? snap.val() : null;
+}
 
-      if (attempt < 3) {
-        console.log(`[VAST] No data yet on attempt ${attempt}, retrying in 1s...`);
-        await new Promise(r => setTimeout(r, 1000));
-      }
-    } catch(e) {
-      console.warn(`[VAST] getMemberJSON attempt ${attempt} failed:`, e);
-      if (attempt < 3) await new Promise(r => setTimeout(r, 1000));
+async function fbSet(path, data) { await fbRef(path).set(data); }
+async function fbUpdate(path, data) { await fbRef(path).update(data); }
+
+// ── Company load/save via Firebase ────────────────────────────────────────
+async function loadCompanyFromFirebase(companyCode) {
+  try {
+    const data = await fbGet(`companies/${companyCode}/data`);
+    if (data) {
+      try { localStorage.setItem("vast:cloud-cache", JSON.stringify(data)); } catch {}
+      console.log("[VAST] Loaded from Firebase.");
+      return data;
     }
-  }
-
-  // Fallback: local cache
+  } catch(e) { console.warn("[VAST] Firebase load failed:", e); }
+  // Fallback to local cache
   try {
     const cached = localStorage.getItem("vast:cloud-cache");
     if (cached) { console.log("[VAST] Loaded from local cache fallback."); return JSON.parse(cached); }
@@ -266,6 +288,7 @@ async function loadCompany() {
 
 let _saveTimer = null;
 let _pendingData = null;
+let _currentCompanyCode = null;
 
 function saveCompany(data) {
   _pendingData = data;
@@ -276,48 +299,65 @@ function saveCompany(data) {
 }
 
 async function flushSave() {
-  if (!_pendingData) return;
+  if (!_pendingData || !_currentCompanyCode) return;
   const data = _pendingData;
   try {
-    const ms = await waitForMemberstack(5000);
-    await ms.updateMemberJSON({ json: { vastData: data } });
-    console.log("[VAST] Saved to Memberstack cloud successfully.");
+    await fbSet(`companies/${_currentCompanyCode}/data`, data);
+    console.log("[VAST] Saved to Firebase.");
     setSyncStatus("saved");
     setTimeout(() => setSyncStatus("idle"), 3000);
     _pendingData = null;
   } catch(e) {
-    console.error("[VAST] Memberstack save failed:", e);
+    console.error("[VAST] Firebase save failed:", e);
     setSyncStatus("error");
   }
 }
 
-// Flush on tab close
 window.addEventListener("beforeunload", () => {
   if (_saveTimer) clearTimeout(_saveTimer);
-  if (_pendingData) {
-    try {
-      const ms = window.$memberstackDom;
-      if (ms) ms.updateMemberJSON({ json: { vastData: _pendingData } });
-    } catch {}
+  if (_pendingData && _currentCompanyCode) {
+    try { fbRef(`companies/${_currentCompanyCode}/data`).set(_pendingData); } catch {}
   }
 });
 
-// One-time migration: move old localStorage data to cloud
-async function migrateLocalStorageToCloud() {
-  try {
-    const oldKeys = Object.keys(localStorage).filter(k => k.startsWith("vast:company:"));
-    if (oldKeys.length === 0) return null;
-    const old = localStorage.getItem(oldKeys[0]);
-    if (!old) return null;
-    const parsed = JSON.parse(old);
-    console.log("[VAST] Migrating old localStorage data to cloud...");
-    const ms = await waitForMemberstack();
-    await ms.updateMemberJSON({ json: { vastData: parsed } });
-    localStorage.removeItem(oldKeys[0]);
-    console.log("[VAST] Migration complete.");
-    return parsed;
-  } catch(e) { console.warn("[VAST] Migration failed:", e); return null; }
+// ── Invite code helpers ───────────────────────────────────────────────────
+async function createInvite(companyCode, memberName, memberEmail, memberRole, memberId) {
+  const code = genCode(8);
+  await fbSet(`invites/${code}`, { companyCode, name: memberName, email: memberEmail, role: memberRole || "member", memberId: memberId || null, used: false, createdAt: Date.now() });
+  return code;
 }
+
+async function redeemInvite(code) {
+  const invite = await fbGet(`invites/${code.toUpperCase().trim()}`);
+  if (!invite) throw new Error("Invite code not found.");
+  if (invite.used) throw new Error("This invite code has already been used.");
+  return invite;
+}
+
+async function markInviteUsed(code) {
+  await fbUpdate(`invites/${code.toUpperCase().trim()}`, { used: true, usedAt: Date.now() });
+}
+
+// ── One-time migration: Memberstack JSON → Firebase ───────────────────────
+async function migrateToFirebase(companyCode) {
+  try {
+    const ms = await waitForMemberstack();
+    const res = await ms.getMemberJSON();
+    const cloud = res?.data?.vastData;
+    if (cloud && typeof cloud === "object" && (cloud.name || cloud.members || cloud.huddles)) {
+      console.log("[VAST] Migrating Memberstack data to Firebase...");
+      await fbSet(`companies/${companyCode}/data`, cloud);
+      // Clear from Memberstack JSON to avoid confusion
+      await ms.updateMemberJSON({ json: { vastData: null } });
+      console.log("[VAST] Migration to Firebase complete.");
+      return cloud;
+    }
+  } catch(e) { console.warn("[VAST] Migration check failed:", e); }
+  return null;
+}
+
+// One-time migration: move old localStorage data to cloud (kept for compat)
+async function migrateLocalStorageToCloud() { return null; }
 
 // ─── Default Company Data ─────────────────────────────────────────────
 function defaultCompany(name, code) {
@@ -855,6 +895,68 @@ const AGENDA = [
   { id: "conclude", label: "Conclude & Rate Meeting", minutes: 5 },
 ];
 
+// ─── CONFETTI ─────────────────────────────────────────────────────────
+function Confetti({ message, onDone }) {
+  const canvasRef = React.useRef(null);
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const colors = ["#E63329","#22c55e","#3b82f6","#eab308","#a855f7","#f97316","#ffffff"];
+    const particles = Array.from({ length: 160 }, (_, i) => ({
+      x: Math.random() * canvas.width,
+      y: -20 - Math.random() * 200,
+      size: 6 + Math.random() * 9,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 5,
+      vy: 1.5 + Math.random() * 4,
+      rotation: Math.random() * 360,
+      rotSpeed: (Math.random() - 0.5) * 9,
+      opacity: 1,
+      rect: Math.random() > 0.4,
+    }));
+    let frame;
+    const start = Date.now();
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const elapsed = Date.now() - start;
+      particles.forEach(p => {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.09;
+        p.rotation += p.rotSpeed;
+        if (elapsed > 2200) p.opacity = Math.max(0, p.opacity - 0.018);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation * Math.PI / 180);
+        ctx.globalAlpha = p.opacity;
+        ctx.fillStyle = p.color;
+        if (p.rect) { ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); }
+        else { ctx.beginPath(); ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2); ctx.fill(); }
+        ctx.restore();
+      });
+      if (elapsed < 3800) { frame = requestAnimationFrame(animate); }
+      else { onDone && onDone(); }
+    };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return (
+    <>
+      <canvas ref={canvasRef} style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999 }} />
+      {message && (
+        <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 10000, pointerEvents: "none", textAlign: "center" }} className="fade-in">
+          <div style={{ background: "rgba(0,0,0,0.82)", borderRadius: 16, padding: "28px 40px", border: "2px solid rgba(255,255,255,0.15)", backdropFilter: "blur(8px)" }}>
+            <div style={{ fontSize: 52 }}>{message.emoji}</div>
+            <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 32, color: "#fff", marginTop: 10, letterSpacing: 1 }}>{message.title}</div>
+            <div style={{ fontSize: 15, color: "rgba(255,255,255,0.7)", marginTop: 6 }}>{message.sub}</div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   // Build agenda using per-huddle custom durations if set
   const customMins = ((company.huddles || []).find(h => h.id === huddleId) || {}).agendaMins || {};
@@ -887,6 +989,19 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const toggleNote = (id) => setNoteOpen(s => ({ ...s, [id]: !s[id] }));
   const timerRef = useRef(null);
   const spinRef = useRef(null);
+  const [confetti, setConfetti] = useState(null); // null | { emoji, title, sub }
+  const confettiFired = useRef({ todos: false, ids: false });
+  const preMeetingTodoIds = useRef(null);
+  const fireConfetti = (msg) => setConfetti(msg);
+
+  // Snapshot pre-meeting todos once the meeting starts
+  useEffect(() => {
+    if (started && !preMeetingTodoIds.current) {
+      preMeetingTodoIds.current = new Set(
+        (company.todos || []).filter(t => t.huddleId === huddleId && !t.done).map(t => t.id)
+      );
+    }
+  }, [started]);
   // Only show members assigned to this huddle (or all if huddle has no member list yet)
   const allMembers = company.members || [];
   const huddleObj = (company.huddles || []).find(h => h.id === huddleId) || {};
@@ -1111,7 +1226,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
   if (done) {
     const recap = buildRecap({ date: now() }, rating);
-    const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegTimes({}); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); clearTimeout(spinRef.current); };
+    const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegTimes({}); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); setConfetti(null); confettiFired.current = { todos: false, ids: false }; preMeetingTodoIds.current = null; clearTimeout(spinRef.current); };
     return (
       <Layout title="Meeting Complete!" subtitle="Great work — keep the momentum going">
         <div style={{ maxWidth: 680, margin: "0 auto" }} className="fade-in">
@@ -1205,6 +1320,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
   return (
     <Layout title={`${huddleName} — Live`} subtitle={`Total: ${fmt(elapsed)}`}>
+      {confetti && <Confetti message={confetti} onDone={() => setConfetti(null)} />}
       <div style={{ display: "grid", gridTemplateColumns: "min(280px,100%) 1fr", gap: 20 }} className="mob-stack">
         {/* Agenda sidebar */}
         <div>
@@ -1573,7 +1689,19 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
           {activeIdx === 4 && (() => {
             // Only show todos assigned to THIS huddle
             const pending = (company.todos || []).filter(t => !t.done && t.huddleId === huddleId);
-            const completeTodo = (id) => onSave({ todos: company.todos.map(x => x.id === id ? { ...x, done: true, completedAt: now() } : x) });
+            const completeTodo = (id) => {
+              const updated = company.todos.map(x => x.id === id ? { ...x, done: true, completedAt: now() } : x);
+              onSave({ todos: updated });
+              // 80% celebration — only count pre-meeting todos
+              if (!confettiFired.current.todos && preMeetingTodoIds.current && preMeetingTodoIds.current.size > 0) {
+                const completed = updated.filter(t => preMeetingTodoIds.current.has(t.id) && t.done).length;
+                if (completed / preMeetingTodoIds.current.size >= 0.8) {
+                  confettiFired.current.todos = true;
+                  const pct = Math.round(completed / preMeetingTodoIds.current.size * 100);
+                  fireConfetti({ emoji: "🎉", title: `${pct}% To-Dos Complete!`, sub: `${completed} of ${preMeetingTodoIds.current.size} to-dos knocked out` });
+                }
+              }
+            };
             return (
               <div className="card">
                 <h3 style={{ fontSize: 18, marginBottom: 4 }}>To-Do Review</h3>
@@ -1683,15 +1811,34 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
             const markSolved = (item) => {
               setSolvedThisSession(s => [...s, { ...item, notes: issueNotes[item.id] || "", solvedAt: now() }]);
               setFocusQueue(q => q.filter(f => f.id !== item.id));
-              // remove from problemQueue in company data
               onSave({ problemQueue: (company.problemQueue || []).filter(p => p.id !== item.id) });
               const next = inFocus.find(f => f.id !== item.id);
               setActiveIssueId(next ? next.id : null);
+              // Celebrate if all problems are now solved
+              const remainingFocus = inFocus.filter(f => f.id !== item.id);
+              const remainingPending = pending.filter(x => x.id !== item.id);
+              if (!confettiFired.current.ids && remainingFocus.length === 0 && remainingPending.length === 0) {
+                confettiFired.current.ids = true;
+                const totalSolved = solvedThisSession.length + 1;
+                fireConfetti({ emoji: "🏆", title: "All Problems Solved!", sub: `${totalSolved} issue${totalSolved !== 1 ? "s" : ""} resolved this meeting` });
+              }
             };
             const markNotSolved = (item) => {
               setFocusQueue(q => q.filter(f => f.id !== item.id));
               const next = inFocus.find(f => f.id !== item.id);
               setActiveIssueId(next ? next.id : null);
+            };
+
+            const addActiveAsHeadline = () => {
+              if (!activeItem) return;
+              const h = { id: uid(), type: "Customer", text: activeItem.title, huddleId: huddleId, date: now() };
+              onSave({ headlines: [...(company.headlines || []), h] });
+            };
+
+            const addActiveAsTodo = () => {
+              if (!activeItem) return;
+              const t = { id: uid(), title: activeItem.title, assignees: [], dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10), huddleId: huddleId, done: false, createdAt: now() };
+              onSave({ todos: [...(company.todos || []), t] });
             };
 
             return (
@@ -1793,16 +1940,12 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                         </div>
                         {/* Quick-add from active problem */}
                         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                          <button onClick={() => {
-                            const h = { id: uid(), type: "Customer", text: activeItem.title, huddleId: huddleId, date: now() };
-                            onSave({ headlines: [...(company.headlines || []), h] });
-                          }} style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid rgba(59,130,246,0.4)`, background: "rgba(59,130,246,0.08)", color: C.blue, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                          <button type="button" onClick={addActiveAsHeadline}
+                            style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid rgba(59,130,246,0.4)`, background: "rgba(59,130,246,0.08)", color: C.blue, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
                             + Add as Headline
                           </button>
-                          <button onClick={() => {
-                            const t = { id: uid(), title: activeItem.title, assignees: [], dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10), huddleId: huddleId, done: false, createdAt: now() };
-                            onSave({ todos: [...(company.todos || []), t] });
-                          }} style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid rgba(34,197,94,0.4)`, background: "rgba(34,197,94,0.08)", color: C.green, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                          <button type="button" onClick={addActiveAsTodo}
+                            style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid rgba(34,197,94,0.4)`, background: "rgba(34,197,94,0.08)", color: C.green, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
                             + Add as To-Do
                           </button>
                         </div>
@@ -3185,11 +3328,44 @@ function Settings({ company, onSave }) {
   const renameOrgChart = (id, name) => onSave({ orgCharts: orgCharts.map(o => o.id === id ? { ...o, name } : o) });
   const deleteOrgChart = (id) => { if (orgCharts.length <= 1) return; onSave({ orgCharts: orgCharts.filter(o => o.id !== id) }); };
 
-  const addMember = () => {
+  const [pendingInvites, setPendingInvites] = React.useState({}); // { memberId: code }
+  const [generatingInvite, setGeneratingInvite] = React.useState(null);
+  const [copiedInvite, setCopiedInvite] = React.useState(null);
+
+  const addMember = async () => {
     if (!newMember.name.trim()) return;
-    const m = { id: uid(), ...newMember };
+    const m = { id: uid(), ...newMember, inviteCode: null };
     onSave({ members: [...(company.members || []), m] });
     setNewMember({ name: "", email: "", role: "member" });
+    // Generate invite code if email provided
+    if (newMember.email.trim() && company.code) {
+      setGeneratingInvite(m.id);
+      try {
+        const code = await createInvite(company.code, newMember.name, newMember.email, newMember.role, m.id);
+        const updatedMember = { ...m, inviteCode: code };
+        onSave({ members: [...(company.members || []), updatedMember] });
+        setPendingInvites(p => ({ ...p, [m.id]: code }));
+      } catch(e) { console.warn("Invite creation failed:", e); }
+      setGeneratingInvite(null);
+    }
+  };
+
+  const generateInviteForMember = async (m) => {
+    if (!company.code) return;
+    setGeneratingInvite(m.id);
+    try {
+      const code = await createInvite(company.code, m.name, m.email, m.role, m.id);
+      const updatedMembers = company.members.map(x => x.id === m.id ? { ...x, inviteCode: code } : x);
+      onSave({ members: updatedMembers });
+      setPendingInvites(p => ({ ...p, [m.id]: code }));
+    } catch(e) { console.warn("Invite creation failed:", e); }
+    setGeneratingInvite(null);
+  };
+
+  const copyInviteCode = (id, code) => {
+    navigator.clipboard.writeText(code).catch(() => {});
+    setCopiedInvite(id);
+    setTimeout(() => setCopiedInvite(null), 2500);
   };
   const delMember = (id) => onSave({ members: company.members.filter(m => m.id !== id) });
 
@@ -3302,20 +3478,43 @@ function Settings({ company, onSave }) {
 
           <div className="card" style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 18, marginBottom: 16 }}>Team Members</h3>
-            {(company.members || []).map(m => (
-              <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}`, gap: 8 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <input
-                    defaultValue={m.name}
-                    onBlur={e => renameMember(m.id, e.target.value.trim())}
-                    onKeyDown={e => e.key === "Enter" && e.target.blur()}
-                    style={{ fontSize: 14, fontWeight: 600, color: C.text, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, padding: "2px 0", outline: "none", width: "100%", fontFamily: "'Barlow',sans-serif" }}
-                  />
-                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{m.email}{m.email && m.role ? " · " : ""}{m.role}</div>
+            {(company.members || []).map(m => {
+              const inviteCode = m.inviteCode || pendingInvites[m.id];
+              return (
+                <div key={m.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <input
+                        defaultValue={m.name}
+                        onBlur={e => renameMember(m.id, e.target.value.trim())}
+                        onKeyDown={e => e.key === "Enter" && e.target.blur()}
+                        style={{ fontSize: 14, fontWeight: 600, color: C.text, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, padding: "2px 0", outline: "none", width: "100%", fontFamily: "'Barlow',sans-serif" }}
+                      />
+                      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{m.email}{m.email && m.role ? " · " : ""}{m.role}</div>
+                    </div>
+                    {!inviteCode && (
+                      <button onClick={() => generateInviteForMember(m)} disabled={generatingInvite === m.id}
+                        style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap", flexShrink: 0 }}>
+                        {generatingInvite === m.id ? "..." : "✉ Invite"}
+                      </button>
+                    )}
+                    <button className="btn-danger" style={{ padding: "6px 10px", flexShrink: 0 }} onClick={() => delMember(m.id)}><Icon.trash /></button>
+                  </div>
+                  {inviteCode && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, padding: "8px 10px", background: "rgba(59,130,246,0.08)", borderRadius: 6, border: "1px solid rgba(59,130,246,0.2)" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 10, color: "#3b82f6", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Invite Code</div>
+                        <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 800, letterSpacing: 3, color: C.text }}>{inviteCode}</div>
+                      </div>
+                      <button onClick={() => copyInviteCode(m.id, inviteCode)}
+                        style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid rgba(59,130,246,0.4)", background: copiedInvite === m.id ? "rgba(34,197,94,0.15)" : "rgba(59,130,246,0.12)", color: copiedInvite === m.id ? "#22c55e" : "#3b82f6", fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                        {copiedInvite === m.id ? "✓ Copied!" : "📋 Copy"}
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <button className="btn-danger" style={{ padding: "6px 10px", flexShrink: 0 }} onClick={() => delMember(m.id)}><Icon.trash /></button>
-              </div>
-            ))}
+              );
+            })}
             {(company.members||[]).length > 0 && (
               <div style={{ fontSize: 11, color: C.textDim, marginTop: 8, fontStyle: "italic" }}>Click a name to edit it. Changes cascade to all tasks and to-dos.</div>
             )}
@@ -3626,27 +3825,164 @@ function VASTApp() {
     setTheme(next);
   };
 
+  const [memberInfo, setMemberInfo] = useState(null); // { id, email, customFields: { companyCode, role } }
+  const [appState, setAppState] = useState("loading"); // "loading" | "invite" | "ready"
+  const [inviteMode, setInviteMode] = useState("choose"); // "choose" | "join" | "create"
+  const [inviteError, setInviteError] = useState("");
+  const [inviteInput, setInviteInput] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const fbListenerRef = useRef(null);
+
+  function applyMigrations(raw) {
+    if (!raw.huddles) raw.huddles = [{ id: "huddle-1", name: "Weekly Huddle" }];
+    if (!raw.navigators) raw.navigators = [{ id: "nav-1", name: "Navigator", coreValues: raw.navigator?.coreValues || ["","",""], purpose: raw.navigator?.purpose || "", avenue: raw.navigator?.avenue || "", targetMarket: raw.navigator?.targetMarket || "", different: raw.navigator?.different || "", proof: raw.navigator?.proof || "", promise: raw.navigator?.promise || "", futureDate: raw.navigator?.futureDate || "", revenue: raw.navigator?.revenue || "", profit: raw.navigator?.profit || "", whatLooksLike: raw.navigator?.whatLooksLike || "", majorMotivator: raw.navigator?.majorMotivator || "" }];
+    if (!raw.orgCharts) raw.orgCharts = [{ id: "org-1", name: "Responsibility Chart", ...(raw.orgChart || { dreamer: "", doer: "", salesRoles: [{ role: "Sales/Mktg", members: [""] }], opsRoles: [{ role: "Operations", members: [""] }], financeRoles: [{ role: "Finance", members: [""] }] }) }];
+    if (!raw.annualGoals) raw.annualGoals = [{ id: "goal-1", name: "Annual Goal", futureDate: raw.yearGoal?.futureDate || "", revenue: raw.yearGoal?.revenue || "", profit: raw.yearGoal?.profit || "" }];
+    if (!raw.quarterStart) raw.quarterStart = new Date().toISOString().slice(0,10);
+    if (!raw.quarterEnd) raw.quarterEnd = new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10);
+    return raw;
+  }
+
+  function attachFirebaseListener(companyCode) {
+    if (fbListenerRef.current) fbListenerRef.current.off();
+    const ref = window._fbDb.ref(`companies/${companyCode}/data`);
+    ref.on("value", snap => {
+      if (snap.exists()) {
+        const val = applyMigrations(snap.val());
+        setCompanyState(val);
+      }
+    });
+    fbListenerRef.current = ref;
+  }
+
   useEffect(() => {
     const init = async () => {
-      // Migrate any old localStorage data to cloud (no-op if already done)
-      let raw = await migrateLocalStorageToCloud();
+      try {
+        const member = await getCurrentMember();
+        if (!member) { setAppState("loading"); return; }
+        setMemberInfo(member);
 
-      // Load from Memberstack cloud (falls back to local cache if needed)
-      if (!raw) raw = await loadCompany();
+        const companyCode = member.customFields?.companyCode;
+        const role = member.customFields?.role;
 
-      if (raw) {
-        // Migrate existing data that's missing new array fields
-        if (!raw.huddles) raw.huddles = [{ id: "huddle-1", name: "Weekly Huddle" }];
-        if (!raw.navigators) raw.navigators = [{ id: "nav-1", name: "Navigator", coreValues: raw.navigator?.coreValues || ["","",""], purpose: raw.navigator?.purpose || "", avenue: raw.navigator?.avenue || "", targetMarket: raw.navigator?.targetMarket || "", different: raw.navigator?.different || "", proof: raw.navigator?.proof || "", promise: raw.navigator?.promise || "", futureDate: raw.navigator?.futureDate || "", revenue: raw.navigator?.revenue || "", profit: raw.navigator?.profit || "", whatLooksLike: raw.navigator?.whatLooksLike || "", majorMotivator: raw.navigator?.majorMotivator || "" }];
-        if (!raw.orgCharts) raw.orgCharts = [{ id: "org-1", name: "Responsibility Chart", ...(raw.orgChart || { dreamer: "", doer: "", salesRoles: [{ role: "Sales/Mktg", members: [""] }], opsRoles: [{ role: "Operations", members: [""] }], financeRoles: [{ role: "Finance", members: [""] }] }) }];
-        if (!raw.annualGoals) raw.annualGoals = [{ id: "goal-1", name: "Annual Goal", futureDate: raw.yearGoal?.futureDate || "", revenue: raw.yearGoal?.revenue || "", profit: raw.yearGoal?.profit || "" }];
-        if (!raw.quarterStart) raw.quarterStart = new Date().toISOString().slice(0,10);
-        if (!raw.quarterEnd) raw.quarterEnd = new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10);
+        // ── New member: no company code yet → show invite entry ──
+        if (!companyCode) {
+          // Check if they have data in old Memberstack JSON (legacy owner)
+          const ms = await waitForMemberstack();
+          const res = await ms.getMemberJSON();
+          const legacyData = res?.data?.vastData;
+          if (legacyData && (legacyData.name || legacyData.members || legacyData.huddles)) {
+            // Existing owner migrating to Firebase
+            const code = legacyData.code || genCode(8);
+            legacyData.code = code;
+            _currentCompanyCode = code;
+            // Check Firebase — if not there yet, migrate
+            const existing = await fbGet(`companies/${code}/data`);
+            if (!existing) await fbSet(`companies/${code}/data`, legacyData);
+            // Save companyCode + role to Memberstack custom fields
+            await ms.updateMember({ customFields: { companyCode: code, role: "owner" } });
+            await ms.updateMemberJSON({ json: { vastData: null } });
+            const raw = applyMigrations(await fbGet(`companies/${code}/data`));
+            setCompanyState(raw);
+            attachFirebaseListener(code);
+            setAppState("ready");
+            return;
+          }
+          // Truly new user — needs invite code
+          setAppState("invite");
+          return;
+        }
+
+        // ── Existing member: load company from Firebase ──
+        _currentCompanyCode = companyCode;
+
+        // First time owner (companyCode set but Firebase record not yet created)
+        let raw = await fbGet(`companies/${companyCode}/data`);
+        if (!raw) {
+          // Check for Memberstack migration
+          raw = await migrateToFirebase(companyCode);
+        }
+        if (!raw) {
+          raw = defaultCompany("My Company", companyCode);
+          await fbSet(`companies/${companyCode}/data`, raw);
+        }
+        raw = applyMigrations(raw);
+        // Backfill memberId: if logged-in member doesn't have one yet, match by email
+        const msForBackfill = await waitForMemberstack();
+        const currentMemberData = await msForBackfill.getCurrentMember();
+        const currentFields = currentMemberData?.data?.customFields || {};
+        if (!currentFields.memberId && currentMemberData?.data?.auth?.email) {
+          const email = currentMemberData.data.auth.email.toLowerCase();
+          const matched = (raw.members || []).find(m => m.email && m.email.toLowerCase() === email);
+          if (matched) {
+            await msForBackfill.updateMember({ customFields: { memberId: matched.id } });
+            console.log("[VAST] Backfilled memberId:", matched.id);
+          }
+        }
+        setCompanyState(raw);
+        attachFirebaseListener(companyCode);
+        setAppState("ready");
+      } catch(e) {
+        console.error("[VAST] Init error:", e);
+        // Try local cache as last resort
+        try {
+          const cached = localStorage.getItem("vast:cloud-cache");
+          if (cached) { setCompanyState(applyMigrations(JSON.parse(cached))); setAppState("ready"); return; }
+        } catch {}
+        setAppState("ready");
+        setCompanyState(defaultCompany("My Company", "myco"));
       }
-      setCompanyState(raw || defaultCompany('My Company', 'myco'));
     };
     init();
+    return () => { if (fbListenerRef.current) fbListenerRef.current.off(); };
   }, []);
+
+  const handleCreateCompany = async () => {
+    if (!newCompanyName.trim()) return;
+    setInviteLoading(true);
+    setInviteError("");
+    try {
+      const code = genCode(8);
+      const ms = await waitForMemberstack();
+      // Save role + companyCode to Memberstack custom fields
+      await ms.updateMember({ customFields: { companyCode: code, role: "owner" } });
+      // Create fresh company record in Firebase
+      const fresh = defaultCompany(newCompanyName.trim(), code);
+      await fbSet(`companies/${code}/data`, fresh);
+      _currentCompanyCode = code;
+      const raw = applyMigrations(fresh);
+      setCompanyState(raw);
+      attachFirebaseListener(code);
+      setAppState("ready");
+    } catch(e) {
+      setInviteError(e.message || "Something went wrong. Please try again.");
+    }
+    setInviteLoading(false);
+  };
+
+  const handleRedeemInvite = async () => {
+    if (!inviteInput.trim()) return;
+    setInviteLoading(true);
+    setInviteError("");
+    try {
+      const invite = await redeemInvite(inviteInput);
+      const ms = await waitForMemberstack();
+      // Write companyCode, role, AND memberId so the app knows which records belong to this user
+      const fields = { companyCode: invite.companyCode, role: invite.role || "member" };
+      if (invite.memberId) fields.memberId = invite.memberId;
+      await ms.updateMember({ customFields: fields });
+      await markInviteUsed(inviteInput.toUpperCase().trim());
+      _currentCompanyCode = invite.companyCode;
+      const raw = applyMigrations(await fbGet(`companies/${invite.companyCode}/data`));
+      setCompanyState(raw);
+      attachFirebaseListener(invite.companyCode);
+      setAppState("ready");
+    } catch(e) {
+      setInviteError(e.message || "Invalid code. Please check with your team owner.");
+    }
+    setInviteLoading(false);
+  };
 
   const handleSave = useCallback((updates) => {
     if (!company) return;
@@ -3655,7 +3991,78 @@ function VASTApp() {
     saveCompany(updated);
   }, [company]);
 
-  if (!company) return (
+  // ── Invite entry screen ──
+  if (appState === "invite") return (
+    <><GlobalStyles theme={theme} />
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 40, maxWidth: 440, width: "100%", textAlign: "center" }}>
+        <VASTLogo size="lg" />
+
+        {/* ── Mode: choose ── */}
+        {inviteMode === "choose" && (<>
+          <div style={{ marginTop: 24, marginBottom: 8, fontFamily: "'Barlow Condensed',sans-serif", fontSize: 26, fontWeight: 800 }}>Welcome to VAST</div>
+          <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 32 }}>Are you starting a new team or joining an existing one?</div>
+          <button className="btn-primary" style={{ width: "100%", padding: 16, fontSize: 15, marginBottom: 12 }}
+            onClick={() => { setInviteMode("create"); setInviteError(""); }}>
+            🚀 Start a New Team
+          </button>
+          <button onClick={() => { setInviteMode("join"); setInviteError(""); }}
+            style={{ width: "100%", padding: 16, fontSize: 15, borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontFamily: "'Barlow',sans-serif", fontWeight: 700, cursor: "pointer" }}>
+            👥 Join an Existing Team
+          </button>
+        </>)}
+
+        {/* ── Mode: create (new owner) ── */}
+        {inviteMode === "create" && (<>
+          <div style={{ marginTop: 24, marginBottom: 8, fontFamily: "'Barlow Condensed',sans-serif", fontSize: 26, fontWeight: 800 }}>Start Your Team</div>
+          <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 28 }}>Enter your company name to get started. You can change this later.</div>
+          <input
+            value={newCompanyName}
+            onChange={e => setNewCompanyName(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleCreateCompany()}
+            placeholder="Your Company Name"
+            autoFocus
+            style={{ width: "100%", padding: "14px 16px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: 18, fontFamily: "'Barlow',sans-serif", fontWeight: 600, textAlign: "center", outline: "none", marginBottom: 12 }}
+          />
+          {inviteError && <div style={{ color: "#E63329", fontSize: 13, marginBottom: 12 }}>{inviteError}</div>}
+          <button className="btn-primary" style={{ width: "100%", padding: 14, fontSize: 15, marginBottom: 12 }}
+            onClick={handleCreateCompany} disabled={inviteLoading || !newCompanyName.trim()}>
+            {inviteLoading ? "Setting up..." : "Create Team →"}
+          </button>
+          <button onClick={() => { setInviteMode("choose"); setInviteError(""); }}
+            style={{ background: "none", border: "none", color: C.textMuted, fontSize: 13, cursor: "pointer", fontFamily: "'Barlow',sans-serif" }}>
+            ← Back
+          </button>
+        </>)}
+
+        {/* ── Mode: join (existing member) ── */}
+        {inviteMode === "join" && (<>
+          <div style={{ marginTop: 24, marginBottom: 8, fontFamily: "'Barlow Condensed',sans-serif", fontSize: 26, fontWeight: 800 }}>Join Your Team</div>
+          <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 28 }}>Enter the invite code your team owner sent you.</div>
+          <input
+            value={inviteInput}
+            onChange={e => setInviteInput(e.target.value.toUpperCase())}
+            onKeyDown={e => e.key === "Enter" && handleRedeemInvite()}
+            placeholder="e.g. AB3XY7KM"
+            autoFocus
+            style={{ width: "100%", padding: "14px 16px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: 22, fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 700, letterSpacing: 4, textAlign: "center", outline: "none", marginBottom: 12 }}
+          />
+          {inviteError && <div style={{ color: "#E63329", fontSize: 13, marginBottom: 12 }}>{inviteError}</div>}
+          <button className="btn-primary" style={{ width: "100%", padding: 14, fontSize: 15, marginBottom: 12 }}
+            onClick={handleRedeemInvite} disabled={inviteLoading || !inviteInput.trim()}>
+            {inviteLoading ? "Joining..." : "Join Team →"}
+          </button>
+          <button onClick={() => { setInviteMode("choose"); setInviteError(""); }}
+            style={{ background: "none", border: "none", color: C.textMuted, fontSize: 13, cursor: "pointer", fontFamily: "'Barlow',sans-serif" }}>
+            ← Back
+          </button>
+        </>)}
+
+      </div>
+    </div></>
+  );
+
+  if (appState === "loading" || !company) return (
     <><GlobalStyles theme={theme} />
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center" }}>
