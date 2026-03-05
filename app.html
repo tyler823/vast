@@ -3866,21 +3866,28 @@ function VASTApp() {
         const companyCode = member.customFields?.companyCode;
         const role = member.customFields?.role;
 
-        // ── New member: no company code yet → show invite entry ──
+        // ── No company code yet → try to recover existing data first ──
         if (!companyCode) {
-          // Check if they have data in old Memberstack JSON (legacy owner)
           const ms = await waitForMemberstack();
-          const res = await ms.getMemberJSON();
-          const legacyData = res?.data?.vastData;
-          if (legacyData && (legacyData.name || legacyData.members || legacyData.huddles)) {
-            // Existing owner migrating to Firebase
+
+          // Retry getMemberJSON up to 4 times with increasing delays
+          let legacyData = null;
+          for (let attempt = 1; attempt <= 4; attempt++) {
+            try {
+              const res = await ms.getMemberJSON();
+              const d = res?.data?.vastData;
+              if (d && (d.name || d.members || d.huddles)) { legacyData = d; break; }
+            } catch(e) { console.warn(`[VAST] getMemberJSON attempt ${attempt} failed:`, e); }
+            if (attempt < 4) await new Promise(r => setTimeout(r, attempt * 800));
+          }
+
+          if (legacyData) {
+            // Existing owner — migrate to Firebase
             const code = legacyData.code || genCode(8);
             legacyData.code = code;
             _currentCompanyCode = code;
-            // Check Firebase — if not there yet, migrate
             const existing = await fbGet(`companies/${code}/data`);
             if (!existing) await fbSet(`companies/${code}/data`, legacyData);
-            // Save companyCode + role to Memberstack custom fields
             await ms.updateMember({ customFields: { companyCode: code, role: "owner" } });
             await ms.updateMemberJSON({ json: { vastData: null } });
             const raw = applyMigrations(await fbGet(`companies/${code}/data`));
@@ -3889,7 +3896,30 @@ function VASTApp() {
             setAppState("ready");
             return;
           }
-          // Truly new user — needs invite code
+
+          // Check local cache — may have data from a previous session
+          try {
+            const cached = localStorage.getItem("vast:cloud-cache");
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (parsed && (parsed.name || parsed.members || parsed.huddles)) {
+                // Recover from cache: push to Firebase and set companyCode
+                const code = parsed.code || genCode(8);
+                parsed.code = code;
+                _currentCompanyCode = code;
+                await fbSet(`companies/${code}/data`, parsed);
+                await ms.updateMember({ customFields: { companyCode: code, role: "owner" } });
+                const raw = applyMigrations(parsed);
+                setCompanyState(raw);
+                attachFirebaseListener(code);
+                setAppState("ready");
+                console.log("[VAST] Recovered from local cache.");
+                return;
+              }
+            }
+          } catch(e) { console.warn("[VAST] Cache recovery failed:", e); }
+
+          // Truly new user with no data anywhere
           setAppState("invite");
           return;
         }
