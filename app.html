@@ -331,6 +331,8 @@ function saveCompany(data) {
 async function flushSave() {
   if (!_pendingData || !_currentCompanyCode) return;
   const data = _pendingData;
+  // Flag that we're writing so the Firebase listener ignores the echo
+  if (window._vastApp) window._vastApp.isWritingRef.current = true;
   try {
     await fbSet(`companies/${_currentCompanyCode}/data`, data);
     console.log("[VAST] Saved to Firebase.");
@@ -340,6 +342,11 @@ async function flushSave() {
   } catch(e) {
     console.error("[VAST] Firebase save failed:", e);
     setSyncStatus("error");
+  } finally {
+    // Clear the write flag after a short delay to allow Firebase echo to pass
+    setTimeout(() => {
+      if (window._vastApp) window._vastApp.isWritingRef.current = false;
+    }, 1500);
   }
 }
 
@@ -4068,6 +4075,10 @@ function VASTApp() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState("");
   const fbListenerRef = useRef(null);
+  const companyRef = useRef(null);      // always holds latest company data
+  const isWritingRef = useRef(false);   // true while we're mid-write to Firebase
+  // Expose refs to module-level functions (flushSave, beforeunload)
+  React.useEffect(() => { window._vastApp = { isWritingRef }; }, []);
 
   function applyMigrations(raw) {
     if (!raw.huddles) raw.huddles = [{ id: "huddle-1", name: "Weekly Huddle" }];
@@ -4083,10 +4094,12 @@ function VASTApp() {
     if (fbListenerRef.current) fbListenerRef.current.off();
     const ref = window._fbDb.ref(`companies/${companyCode}/data`);
     ref.on("value", snap => {
-      if (snap.exists()) {
-        const val = applyMigrations(snap.val());
-        setCompanyState(val);
-      }
+      if (!snap.exists()) return;
+      // Suppress echo: if we just wrote this data ourselves, skip the listener update
+      if (isWritingRef.current) return;
+      const val = applyMigrations(snap.val());
+      companyRef.current = val;
+      setCompanyState(val);
     });
     fbListenerRef.current = ref;
   }
@@ -4139,7 +4152,7 @@ function VASTApp() {
             await ms.updateMember({ customFields: { companyCode: code, role: "owner" } });
             await ms.updateMemberJSON({ json: { vastData: null } });
             const raw = applyMigrations(await fbGet(`companies/${code}/data`));
-            setCompanyState(raw);
+            companyRef.current = raw; setCompanyState(raw);
             attachFirebaseListener(code);
             setAppState("ready");
             return;
@@ -4158,7 +4171,7 @@ function VASTApp() {
                 await fbSet(`companies/${code}/data`, parsed);
                 await ms.updateMember({ customFields: { companyCode: code, role: "owner" } });
                 const raw = applyMigrations(parsed);
-                setCompanyState(raw);
+                companyRef.current = raw; setCompanyState(raw);
                 attachFirebaseListener(code);
                 setAppState("ready");
                 console.log("[VAST] Recovered from local cache.");
@@ -4198,7 +4211,7 @@ function VASTApp() {
             console.log("[VAST] Backfilled memberId:", matched.id);
           }
         }
-        setCompanyState(raw);
+        companyRef.current = raw; setCompanyState(raw);
         attachFirebaseListener(companyCode);
         setAppState("ready");
       } catch(e) {
@@ -4230,7 +4243,7 @@ function VASTApp() {
       await fbSet(`companies/${code}/data`, fresh);
       _currentCompanyCode = code; setCurrentCompanyCode(code);
       const raw = applyMigrations(fresh);
-      setCompanyState(raw);
+      companyRef.current = raw; setCompanyState(raw);
       attachFirebaseListener(code);
       setAppState("ready");
     } catch(e) {
@@ -4253,7 +4266,7 @@ function VASTApp() {
       await markInviteUsed(inviteInput.toUpperCase().trim());
       _currentCompanyCode = invite.companyCode; setCurrentCompanyCode(invite.companyCode);
       const raw = applyMigrations(await fbGet(`companies/${invite.companyCode}/data`));
-      setCompanyState(raw);
+      companyRef.current = raw; setCompanyState(raw);
       attachFirebaseListener(invite.companyCode);
       setAppState("ready");
     } catch(e) {
@@ -4263,11 +4276,13 @@ function VASTApp() {
   };
 
   const handleSave = useCallback((updates) => {
-    if (!company) return;
-    const updated = { ...company, ...updates };
+    const base = companyRef.current;
+    if (!base) return;
+    const updated = { ...base, ...updates };
+    companyRef.current = updated;   // update ref immediately so next call has fresh data
     setCompanyState(updated);
     saveCompany(updated);
-  }, [company]);
+  }, []); // no dependency on company — reads from ref instead
 
   // ── Invite entry screen ──
   if (appState === "invite") return (
