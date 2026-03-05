@@ -10,6 +10,7 @@
   <!-- Firebase compat SDK (no bundler needed) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script>
     const _fbConfig = {
       apiKey: "AIzaSyBeQ2oixMCr3QnqwWeA_EXmaYzvEXBLe0M",
@@ -22,6 +23,8 @@
     };
     firebase.initializeApp(_fbConfig);
     window._fbDb = firebase.database();
+    window._fbAuth = firebase.auth();
+    window._VAST_WORKER_URL = "https://vast-auth.tyler-1db.workers.dev";
     console.log("[VAST] Firebase initialized");
   </script>
   <script>
@@ -136,6 +139,7 @@ const makeSTYLE = (C) => `
   .fade-in{animation:fadeIn 0.3s ease}
   @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   .progress-bar{height:6px;background:${C.surface2};border-radius:3px;overflow:hidden}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
   .progress-fill{height:100%;background:${C.red};border-radius:3px;transition:width 0.5s}
   .rating-btn{width:44px;height:44px;border-radius:8px;border:1px solid ${C.border};background:${C.surface2};color:${C.textMuted};font-size:15px;font-weight:700;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center}
   .rating-btn:hover,.rating-btn.sel{background:${C.red};border-color:${C.red};color:#fff}
@@ -239,6 +243,30 @@ async function getCurrentMember() {
   return res?.data || null;
 }
 
+// Sign into Firebase using a custom token minted by the Cloudflare Worker
+async function signInToFirebase(memberId) {
+  // Skip if already signed in as this user
+  const current = window._fbAuth.currentUser;
+  if (current && current.uid === memberId) {
+    console.log("[VAST] Already signed into Firebase.");
+    return;
+  }
+  try {
+    const res = await fetch(window._VAST_WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId })
+    });
+    const data = await res.json();
+    if (!data.firebaseToken) throw new Error(data.error || "No token returned");
+    await window._fbAuth.signInWithCustomToken(data.firebaseToken);
+    console.log("[VAST] Signed into Firebase as", memberId);
+  } catch(e) {
+    console.warn("[VAST] Firebase sign-in failed, falling back to anonymous:", e.message);
+    await window._fbAuth.signInAnonymously();
+  }
+}
+
 // Generate a short random invite / company code
 function genCode(len = 6) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -251,7 +279,7 @@ function setSyncStatus(s) {
   _syncStatus = s;
   const el = document.getElementById("vast-sync-status");
   if (!el) return;
-  const map = { idle: "", saving: "⏳ Syncing...", saved: "✓ Saved", error: "⚠ Sync failed" };
+  const map = { idle: "", saving: "⏳ Syncing...", saved: "✓ Saved", error: "Sync failed" };
   const col = { idle: "", saving: "#888", saved: "#22c55e", error: "#E63329" };
   el.textContent = map[s] || "";
   el.style.color = col[s] || "";
@@ -319,6 +347,22 @@ window.addEventListener("beforeunload", () => {
     try { fbRef(`companies/${_currentCompanyCode}/data`).set(_pendingData); } catch {}
   }
 });
+
+// ── Live session helpers ──────────────────────────────────────────────────
+async function startLiveSession(companyCode, huddleId, hostMemberId, hostName) {
+  await fbSet(`companies/${companyCode}/liveSessions/${huddleId}`, {
+    active: true, activeIdx: 0, hostMemberId, hostName: hostName || "Host",
+    startedAt: Date.now()
+  });
+}
+
+async function updateLiveSession(companyCode, huddleId, activeIdx) {
+  await fbUpdate(`companies/${companyCode}/liveSessions/${huddleId}`, { activeIdx });
+}
+
+async function endLiveSession(companyCode, huddleId) {
+  await fbSet(`companies/${companyCode}/liveSessions/${huddleId}`, { active: false });
+}
 
 // ── Invite code helpers ───────────────────────────────────────────────────
 async function createInvite(companyCode, memberName, memberEmail, memberRole, memberId) {
@@ -416,6 +460,22 @@ const Icon = {
   logout: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
   archive: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>,
   headlines: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+  signal: (p) => <svg width={p?.size||16} height={p?.size||16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1.5 8.5a13 13 0 0 1 21 0"/><path d="M5 12a10 10 0 0 1 14 0"/><path d="M8.5 15.5a6 6 0 0 1 7 0"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>,
+  play: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/></svg>,
+  arrowLeft: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
+  arrowRight: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+  flag: (p) => <svg width={p?.size||13} height={p?.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>,
+  note: (p) => <svg width={p?.size||13} height={p?.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+  copy: (p) => <svg width={p?.size||13} height={p?.size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
+  chat: () => <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
+  star: () => <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+  warning: () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  celebrate: () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
+  trophy: () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="8 2 16 2"/><path d="M4 2h16v6a8 8 0 0 1-16 0V2z"/><path d="M4 5H2a2 2 0 0 0 0 4h2"/><path d="M20 5h2a2 2 0 0 0 0 4h-2"/><line x1="12" y1="18" x2="12" y2="22"/><path d="M8 22h8"/></svg>,
+  users: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  rocket: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>,
+  mail: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
+  menu: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
 };
 
 // ─── Logo Component ───────────────────────────────────────────────────
@@ -615,7 +675,7 @@ function Layout({ children, title, subtitle, action }) {
         <div style={{ display: "flex", alignItems: "center", gap: mobile ? 10 : 0, minWidth: 0 }}>
           {mobile && (
             <button onClick={openMobileMenu}
-              style={{ background: "none", border: "none", color: C.text, fontSize: 22, cursor: "pointer", padding: "2px 6px", lineHeight: 1, flexShrink: 0 }}>☰</button>
+              style={{ background: "none", border: "none", color: C.text, fontSize: 22, cursor: "pointer", padding: "2px 6px", lineHeight: 1, flexShrink: 0 }}><Icon.menu /></button>
           )}
           <div style={{ minWidth: 0 }}>
             <h1 style={{ fontSize: mobile ? 18 : 26, fontWeight: 800, color: C.text, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</h1>
@@ -630,9 +690,16 @@ function Layout({ children, title, subtitle, action }) {
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────
-function Dashboard({ company, setView }) {
+function Dashboard({ company, setView, memberInfo, companyCode }) {
   const q = company.currentQuarter || "This Quarter";
   const tasks = company.quarterlyTasks || [];
+  const [liveSessions, setLiveSessions] = React.useState({});
+  React.useEffect(() => {
+    if (!companyCode) return;
+    const ref = window._fbDb.ref(`companies/${companyCode}/liveSessions`);
+    ref.on("value", snap => setLiveSessions(snap.exists() ? snap.val() : {}));
+    return () => ref.off();
+  }, [companyCode]);
   const onTrack = tasks.filter(t => t.status === "on").length;
   const offTrack = tasks.filter(t => t.status === "off").length;
   const done = tasks.filter(t => t.status === "done").length;
@@ -740,16 +807,40 @@ function Dashboard({ company, setView }) {
             </div>
             {(company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }]).map(h => {
               const lastHM = (h.meetings || []).slice(-1)[0];
+              const session = liveSessions[h.id];
+              const isLive = session?.active === true;
               return (
-                <div key={h.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>{h.name}</div>
-                    {lastHM
-                      ? <div style={{ fontSize: 12, color: C.textMuted }}>Last: {dateStr(new Date(lastHM.date))} · <span style={{ color: lastHM.rating >= 8 ? C.green : lastHM.rating >= 6 ? C.yellow : C.red, fontWeight: 700 }}>{lastHM.rating}/10</span></div>
-                      : <div style={{ fontSize: 12, color: C.textMuted }}>No meetings yet</div>
-                    }
+                <div key={h.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>{h.name}</div>
+                        {isLive && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(230,51,41,0.12)", border: "1px solid rgba(230,51,41,0.3)", borderRadius: 20, padding: "2px 8px" }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.red, display: "inline-block", animation: "pulse 1.2s infinite" }} />
+                            <span style={{ fontSize: 10, fontWeight: 800, color: C.red, letterSpacing: 0.5 }}>IN PROGRESS</span>
+                          </div>
+                        )}
+                      </div>
+                      {isLive
+                        ? <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Started by <strong>{session.hostName || "Host"}</strong> · Step {(session.activeIdx || 0) + 1} of {AGENDA.length}</div>
+                        : lastHM
+                          ? <div style={{ fontSize: 12, color: C.textMuted }}>Last: {dateStr(new Date(lastHM.date))} · <span style={{ color: lastHM.rating >= 8 ? C.green : lastHM.rating >= 6 ? C.yellow : C.red, fontWeight: 700 }}>{lastHM.rating}/10</span></div>
+                          : <div style={{ fontSize: 12, color: C.textMuted }}>No meetings yet</div>
+                      }
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      {isLive && (
+                        <button onClick={() => setView("huddle:" + h.id)}
+                          style={{ padding: "6px 14px", fontSize: 12, borderRadius: 7, border: "1px solid rgba(230,51,41,0.5)", background: "rgba(230,51,41,0.12)", color: C.red, fontFamily: "'Barlow',sans-serif", fontWeight: 700, cursor: "pointer" }}>
+                          <Icon.signal /> Join
+                        </button>
+                      )}
+                      <button className="btn-primary" style={{ padding: "6px 14px", fontSize: 12 }} onClick={() => setView("huddle:" + h.id)}>
+                        {isLive ? "Host View" : "Start →"}
+                      </button>
+                    </div>
                   </div>
-                  <button className="btn-primary" style={{ padding: "6px 14px", fontSize: 12 }} onClick={() => setView("huddle:" + h.id)}>Start →</button>
                 </div>
               );
             })}
@@ -947,7 +1038,7 @@ function Confetti({ message, onDone }) {
       {message && (
         <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 10000, pointerEvents: "none", textAlign: "center" }} className="fade-in">
           <div style={{ background: "rgba(0,0,0,0.82)", borderRadius: 16, padding: "28px 40px", border: "2px solid rgba(255,255,255,0.15)", backdropFilter: "blur(8px)" }}>
-            <div style={{ fontSize: 52 }}>{message.emoji}</div>
+            <div style={{ color: "#fff", display: "flex", justifyContent: "center" }}>{message.emoji === "celebrate" ? <Icon.celebrate /> : <Icon.trophy />}</div>
             <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 32, color: "#fff", marginTop: 10, letterSpacing: 1 }}>{message.title}</div>
             <div style={{ fontSize: 15, color: "rgba(255,255,255,0.7)", marginTop: 6 }}>{message.sub}</div>
           </div>
@@ -957,7 +1048,7 @@ function Confetti({ message, onDone }) {
   );
 }
 
-function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
+function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, companyCode }) {
   // Build agenda using per-huddle custom durations if set
   const customMins = ((company.huddles || []).find(h => h.id === huddleId) || {}).agendaMins || {};
   const agenda = AGENDA.map(a => ({ ...a, minutes: customMins[a.id] ?? a.minutes }));
@@ -985,6 +1076,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const [activeIssueId, setActiveIssueId] = useState(null);
   const [issueNotes, setIssueNotes] = useState({});
   const [solvedThisSession, setSolvedThisSession] = useState([]);
+  const [IDSAdded, setIDSAdded] = useState({}); // { [itemId_h/t]: bool } confirmation states
   const [noteOpen, setNoteOpen] = useState({}); // { [itemId]: bool }
   const toggleNote = (id) => setNoteOpen(s => ({ ...s, [id]: !s[id] }));
   const timerRef = useRef(null);
@@ -993,6 +1085,29 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   const confettiFired = useRef({ todos: false, ids: false });
   const preMeetingTodoIds = useRef(null);
   const fireConfetti = (msg) => setConfetti(msg);
+
+  // ── Live session state ─────────────────────────────────────────────────
+  const [isViewer, setIsViewer] = useState(false);   // true = following host
+  const [liveSession, setLiveSession] = useState(null); // { active, activeIdx, hostName }
+  const liveRef = useRef(null);
+  const myMemberId = memberInfo?.customFields?.memberId || memberInfo?.id || null;
+
+  // Subscribe to live session for this huddle
+  useEffect(() => {
+    if (!companyCode || !huddleId) return;
+    const ref = window._fbDb.ref(`companies/${companyCode}/liveSessions/${huddleId}`);
+    ref.on("value", snap => {
+      const session = snap.exists() ? snap.val() : null;
+      setLiveSession(session);
+      // If session is active and I'm not the host → viewer mode
+      if (session?.active && session?.hostMemberId && session.hostMemberId !== myMemberId) {
+        setIsViewer(true);
+        setActiveIdx(session.activeIdx || 0);
+      }
+    });
+    liveRef.current = ref;
+    return () => ref.off();
+  }, [companyCode, huddleId, myMemberId]);
 
   // Snapshot pre-meeting todos once the meeting starts
   useEffect(() => {
@@ -1032,10 +1147,16 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
   }, [started, activeIdx, done]);
 
   const next = () => {
-    if (activeIdx < agenda.length - 1) setActiveIdx(i => i + 1);
+    if (isViewer) return; // viewers can't control
+    const n = Math.min(agenda.length - 1, activeIdx + 1);
+    setActiveIdx(n);
+    if (companyCode) updateLiveSession(companyCode, huddleId, n).catch(() => {});
   };
   const prev = () => {
-    if (activeIdx > 0) setActiveIdx(i => i - 1);
+    if (isViewer) return;
+    const n = Math.max(0, activeIdx - 1);
+    setActiveIdx(n);
+    if (companyCode) updateLiveSession(companyCode, huddleId, n).catch(() => {});
   };
 
   const addHeadline = () => {
@@ -1137,7 +1258,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
         items.forEach(t => {
           const isOverdue = t.dueDate && new Date(t.dueDate) < today;
           const isNew = t.createdAt && t.createdAt.slice(0,10) === todayStr;
-          const tag = isOverdue ? " ⚠ OVERDUE" : isNew ? " ★ NEW" : "";
+          const tag = isOverdue ? " ⚠ OVERDUE" : isNew ? " NEW" : "";
           lines.push(`    □ ${t.title}${t.dueDate ? ` (Due ${dateStr(new Date(t.dueDate))})` : ""}${tag}`);
         });
       });
@@ -1222,16 +1343,17 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
     setDone(true);
     clearInterval(timerRef.current);
     clearTimeout(spinRef.current);
+    if (companyCode && !isViewer) endLiveSession(companyCode, huddleId).catch(() => {});
   };
 
   if (done) {
     const recap = buildRecap({ date: now() }, rating);
-    const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegTimes({}); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); setConfetti(null); confettiFired.current = { todos: false, ids: false }; preMeetingTodoIds.current = null; clearTimeout(spinRef.current); };
+    const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegTimes({}); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); setIDSAdded({}); setConfetti(null); confettiFired.current = { todos: false, ids: false }; preMeetingTodoIds.current = null; clearTimeout(spinRef.current); setIsViewer(false); if (companyCode && myMemberId) endLiveSession(companyCode, huddleId).catch(() => {}); };
     return (
       <Layout title="Meeting Complete!" subtitle="Great work — keep the momentum going">
         <div style={{ maxWidth: 680, margin: "0 auto" }} className="fade-in">
           <div style={{ textAlign: "center", marginBottom: 24 }}>
-            <div style={{ fontSize: 64, marginBottom: 8 }}>🎉</div>
+            <div style={{ marginBottom: 8, color: C.green, display:"flex", justifyContent:"center" }}><Icon.celebrate /></div>
             <div style={{ fontSize: 52, fontWeight: 800, color: rating >= 8 ? C.green : rating >= 6 ? C.yellow : C.red, fontFamily: "'Barlow Condensed',sans-serif", lineHeight: 1 }}>{rating}/10</div>
             <div style={{ color: C.textMuted, marginTop: 4, fontSize: 14 }}>Average Meeting Rating · {fmt(elapsed)}</div>
           </div>
@@ -1258,7 +1380,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
               <h3 style={{ fontSize: 16 }}>Meeting Recap</h3>
               <button className="btn-primary" style={{ padding: "8px 16px", fontSize: 12 }}
                 onClick={() => { navigator.clipboard.writeText(recap).catch(() => {}); }}>
-                📋 Copy Recap
+                <Icon.copy /> Copy Recap
               </button>
             </div>
             <pre style={{ fontSize: 12, lineHeight: 1.7, color: C.textMuted, whiteSpace: "pre-wrap", fontFamily: "'Barlow',sans-serif", background: C.surface2, borderRadius: 6, padding: "16px", maxHeight: 400, overflowY: "auto" }}>{recap}</pre>
@@ -1267,6 +1389,76 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
           <button className="btn-primary" style={{ width: "100%", padding: "14px", fontSize: 15 }} onClick={resetMeeting}>
             End & Return to Dashboard
           </button>
+        </div>
+      </Layout>
+    );
+  }
+
+  // ── Viewer mode: following the host live ──────────────────────────────
+  if (isViewer && liveSession?.active) {
+    const seg = agenda[activeIdx] || agenda[0];
+    const hostName = liveSession.hostName || "Host";
+    return (
+      <Layout title={`${huddleName} — Live`} subtitle={`Following ${hostName}`}>
+        <div style={{ maxWidth: 700, margin: "0 auto" }}>
+          {/* Following banner */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(230,51,41,0.1)", border: "1px solid rgba(230,51,41,0.3)", borderRadius: 10, padding: "12px 18px", marginBottom: 20 }}>
+            <Icon.signal size={20} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: C.red }}>Live Meeting in Progress</div>
+              <div style={{ fontSize: 12, color: C.textMuted }}>Your screen updates automatically as {hostName} advances the meeting.</div>
+            </div>
+          </div>
+
+          {/* Agenda progress */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted, marginBottom: 14 }}>Meeting Progress</div>
+            {agenda.map((a, i) => (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${C.border}`, opacity: i > activeIdx ? 0.4 : 1, transition: "opacity 0.3s" }}>
+                <div style={{ width: 26, height: 26, borderRadius: "50%", background: i < activeIdx ? C.green : i === activeIdx ? C.red : C.surface2, color: i <= activeIdx ? "#fff" : C.textMuted, fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.3s" }}>
+                  {i < activeIdx ? "✓" : i + 1}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: i === activeIdx ? 700 : 400, color: i === activeIdx ? C.text : C.textMuted }}>{a.label}</div>
+                  {i === activeIdx && <div style={{ fontSize: 11, color: C.red, fontWeight: 700, marginTop: 2 }}>● NOW DISCUSSING</div>}
+                </div>
+                <div style={{ fontSize: 12, color: C.textMuted }}>{a.minutes}m</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Current segment spotlight */}
+          <div className="card fade-in" key={activeIdx} style={{ border: `1px solid rgba(230,51,41,0.3)`, background: C.surface }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ background: C.red, color: "#fff", borderRadius: 6, padding: "6px 12px", fontSize: 11, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase" }}>
+                Step {activeIdx + 1} of {agenda.length}
+              </div>
+            </div>
+            <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 28, fontWeight: 800, marginBottom: 4 }}>{seg.label}</div>
+            <div style={{ fontSize: 13, color: C.textMuted }}>{seg.minutes} minutes allocated</div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // ── Pre-meeting: live session exists → offer to join ──────────────────
+  if (!started && liveSession?.active && liveSession.hostMemberId !== myMemberId) {
+    return (
+      <Layout title={huddleName} subtitle="Meeting in progress">
+        <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center" }}>
+          <div className="card" style={{ padding: 40 }}>
+            <div style={{ marginBottom: 16, color: C.red }}><Icon.signal size={48} /></div>
+            <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Meeting in Progress</div>
+            <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 28 }}>
+              <strong>{liveSession.hostName || "Your team"}</strong> is currently running this huddle. Join to follow along live.
+            </div>
+            <button className="btn-primary" style={{ width: "100%", padding: 16, fontSize: 16, marginBottom: 12 }}
+              onClick={() => { setIsViewer(true); setStarted(true); }}>
+              <Icon.signal /> Join Live Meeting
+            </button>
+            <div style={{ fontSize: 12, color: C.textDim }}>Your screen will follow the host automatically.</div>
+          </div>
         </div>
       </Layout>
     );
@@ -1310,8 +1502,14 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
               <span>Total</span><span style={{ fontWeight: 700, color: C.text }}>{agenda.reduce((s, a) => s + a.minutes, 0)} min</span>
             </div>
           </div>
-          <button className="btn-primary" style={{ width: "100%", padding: "16px", fontSize: 16 }} onClick={() => setStarted(true)}>
-            ▶  Start Huddle
+          <button className="btn-primary" style={{ width: "100%", padding: "16px", fontSize: 16 }} onClick={() => {
+            setStarted(true);
+            if (companyCode && myMemberId) {
+              const hostName = (company.members || []).find(m => m.id === myMemberId)?.name || "Host";
+              startLiveSession(companyCode, huddleId, myMemberId, hostName).catch(() => {});
+            }
+          }}>
+            Start Huddle
           </button>
         </div>
       </Layout>
@@ -1347,15 +1545,15 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</div>
                   <div style={{ fontSize: 11, color: isOver ? C.red : C.textMuted, fontWeight: isOver ? 700 : 400 }}>
-                    {t > 0 ? fmt(t) : a.minutes + ":00"}{isOver ? " ⚠" : ""} / {a.minutes}:00
+                    {t > 0 ? fmt(t) : a.minutes + ":00"}{isOver ? " !" : ""} / {a.minutes}:00
                   </div>
                 </div>
               </div>
             );
           })}
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button className="btn-secondary" style={{ flex: 1 }} onClick={prev} disabled={activeIdx === 0}>← Back</button>
-            <button className="btn-primary" style={{ flex: 1 }} onClick={next} disabled={activeIdx === AGENDA.length - 1}>Next →</button>
+            <button className="btn-secondary" style={{ flex: 1 }} onClick={prev} disabled={activeIdx === 0}><Icon.arrowLeft /> Back</button>
+            <button className="btn-primary" style={{ flex: 1 }} onClick={next} disabled={activeIdx === AGENDA.length - 1}>Next <Icon.arrowRight /></button>
           </div>
         </div>
 
@@ -1365,7 +1563,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
           {started && !done && (() => {
             const closeQuickAdd = () => setQuickAdd(null);
             return (
-              <div style={{ position: "sticky", top: 12, zIndex: 100, marginBottom: 12 }}>
+              <div style={{ position: "sticky", top: 12, zIndex: 100, marginBottom: 12, pointerEvents: quickAdd ? "auto" : "none" }}>
                 {/* Popover form */}
                 {quickAdd && (
                   <div className="card fade-in" style={{ marginBottom: 8, padding: "14px 16px", border: `1px solid ${C.red}`, background: C.surface }}>
@@ -1432,11 +1630,11 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                   </div>
                 )}
                 {/* Floating button bar */}
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", pointerEvents: "auto" }}>
                   {[
-                    { key: "headline", label: "📰 Headline", color: C.blue },
-                    { key: "todo", label: "✅ To-Do", color: C.green },
-                    { key: "issue", label: "⚑ Issue", color: C.red },
+                    { key: "headline", label: "Headline", color: C.blue },
+                    { key: "todo", label: "To-Do", color: C.green },
+                    { key: "issue", label: "Issue", color: C.red },
                   ].map(btn => (
                     <button key={btn.key} onClick={() => setQuickAdd(q => q === btn.key ? null : btn.key)}
                       style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${quickAdd === btn.key ? btn.color : C.border}`,
@@ -1531,7 +1729,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                                   <button onClick={() => addToProblemQueue({ id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })}
                                     title={alreadyQueued ? "Already in problem queue" : "Send to Problem Solving"}
                                     style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${alreadyQueued ? "rgba(230,51,41,0.4)" : "rgba(230,51,41,0.3)"}`, background: alreadyQueued ? "rgba(230,51,41,0.2)" : C.surface3, color: alreadyQueued ? C.red : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 10, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
-                                    {alreadyQueued ? "✓ Queued" : "⚑"}
+                                    {alreadyQueued ? "Queued" : "Flag"}
                                   </button>
                                 );
                               })()}
@@ -1580,7 +1778,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
                       {t.who && <div style={{ fontSize: 12, color: C.textMuted }}>{t.who}</div>}
-                      {t.notes && !noteOpen[t.id] && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📝 {t.notes}</div>}
+                      {t.notes && !noteOpen[t.id] && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:3 }} />{t.notes}</div>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                       {[["on","On Track"],["off","Off Track"],["done","Done"]].map(([s, label]) => {
@@ -1598,12 +1796,12 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                       {t.status === "off" && (
                         <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
                           style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                          {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "⚑ Problem Solve"}
+                          {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "Flag Issue"}
                         </button>
                       )}
                       <button onClick={() => toggleNote(t.id)}
                         style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid ${noteOpen[t.id] || t.notes ? C.blue : C.border}`, background: noteOpen[t.id] ? `rgba(59,130,246,0.1)` : C.surface2, color: noteOpen[t.id] || t.notes ? C.blue : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer" }}>
-                        📝{t.notes && !noteOpen[t.id] ? " ●" : ""}
+                        <Icon.note size={11} />
                       </button>
                     </div>
                   </div>
@@ -1641,7 +1839,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                       <div style={{ fontSize: 14, flex: 1 }}>
                         <span className="chip" style={{ marginRight: 8, fontSize: 10, background: h.type === "Customer" ? "rgba(59,130,246,0.15)" : "rgba(34,197,94,0.1)", borderColor: h.type === "Customer" ? "rgba(59,130,246,0.3)" : "rgba(34,197,94,0.2)", color: h.type === "Customer" ? C.blue : C.green }}>{h.type}</span>
                         {h.text}
-                        {h.notes && !noteOpen[h.id] && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, fontStyle: "italic" }}>📝 {h.notes}</div>}
+                        {h.notes && !noteOpen[h.id] && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, fontStyle: "italic" }}><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:3 }} />{h.notes}</div>}
                       </div>
                       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                         <button onClick={() => markReviewed(h.id)}
@@ -1650,11 +1848,11 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                         </button>
                         <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
                           style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===h.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===h.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                          {(company.problemQueue||[]).find(p=>p.id===h.id) ? "✓ Queued" : "⚑ Problem Solve"}
+                          {(company.problemQueue||[]).find(p=>p.id===h.id) ? "✓ Queued" : "Flag Issue"}
                         </button>
                         <button onClick={() => toggleNote(h.id)}
                           style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${noteOpen[h.id] || h.notes ? C.blue : C.border}`, background: noteOpen[h.id] ? `rgba(59,130,246,0.1)` : C.surface2, color: noteOpen[h.id] || h.notes ? C.blue : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer" }}>
-                          📝{h.notes && !noteOpen[h.id] ? " ●" : ""}
+                          <Icon.note size={11} />
                         </button>
                       </div>
                     </div>
@@ -1698,7 +1896,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                 if (completed / preMeetingTodoIds.current.size >= 0.8) {
                   confettiFired.current.todos = true;
                   const pct = Math.round(completed / preMeetingTodoIds.current.size * 100);
-                  fireConfetti({ emoji: "🎉", title: `${pct}% To-Dos Complete!`, sub: `${completed} of ${preMeetingTodoIds.current.size} to-dos knocked out` });
+                  fireConfetti({ emoji: "celebrate", title: `${pct}% To-Dos Complete!`, sub: `${completed} of ${preMeetingTodoIds.current.size} to-dos knocked out` });
                 }
               }
             };
@@ -1719,9 +1917,9 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                           <div style={{ fontSize: 11, color: isOverdue ? C.red : C.textMuted, marginTop: 2 }}>
                             {getAssignees(t).length > 0 && <span>{getAssignees(t).join(", ")}</span>}
                             {getAssignees(t).length > 0 && t.dueDate && <span> · </span>}
-                            {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "⚠ Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
+                            {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
                           </div>
-                          {t.notes && !noteOpen[t.id] && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, fontStyle: "italic" }}>📝 {t.notes}</div>}
+                          {t.notes && !noteOpen[t.id] && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, fontStyle: "italic" }}><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:3 }} />{t.notes}</div>}
                         </div>
                         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                           <button onClick={() => completeTodo(t.id)}
@@ -1730,11 +1928,11 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                           </button>
                           <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
                             style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                            {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "⚑ Problem Solve"}
+                            {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "Flag Issue"}
                           </button>
                           <button onClick={() => toggleNote(t.id)}
                             style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid ${noteOpen[t.id] || t.notes ? C.blue : C.border}`, background: noteOpen[t.id] ? `rgba(59,130,246,0.1)` : C.surface2, color: noteOpen[t.id] || t.notes ? C.blue : C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer" }}>
-                            📝{t.notes && !noteOpen[t.id] ? " ●" : ""}
+                            <Icon.note size={11} />
                           </button>
                         </div>
                       </div>
@@ -1820,7 +2018,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
               if (!confettiFired.current.ids && remainingFocus.length === 0 && remainingPending.length === 0) {
                 confettiFired.current.ids = true;
                 const totalSolved = solvedThisSession.length + 1;
-                fireConfetti({ emoji: "🏆", title: "All Problems Solved!", sub: `${totalSolved} issue${totalSolved !== 1 ? "s" : ""} resolved this meeting` });
+                fireConfetti({ emoji: "trophy", title: "All Problems Solved!", sub: `${totalSolved} issue${totalSolved !== 1 ? "s" : ""} resolved this meeting` });
               }
             };
             const markNotSolved = (item) => {
@@ -1829,16 +2027,26 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
               setActiveIssueId(next ? next.id : null);
             };
 
-            const addActiveAsHeadline = () => {
+            const addActiveAsHeadline = (e) => {
+              e.stopPropagation();
               if (!activeItem) return;
+              const headlines = company.headlines ? [...company.headlines] : [];
               const h = { id: uid(), type: "Customer", text: activeItem.title, huddleId: huddleId, date: now() };
-              onSave({ headlines: [...(company.headlines || []), h] });
+              headlines.push(h);
+              onSave({ headlines });
+              setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: true }));
+              setTimeout(() => setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: false })), 2000);
             };
 
-            const addActiveAsTodo = () => {
+            const addActiveAsTodo = (e) => {
+              e.stopPropagation();
               if (!activeItem) return;
+              const todos = company.todos ? [...company.todos] : [];
               const t = { id: uid(), title: activeItem.title, assignees: [], dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10), huddleId: huddleId, done: false, createdAt: now() };
-              onSave({ todos: [...(company.todos || []), t] });
+              todos.push(t);
+              onSave({ todos });
+              setIDSAdded(s => ({ ...s, [activeItem.id + "_t"]: true }));
+              setTimeout(() => setIDSAdded(s => ({ ...s, [activeItem.id + "_t"]: false })), 2000);
             };
 
             return (
@@ -1878,7 +2086,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                               <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{item.title}</div>
                               <div style={{ fontSize: 10, color: C.red, fontWeight: 700, letterSpacing: 0.5 }}>{item.sourceLabel}</div>
                             </div>
-                            {issueNotes[item.id] && <div style={{ fontSize: 10, color: C.green }}>📝</div>}
+                            {issueNotes[item.id] && <div style={{ fontSize: 10, color: C.green }}><Icon.note size={10} /></div>}
                           </div>
                         </div>
                       ))}
@@ -1889,7 +2097,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                       <h4 style={{ fontSize: 15, marginBottom: 12 }}>Problem Queue <span style={{ color: C.textMuted, fontSize: 12 }}>({pending.length})</span></h4>
                       {pending.length === 0 && (
                         <div style={{ fontSize: 13, color: C.textMuted, textAlign: "center", padding: "12px 0" }}>
-                          {allItems.length === 0 ? "No problems queued. Use ⚑ Problem Solve buttons in earlier segments, or add an issue above." : "All queued problems are in focus."}
+                          {allItems.length === 0 ? "No problems queued. Use the Flag Issue buttons in earlier segments, or add an issue above." : "All queued problems are in focus."}
                         </div>
                       )}
                       {pending.map(item => (
@@ -1920,7 +2128,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                   <div>
                     {!activeItem ? (
                       <div className="card" style={{ textAlign: "center", padding: "40px 20px" }}>
-                        <div style={{ fontSize: 32, marginBottom: 12 }}>💬</div>
+                        <div style={{ marginBottom: 12, color: C.textMuted }}><Icon.chat /></div>
                         <div style={{ fontSize: 14, color: C.textMuted }}>Select a problem from the focus queue to begin discussion.</div>
                       </div>
                     ) : (
@@ -1941,12 +2149,12 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
                         {/* Quick-add from active problem */}
                         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                           <button type="button" onClick={addActiveAsHeadline}
-                            style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid rgba(59,130,246,0.4)`, background: "rgba(59,130,246,0.08)", color: C.blue, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                            + Add as Headline
+                            style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid ${IDSAdded[activeItem.id+"_h"] ? "rgba(34,197,94,0.4)" : "rgba(59,130,246,0.4)"}`, background: IDSAdded[activeItem.id+"_h"] ? "rgba(34,197,94,0.12)" : "rgba(59,130,246,0.08)", color: IDSAdded[activeItem.id+"_h"] ? C.green : C.blue, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer", transition: "all 0.2s" }}>
+                            {IDSAdded[activeItem.id+"_h"] ? "✓ Added!" : "+ Add as Headline"}
                           </button>
                           <button type="button" onClick={addActiveAsTodo}
-                            style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid rgba(34,197,94,0.4)`, background: "rgba(34,197,94,0.08)", color: C.green, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                            + Add as To-Do
+                            style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid ${IDSAdded[activeItem.id+"_t"] ? "rgba(34,197,94,0.4)" : "rgba(34,197,94,0.4)"}`, background: IDSAdded[activeItem.id+"_t"] ? "rgba(34,197,94,0.2)" : "rgba(34,197,94,0.08)", color: C.green, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer", transition: "all 0.2s" }}>
+                            {IDSAdded[activeItem.id+"_t"] ? "✓ Added!" : "+ Add as To-Do"}
                           </button>
                         </div>
                         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
@@ -2140,7 +2348,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName }) {
 
                   {allDone && (
                     <div style={{ textAlign: "center", marginTop: 20, padding: "12px", background: "rgba(34,197,94,0.08)", border: `1px solid rgba(34,197,94,0.25)`, borderRadius: 8 }}>
-                      <div style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>🎉 Everyone has shared their good news!</div>
+                      <div style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>Everyone has shared their good news!</div>
                     </div>
                   )}
                   {present.length === 0 && members.length > 0 && (
@@ -2903,7 +3111,7 @@ function Todos({ company, onSave }) {
           <div style={{ fontSize: 11, color: isOverdue ? C.red : C.textMuted, marginTop: 2 }}>
             {getAssignees(t).length > 0 && <span>{getAssignees(t).join(", ")}</span>}
             {getAssignees(t).length > 0 && (t.dueDate || huddleName) && <span> · </span>}
-            {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "⚠ Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
+            {t.dueDate && <span style={{ fontWeight: isOverdue ? 700 : 400 }}>{isOverdue ? "Overdue — " : "Due "}{dateStr(new Date(t.dueDate))}</span>}
             {huddleName && <span style={{ color: C.textDim }}> · {huddleName}</span>}
           </div>
         </div>
@@ -3241,7 +3449,7 @@ function MeetingHistory({ company }) {
                   <div>
                     <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 20, fontWeight: 700 }}>{dateStr(new Date(m.date))}</div>
                     <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
-                      {huddleLabel && <span style={{ marginRight: 10 }}>📋 {huddleLabel}</span>}
+                      {huddleLabel && <span style={{ marginRight: 10 }}>{huddleLabel}</span>}
                       ~{m.totalMinutes || "—"} min
                     </div>
                   </div>
@@ -3266,7 +3474,7 @@ function MeetingHistory({ company }) {
                           <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted }}>Meeting Recap</span>
                           <button onClick={e => { e.stopPropagation(); copyRecap(m); }}
                             style={{ padding: "6px 14px", borderRadius: 6, border: `1px solid ${C.border}`, background: copied === m.id ? "rgba(34,197,94,0.15)" : C.surface2, color: copied === m.id ? C.green : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                            {copied === m.id ? "✓ Copied!" : "📋 Copy Recap"}
+                            {copied === m.id ? "✓ Copied!" : "Copy Recap"}
                           </button>
                         </div>
                         <pre style={{ fontSize: 12, lineHeight: 1.7, color: C.textMuted, whiteSpace: "pre-wrap", fontFamily: "'Barlow',sans-serif", background: C.surface2, borderRadius: 6, padding: "16px", maxHeight: 400, overflowY: "auto" }}>{m.recapText}</pre>
@@ -3495,7 +3703,7 @@ function Settings({ company, onSave }) {
                     {!inviteCode && (
                       <button onClick={() => generateInviteForMember(m)} disabled={generatingInvite === m.id}
                         style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap", flexShrink: 0 }}>
-                        {generatingInvite === m.id ? "..." : "✉ Invite"}
+                        {generatingInvite === m.id ? "..." : "Invite"}
                       </button>
                     )}
                     <button className="btn-danger" style={{ padding: "6px 10px", flexShrink: 0 }} onClick={() => delMember(m.id)}><Icon.trash /></button>
@@ -3508,7 +3716,7 @@ function Settings({ company, onSave }) {
                       </div>
                       <button onClick={() => copyInviteCode(m.id, inviteCode)}
                         style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid rgba(59,130,246,0.4)", background: copiedInvite === m.id ? "rgba(34,197,94,0.15)" : "rgba(59,130,246,0.12)", color: copiedInvite === m.id ? "#22c55e" : "#3b82f6", fontFamily:"'Barlow',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                        {copiedInvite === m.id ? "✓ Copied!" : "📋 Copy"}
+                        {copiedInvite === m.id ? "✓ Copied!" : "Copy"}
                       </button>
                     </div>
                   )}
@@ -3863,6 +4071,10 @@ function VASTApp() {
         if (!member) { setAppState("loading"); return; }
         setMemberInfo(member);
 
+        // Sign into Firebase with a verified identity token
+        const memberId = member.customFields?.memberId || member.id;
+        await signInToFirebase(memberId);
+
         const companyCode = member.customFields?.companyCode;
         const role = member.customFields?.role;
 
@@ -4034,11 +4246,11 @@ function VASTApp() {
           <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 32 }}>Are you starting a new team or joining an existing one?</div>
           <button className="btn-primary" style={{ width: "100%", padding: 16, fontSize: 15, marginBottom: 12 }}
             onClick={() => { setInviteMode("create"); setInviteError(""); }}>
-            🚀 Start a New Team
+            Start a New Team
           </button>
           <button onClick={() => { setInviteMode("join"); setInviteError(""); }}
             style={{ width: "100%", padding: 16, fontSize: 15, borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontFamily: "'Barlow',sans-serif", fontWeight: 700, cursor: "pointer" }}>
-            👥 Join an Existing Team
+            Join an Existing Team
           </button>
         </>)}
 
@@ -4110,7 +4322,7 @@ function VASTApp() {
       <GlobalStyles theme={theme} />
       <MobileMenuContext.Provider value={() => setMobileOpen(true)}>
       <Sidebar view={view} setView={v => { setView(v); setMobileOpen(false); }} company={company} theme={theme} toggleTheme={toggleTheme} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
-      {view === "dashboard" && <Dashboard {...viewProps} setView={setView} />}
+      {view === "dashboard" && <Dashboard {...viewProps} setView={setView} memberInfo={memberInfo} companyCode={_currentCompanyCode} />}
       {view.startsWith("navigator:") && (() => {
         const nid = view.slice(10);
         const nObj = (company.navigators || []).find(n => n.id === nid) || { id: nid, name: "Navigator" };
@@ -4119,7 +4331,7 @@ function VASTApp() {
       {view.startsWith("huddle:") && (() => {
         const hid = view.slice(7);
         const hObj = (company.huddles || []).find(h => h.id === hid) || { id: hid, name: "Weekly Huddle" };
-        return <WeeklyHuddle {...viewProps} huddleId={hid} huddleName={hObj.name} />;
+        return <WeeklyHuddle {...viewProps} huddleId={hid} huddleName={hObj.name} memberInfo={memberInfo} companyCode={_currentCompanyCode} />;
       })()}
       {view === "tasks" && <Tasks {...viewProps} />}
       {view === "scorecard" && <Scorecard {...viewProps} />}
