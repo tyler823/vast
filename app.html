@@ -902,13 +902,22 @@ function MyMeasurables({ company, onSave, memberInfo }) {
   const entries = company.scorecard?.entries || {};
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
 
-  // Find who the logged-in user is by matching memberId → member record → name
+  // Find who the logged-in user is — try memberId first, then email match, then show all owned
   const myMemberId = memberInfo?.customFields?.memberId;
-  const myMember = members.find(m => m.id === myMemberId);
+  const myEmail = memberInfo?.auth?.email || memberInfo?.email;
+  let myMember = members.find(m => m.id === myMemberId);
+  if (!myMember && myEmail) myMember = members.find(m => m.email?.toLowerCase() === myEmail.toLowerCase());
   const myName = myMember?.name;
 
   // Filter measurables owned by this user
-  const mine = measurables.filter(m => myName && m.owner === myName);
+  // If we can't identify the user, show nothing rather than everything
+  const mine = myName ? measurables.filter(m => m.owner === myName) : [];
+
+  // Debug info — visible in console to help diagnose
+  if (!mine.length) {
+    console.log("[VAST] MyMeasurables: myMemberId=", myMemberId, "myEmail=", myEmail, "myName=", myName, "totalMeasurables=", measurables.length, "owners=", [...new Set(measurables.map(m => m.owner))]);
+  }
+
   if (!mine.length) return null;
 
   // Group by huddle
