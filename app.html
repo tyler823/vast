@@ -719,7 +719,7 @@ function Layout({ children, title, subtitle, action }) {
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────
-function Dashboard({ company, setView, memberInfo, companyCode }) {
+function Dashboard({ company, onSave, setView, memberInfo, companyCode }) {
   const q = company.currentQuarter || "This Quarter";
   const tasks = company.quarterlyTasks || [];
   const [liveSessions, setLiveSessions] = React.useState({});
@@ -889,7 +889,146 @@ function Dashboard({ company, setView, memberInfo, companyCode }) {
           </div>
         </div>
       </div>
+      <MyMeasurables company={company} onSave={onSave} memberInfo={memberInfo} />
     </Layout>
+  );
+}
+
+// ─── MY MEASURABLES WIDGET ────────────────────────────────────────────
+function MyMeasurables({ company, onSave, memberInfo }) {
+  const curWk = weekKey();
+  const members = company.members || [];
+  const measurables = company.scorecard?.measurables || [];
+  const entries = company.scorecard?.entries || {};
+  const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
+
+  // Find who the logged-in user is by matching memberId → member record → name
+  const myMemberId = memberInfo?.customFields?.memberId;
+  const myMember = members.find(m => m.id === myMemberId);
+  const myName = myMember?.name;
+
+  // Filter measurables owned by this user
+  const mine = measurables.filter(m => myName && m.owner === myName);
+  if (!mine.length) return null;
+
+  // Group by huddle
+  const byHuddle = {};
+  mine.forEach(m => {
+    const hid = m.huddleId || "__none";
+    if (!byHuddle[hid]) byHuddle[hid] = [];
+    byHuddle[hid].push(m);
+  });
+
+  // Build last 3 weeks + current for context
+  const qStart = company.quarterStart ? new Date(company.quarterStart) : new Date(Date.now() - 12 * 7 * 86400000);
+  const qEnd = company.quarterEnd ? new Date(company.quarterEnd) : new Date();
+  const allWeeks = weeksInRange(qStart, qEnd);
+  // Show up to 4 weeks: last 2 past, current, next 1
+  const curIdx = allWeeks.indexOf(curWk);
+  const displayWeeks = allWeeks.slice(Math.max(0, curIdx - 2), curIdx + 2);
+
+  const meetsGoal = (val, m) => {
+    if (val === "" || val === undefined || val === null) return null;
+    const v = parseFloat(val), t = parseFloat(m.target);
+    if (isNaN(v) || isNaN(t)) return null;
+    const op = m.operator || "gte";
+    if (op === "gte") return v >= t;
+    if (op === "lte") return v <= t;
+    if (op === "gt") return v > t;
+    if (op === "lt") return v < t;
+    if (op === "eq") return v === t;
+    return null;
+  };
+
+  const setEntry = (measId, wk, val) => {
+    const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
+    onSave({ scorecard: { ...company.scorecard, entries: updated } });
+  };
+
+  const fmtWk = (wk) => {
+    // wk is like "2026-W10" → show "Mar 2"
+    try {
+      const [year, week] = wk.split("-W").map(Number);
+      const jan4 = new Date(year, 0, 4);
+      const d = new Date(jan4.getTime() + (week - 1) * 7 * 86400000);
+      // Go to Monday of that week
+      const day = d.getDay();
+      d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    } catch { return wk; }
+  };
+
+  return (
+    <div className="card fade-in" style={{ marginTop: 20 }}>
+      <div className="section-header" style={{ marginBottom: 16 }}>
+        <h3 style={{ fontSize: 18 }}>My Measurables</h3>
+        <span style={{ fontSize: 12, color: C.textMuted }}>Enter your numbers for any week</span>
+      </div>
+
+      {Object.entries(byHuddle).map(([hid, hMeasurables]) => {
+        const huddle = huddles.find(h => h.id === hid);
+        const hudName = huddle?.name || "Other";
+        return (
+          <div key={hid} style={{ marginBottom: 20 }}>
+            {Object.keys(byHuddle).length > 1 && (
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", color: C.red, marginBottom: 10 }}>{hudName}</div>
+            )}
+            {/* Week header row */}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 360 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left", padding: "6px 0", fontSize: 11, fontWeight: 700, color: C.textMuted, width: "40%" }}>Measurable</th>
+                    <th style={{ textAlign: "center", padding: "6px 4px", fontSize: 11, fontWeight: 700, color: C.textMuted, minWidth: 52 }}>Goal</th>
+                    {displayWeeks.map(wk => (
+                      <th key={wk} style={{ textAlign: "center", padding: "6px 4px", fontSize: 10, fontWeight: wk === curWk ? 800 : 600,
+                        color: wk === curWk ? C.red : C.textMuted, minWidth: 68, whiteSpace: "nowrap" }}>
+                        {fmtWk(wk)}
+                        {wk === curWk && <div style={{ fontSize: 9, letterSpacing: 0.5, color: C.red }}>THIS WEEK</div>}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {hMeasurables.map(m => (
+                    <tr key={m.id}>
+                      <td style={{ padding: "8px 0", borderTop: `1px solid ${C.border}` }}>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>{m.name}</div>
+                        {m.unit && <div style={{ fontSize: 11, color: C.textMuted }}>{m.unit}</div>}
+                      </td>
+                      <td style={{ textAlign: "center", padding: "8px 4px", borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textMuted, whiteSpace: "nowrap" }}>
+                        {({ gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" })[m.operator || "gte"]} {m.target}
+                      </td>
+                      {displayWeeks.map(wk => {
+                        const val = entries[wk]?.[m.id] ?? "";
+                        const met = meetsGoal(val, m);
+                        const isCur = wk === curWk;
+                        return (
+                          <td key={wk} style={{ textAlign: "center", padding: "8px 4px", borderTop: `1px solid ${C.border}`, background: isCur ? "rgba(230,51,41,0.04)" : "transparent" }}>
+                            <input
+                              type="text"
+                              value={val}
+                              onChange={e => setEntry(m.id, wk, e.target.value)}
+                              placeholder="—"
+                              style={{ width: 60, textAlign: "center", padding: "5px 4px", fontSize: 13, fontWeight: val !== "" ? 700 : 400,
+                                border: `1px solid ${isCur ? (met === true ? C.green : met === false ? C.red : "rgba(230,51,41,0.5)") : (met === true ? C.green : met === false ? C.red : C.border)}`,
+                                borderRadius: 5,
+                                background: met === true ? "rgba(34,197,94,0.12)" : met === false ? "rgba(230,51,41,0.1)" : isCur ? C.surface2 : "transparent",
+                                color: met === true ? C.green : met === false ? C.red : val !== "" ? C.text : C.textDim,
+                                outline: "none", fontFamily: "'Barlow',sans-serif" }}
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
