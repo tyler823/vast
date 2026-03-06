@@ -382,9 +382,10 @@ async function createInvite(companyCode, memberName, memberEmail, memberRole, me
 
 async function redeemInvite(code) {
   const invite = await fbGet(`invites/${code.toUpperCase().trim()}`);
-  if (!invite) throw new Error("Invite code not found.");
-  if (invite.used) throw new Error("This invite code has already been used.");
-  return invite;
+  if (!invite) throw new Error("Invite code not found. Check with your team owner.");
+  // Allow re-use if code was already used — the first redemption may have failed
+  // to save the Memberstack custom fields. We just won't mark it used again.
+  return { ...invite, alreadyUsed: invite.used === true };
 }
 
 async function markInviteUsed(code) {
@@ -1768,21 +1769,19 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                             const val = entries[wk]?.[m.id] ?? "";
                             const met = meetsGoal(val, m);
                             const isCur = wk === curWk;
+                            // Current week: red highlight border; past/future: subtle styling
+                            const inputBg = met === true ? "rgba(34,197,94,0.15)" : met === false ? "rgba(230,51,41,0.15)" : isCur ? C.surface2 : "transparent";
+                            const inputBorder = met === true ? C.green : met === false ? C.red : isCur ? "rgba(230,51,41,0.5)" : C.border;
+                            const inputColor = met === true ? C.green : met === false ? C.red : C.text;
                             return (
                               <td key={wk} style={{ textAlign: "center", padding: "6px 4px", borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${isCur ? "rgba(230,51,41,0.3)" : C.border}`, background: isCur ? `rgba(230,51,41,0.05)` : "transparent" }}>
-                                {isCur ? (
-                                  <input
-                                    type="text"
-                                    value={val}
-                                    onChange={e => setEntry(m.id, wk, e.target.value)}
-                                    placeholder="—"
-                                    style={{ width: 60, textAlign: "center", padding: "5px 4px", fontSize: 13, fontWeight: 700, background: met === true ? "rgba(34,197,94,0.15)" : met === false ? "rgba(230,51,41,0.15)" : C.surface2, border: `1px solid ${met === true ? C.green : met === false ? C.red : C.border}`, borderRadius: 5, color: met === true ? C.green : met === false ? C.red : C.text, outline: "none" }}
-                                  />
-                                ) : (
-                                  <span style={{ fontSize: 13, fontWeight: val !== "" ? 700 : 400, color: met === true ? C.green : met === false ? C.red : C.textDim }}>
-                                    {val !== "" ? val : "—"}
-                                  </span>
-                                )}
+                                <input
+                                  type="text"
+                                  value={val}
+                                  onChange={e => setEntry(m.id, wk, e.target.value)}
+                                  placeholder="—"
+                                  style={{ width: 60, textAlign: "center", padding: "5px 4px", fontSize: 13, fontWeight: val !== "" ? 700 : 400, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 5, color: val !== "" ? inputColor : C.textDim, outline: "none", fontFamily: "'Barlow',sans-serif", cursor: "text" }}
+                                />
                               </td>
                             );
                           })}
@@ -2696,8 +2695,9 @@ function Scorecard({ company, onSave }) {
     setShowAdd(false);
   };
 
-  const setEntry = (measId, val) => {
-    const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
+  const setEntry = (measId, val, targetWk) => {
+    const weekToWrite = targetWk || wk;
+    const updated = { ...entries, [weekToWrite]: { ...(entries[weekToWrite] || {}), [measId]: val } };
     onSave({ scorecard: { ...company.scorecard, entries: updated } });
   };
 
@@ -2774,15 +2774,17 @@ function Scorecard({ company, onSave }) {
                     };
                     const onTarget = checkTarget(val, m);
                       return (
-                        <td key={w} style={{ textAlign: "center" }}>
-                          {isCurrentWeek ? (
-                            <input value={val} onChange={e => setEntry(m.id, e.target.value)}
-                              style={{ width: 70, textAlign: "center", padding: "6px 8px", fontSize: 13, border: `1px solid ${C.red}` }} />
-                          ) : (
-                            <span style={{ color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.textMuted) : C.textDim, fontWeight: val ? 700 : 400 }}>
-                              {val || "—"}
-                            </span>
-                          )}
+                        <td key={w} style={{ textAlign: "center", background: isCurrentWeek ? "rgba(230,51,41,0.04)" : "transparent" }}>
+                          <input
+                            value={val}
+                            onChange={e => setEntry(m.id, e.target.value, w)}
+                            placeholder="—"
+                            style={{ width: 70, textAlign: "center", padding: "6px 8px", fontSize: 13, fontWeight: val ? 700 : 400,
+                              border: `1px solid ${isCurrentWeek ? C.red : onTarget === true ? C.green : onTarget === false ? C.red : C.border}`,
+                              borderRadius: 5, background: onTarget === true ? "rgba(34,197,94,0.1)" : onTarget === false ? "rgba(230,51,41,0.1)" : C.surface2,
+                              color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.text) : C.textDim,
+                              outline: "none", fontFamily: "'Barlow',sans-serif" }}
+                          />
                         </td>
                       );
                     })}
@@ -3577,7 +3579,7 @@ function Settings({ company, onSave }) {
     if (newMember.email.trim() && company.code) {
       setGeneratingInvite(m.id);
       try {
-        const code = await createInvite(company.code, newMember.name, newMember.email, newMember.role, m.id);
+        const code = await createInvite(_currentCompanyCode || company.code, newMember.name, newMember.email, newMember.role, m.id);
         const updatedMember = { ...m, inviteCode: code };
         onSave({ members: [...(company.members || []), updatedMember] });
         setPendingInvites(p => ({ ...p, [m.id]: code }));
@@ -3587,10 +3589,11 @@ function Settings({ company, onSave }) {
   };
 
   const generateInviteForMember = async (m) => {
-    if (!company.code) return;
+    const activeCode = _currentCompanyCode || company.code;
+    if (!activeCode) return;
     setGeneratingInvite(m.id);
     try {
-      const code = await createInvite(company.code, m.name, m.email, m.role, m.id);
+      const code = await createInvite(activeCode, m.name, m.email, m.role, m.id);
       const updatedMembers = company.members.map(x => x.id === m.id ? { ...x, inviteCode: code } : x);
       onSave({ members: updatedMembers });
       setPendingInvites(p => ({ ...p, [m.id]: code }));
@@ -4087,6 +4090,8 @@ function VASTApp() {
     if (!raw.annualGoals) raw.annualGoals = [{ id: "goal-1", name: "Annual Goal", futureDate: raw.yearGoal?.futureDate || "", revenue: raw.yearGoal?.revenue || "", profit: raw.yearGoal?.profit || "" }];
     if (!raw.quarterStart) raw.quarterStart = new Date().toISOString().slice(0,10);
     if (!raw.quarterEnd) raw.quarterEnd = new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10);
+    // Always stamp the real company code from the module-level var (never "myco")
+    if (_currentCompanyCode && raw.code !== _currentCompanyCode) raw.code = _currentCompanyCode;
     return raw;
   }
 
@@ -4098,6 +4103,8 @@ function VASTApp() {
       // Suppress echo: if we just wrote this data ourselves, skip the listener update
       if (isWritingRef.current) return;
       const val = applyMigrations(snap.val());
+      // Always ensure company.code matches the actual Firebase key
+      if (val.code !== companyCode) val.code = companyCode;
       companyRef.current = val;
       setCompanyState(val);
     });
@@ -4180,6 +4187,41 @@ function VASTApp() {
             }
           } catch(e) { console.warn("[VAST] Cache recovery failed:", e); }
 
+          // Last resort: try to find a matching invite by email
+          try {
+            const memberRes = await ms.getCurrentMember();
+            const email = memberRes?.data?.auth?.email?.toLowerCase();
+            if (email) {
+              const allInvites = await fbGet("invites");
+              if (allInvites) {
+                const match = Object.entries(allInvites).find(([, inv]) =>
+                  inv.email?.toLowerCase() === email && inv.companyCode
+                );
+                if (match) {
+                  const [, invite] = match;
+                  const fields = { companyCode: invite.companyCode, role: invite.role || "member" };
+                  if (invite.memberId) fields.memberId = invite.memberId;
+                  await ms.updateMember({ customFields: fields });
+                  _currentCompanyCode = invite.companyCode; setCurrentCompanyCode(invite.companyCode);
+                  const raw = applyMigrations(await fbGet(`companies/${invite.companyCode}/data`));
+                  companyRef.current = raw; setCompanyState(raw);
+                  attachFirebaseListener(invite.companyCode);
+                  setAppState("ready");
+                  console.log("[VAST] Auto-recovered via email match.");
+                  return;
+                }
+              }
+            }
+          } catch(e) { console.warn("[VAST] Email recovery failed:", e); }
+
+          // Sign in anonymously so invite redemption can read Firebase
+          try {
+            if (!window._fbAuth.currentUser) {
+              await window._fbAuth.signInAnonymously();
+              console.log("[VAST] Signed in anonymously for invite redemption.");
+            }
+          } catch(e) { console.warn("[VAST] Anonymous sign-in failed:", e); }
+
           // Truly new user with no data anywhere
           setAppState("invite");
           return;
@@ -4222,7 +4264,8 @@ function VASTApp() {
           if (cached) { setCompanyState(applyMigrations(JSON.parse(cached))); setAppState("ready"); return; }
         } catch {}
         setAppState("ready");
-        setCompanyState(defaultCompany("My Company", "myco"));
+        // Don't use "myco" fallback — just show loading until real data arrives
+        console.warn("[VAST] Could not load company data.");
       }
     };
     init();
@@ -4257,13 +4300,48 @@ function VASTApp() {
     setInviteLoading(true);
     setInviteError("");
     try {
+      // Ensure we have at least anonymous Firebase auth before reading invite
+      if (!window._fbAuth.currentUser) {
+        await window._fbAuth.signInAnonymously();
+      }
       const invite = await redeemInvite(inviteInput);
       const ms = await waitForMemberstack();
-      // Write companyCode, role, AND memberId so the app knows which records belong to this user
+
+      // Build custom fields to save
       const fields = { companyCode: invite.companyCode, role: invite.role || "member" };
-      if (invite.memberId) fields.memberId = invite.memberId;
-      await ms.updateMember({ customFields: fields });
-      await markInviteUsed(inviteInput.toUpperCase().trim());
+
+      // If invite has a memberId, use it. Otherwise try to match by email.
+      if (invite.memberId) {
+        fields.memberId = invite.memberId;
+      } else {
+        // Try matching logged-in email against company member records
+        const memberData = await ms.getCurrentMember();
+        const email = memberData?.data?.auth?.email?.toLowerCase();
+        if (email) {
+          const companyData = await fbGet(`companies/${invite.companyCode}/data`);
+          const matched = (companyData?.members || []).find(m => m.email?.toLowerCase() === email);
+          if (matched) fields.memberId = matched.id;
+        }
+      }
+
+      // Save to Memberstack — retry once if it fails
+      try {
+        await ms.updateMember({ customFields: fields });
+      } catch(e) {
+        console.warn("[VAST] First Memberstack save failed, retrying...", e);
+        await new Promise(r => setTimeout(r, 1000));
+        await ms.updateMember({ customFields: fields });
+      }
+
+      // Only mark as used if it wasn't already (recovery path)
+      if (!invite.alreadyUsed) {
+        await markInviteUsed(inviteInput.toUpperCase().trim());
+      }
+
+      // Upgrade from anonymous to real identity now that we have a memberId
+      const finalMemberId = fields.memberId || inviteInput;
+      await signInToFirebase(finalMemberId);
+
       _currentCompanyCode = invite.companyCode; setCurrentCompanyCode(invite.companyCode);
       const raw = applyMigrations(await fbGet(`companies/${invite.companyCode}/data`));
       companyRef.current = raw; setCompanyState(raw);
