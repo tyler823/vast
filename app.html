@@ -328,11 +328,12 @@ function saveCompany(data) {
   _saveTimer = setTimeout(() => flushSave(), 800);
 }
 
+let _lastWrittenJson = null; // tracks what we last wrote so listener can skip the echo
+
 async function flushSave() {
   if (!_pendingData || !_currentCompanyCode) return;
   const data = _pendingData;
-  // Flag that we're writing so the Firebase listener ignores the echo
-  if (window._vastApp) window._vastApp.isWritingRef.current = true;
+  _lastWrittenJson = JSON.stringify(data); // stamp before write
   try {
     await fbSet(`companies/${_currentCompanyCode}/data`, data);
     console.log("[VAST] Saved to Firebase.");
@@ -342,12 +343,10 @@ async function flushSave() {
   } catch(e) {
     console.error("[VAST] Firebase save failed:", e);
     setSyncStatus("error");
-  } finally {
-    // Clear the write flag after a short delay to allow Firebase echo to pass
-    setTimeout(() => {
-      if (window._vastApp) window._vastApp.isWritingRef.current = false;
-    }, 1500);
+    _lastWrittenJson = null;
   }
+  // Clear echo-suppression stamp after listener has had time to fire once
+  setTimeout(() => { _lastWrittenJson = null; }, 2000);
 }
 
 window.addEventListener("beforeunload", () => {
@@ -1494,30 +1493,43 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     return lines.join("\n");
   };
 
-  const finishMeeting = () => {
+  const finishMeeting = async () => {
     const scores = Object.values(memberRatings).filter(Boolean);
     const avgRating = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : rating;
     if (!avgRating) return;
+    // Fetch the very latest data from Firebase before saving the recap,
+    // so the meeting record reflects everyone's entries (scorecard, issues, todos)
+    if (_currentCompanyCode) {
+      try {
+        const fresh = await fbGet(`companies/${_currentCompanyCode}/data`);
+        if (fresh && typeof fresh === "object") {
+          if (fresh.code !== _currentCompanyCode) fresh.code = _currentCompanyCode;
+          companyRef.current = fresh;
+        }
+      } catch(e) { console.warn("[VAST] Could not pre-fetch latest data for recap:", e); }
+    }
     const recapText = buildRecap({ date: now() }, avgRating);
+    // Use companyRef.current (just refreshed from Firebase) for the freshest data
+    const latestData = companyRef.current || company;
     const mtg = {
       id: uid(), date: now(), rating: avgRating, memberRatings, totalMinutes: Math.round(elapsed / 60),
       huddleId, huddleName,
-      notes, headlines: (company.headlines || []).filter(h => !h.reviewed).slice(-5),
-      reviewedHeadlines: (company.headlines || []).filter(h => h.reviewed).slice(-20),
-      completedTodos: (company.todos || []).filter(t => t.done).slice(-20),
-      todos: (company.todos || []).filter(t => !t.done).slice(-5),
+      notes, headlines: (latestData.headlines || []).filter(h => !h.reviewed).slice(-5),
+      reviewedHeadlines: (latestData.headlines || []).filter(h => h.reviewed).slice(-20),
+      completedTodos: (latestData.todos || []).filter(t => t.done).slice(-20),
+      todos: (latestData.todos || []).filter(t => !t.done).slice(-5),
       solvedProblems: solvedThisSession,
       recapText
     };
     // Archive quarter snapshot (once per quarter, keyed by currentQuarter)
-    const qh = company.quarterHistory || [];
-    const qLabel = company.currentQuarter || "Unknown Quarter";
+    const qh = latestData.quarterHistory || [];
+    const qLabel = latestData.currentQuarter || "Unknown Quarter";
     const existingIdx = qh.findIndex(q => q.quarter === qLabel);
     const snapshot = {
       quarter: qLabel,
       archivedAt: now(),
-      tasks: (company.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status })),
-      todos: (company.todos || []).map(t => ({ title: t.title, assignee: t.assignee, done: t.done })),
+      tasks: (latestData.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status })),
+      todos: (latestData.todos || []).map(t => ({ title: t.title, assignee: t.assignee, done: t.done })),
       solvedProblems: [
         ...(existingIdx >= 0 ? (qh[existingIdx].solvedProblems || []) : []),
         ...solvedThisSession
@@ -1530,12 +1542,21 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     const newQH = existingIdx >= 0
       ? qh.map((q, i) => i === existingIdx ? snapshot : q)
       : [...qh, snapshot];
-    const allHuddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
+    const allHuddles = latestData.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
     const updatedHuddles = allHuddles.map(h => h.id === huddleId
       ? { ...h, meetings: [...(h.meetings || []), mtg] }
       : h
     );
-    onSave({ huddles: updatedHuddles, meetings: [...(company.meetings || []), mtg], quarterHistory: newQH });
+    // Write only the fields that changed — avoids overwriting other members'
+    // scorecard entries or issues that were saved via direct Firebase paths
+    const newMeetings = [...(companyRef.current?.meetings || company.meetings || []), mtg];
+    if (_currentCompanyCode) {
+      fbSet(`companies/${_currentCompanyCode}/data/meetings`, newMeetings);
+      fbSet(`companies/${_currentCompanyCode}/data/huddles`, updatedHuddles);
+      fbSet(`companies/${_currentCompanyCode}/data/quarterHistory`, newQH);
+    }
+    // Also update local state so done screen renders immediately
+    onSave({ huddles: updatedHuddles, meetings: newMeetings, quarterHistory: newQH });
     setRating(avgRating);
     setShowRecap(true);
     setDone(true);
@@ -4344,9 +4365,6 @@ function VASTApp() {
   const [newCompanyName, setNewCompanyName] = useState("");
   const fbListenerRef = useRef(null);
   const companyRef = useRef(null);      // always holds latest company data
-  const isWritingRef = useRef(false);   // true while we're mid-write to Firebase
-  // Expose refs to module-level functions (flushSave, beforeunload)
-  React.useEffect(() => { window._vastApp = { isWritingRef }; }, []);
 
   function applyMigrations(raw) {
     if (!raw.huddles) raw.huddles = [{ id: "huddle-1", name: "Weekly Huddle" }];
@@ -4365,10 +4383,11 @@ function VASTApp() {
     const ref = window._fbDb.ref(`companies/${companyCode}/data`);
     ref.on("value", snap => {
       if (!snap.exists()) return;
-      // Suppress echo: if we just wrote this data ourselves, skip the listener update
-      if (isWritingRef.current) return;
-      const val = applyMigrations(snap.val());
-      // Always ensure company.code matches the actual Firebase key
+      const raw = snap.val();
+      // Only suppress if this is literally the data we just wrote (echo suppression).
+      // This lets real updates from other team members always come through.
+      if (_lastWrittenJson && JSON.stringify(raw) === _lastWrittenJson) return;
+      const val = applyMigrations(raw);
       if (val.code !== companyCode) val.code = companyCode;
       companyRef.current = val;
       setCompanyState(val);
