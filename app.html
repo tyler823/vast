@@ -1291,9 +1291,16 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
       const session = snap.exists() ? snap.val() : null;
       setLiveSession(session);
       // If session is active and I'm not the host → viewer mode
+      // Only switch to viewer if we haven't already started as host ourselves
       if (session?.active && session?.hostMemberId && session.hostMemberId !== myMemberId) {
-        setIsViewer(true);
+        setIsViewer(prev => {
+          // Don't override if we're already in the meeting as host (started=true handled below)
+          return true;
+        });
         setActiveIdx(session.activeIdx || 0);
+      } else if (!session?.active) {
+        // Session ended — exit viewer mode
+        setIsViewer(false);
       }
     });
     liveRef.current = ref;
@@ -1569,13 +1576,34 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
           <div className="card" style={{ marginBottom: 20 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <h3 style={{ fontSize: 16 }}>Meeting Recap</h3>
-              <button className="btn-primary" style={{ padding: "8px 16px", fontSize: 12 }}
-                onClick={() => { navigator.clipboard.writeText(recap).catch(() => {}); }}>
-                <Icon.copy /> Copy Recap
-              </button>
             </div>
             <pre style={{ fontSize: 12, lineHeight: 1.7, color: C.textMuted, whiteSpace: "pre-wrap", fontFamily: "'Barlow',sans-serif", background: C.surface2, borderRadius: 6, padding: "16px", maxHeight: 400, overflowY: "auto" }}>{recap}</pre>
           </div>
+
+          {/* Send Recap Email button */}
+          {(() => {
+            const huddleObj = (company.huddles || []).find(h => h.id === huddleId);
+            const huddleMemberIds = huddleObj?.memberIds || [];
+            const allMembers = company.members || [];
+            const recipientPool = huddleMemberIds.length > 0
+              ? allMembers.filter(m => huddleMemberIds.includes(m.id))
+              : allMembers;
+            const emails = recipientPool.map(m => m.email).filter(Boolean).join(",");
+            const subject = encodeURIComponent(`${huddleName} Recap — ${dateStr(new Date())}`);
+            const body = encodeURIComponent(recap);
+            return (
+              <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+                <button onClick={() => { navigator.clipboard.writeText(recap).catch(() => {}); }}
+                  style={{ flex: 1, padding: "12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 14, cursor: "pointer", letterSpacing: 0.5, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <Icon.copy /> Copy Recap
+                </button>
+                <button onClick={() => { window.location.href = `mailto:${emails}?subject=${subject}&body=${body}`; }}
+                  style={{ flex: 1, padding: "12px", borderRadius: 8, border: `1px solid rgba(59,130,246,0.4)`, background: "rgba(59,130,246,0.08)", color: C.blue, fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 14, cursor: "pointer", letterSpacing: 0.5, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <Icon.mail /> Send Recap
+                </button>
+              </div>
+            );
+          })()}
 
           <button className="btn-primary" style={{ width: "100%", padding: "14px", fontSize: 15 }} onClick={resetMeeting}>
             End & Return to Dashboard
@@ -1586,52 +1614,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   }
 
   // ── Viewer mode: following the host live ──────────────────────────────
-  if (isViewer && liveSession?.active) {
-    const seg = agenda[activeIdx] || agenda[0];
-    const hostName = liveSession.hostName || "Host";
-    return (
-      <Layout title={`${huddleName} — Live`} subtitle={`Following ${hostName}`}>
-        <div style={{ maxWidth: 700, margin: "0 auto" }}>
-          {/* Following banner */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(230,51,41,0.1)", border: "1px solid rgba(230,51,41,0.3)", borderRadius: 10, padding: "12px 18px", marginBottom: 20 }}>
-            <Icon.signal size={20} />
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: C.red }}>Live Meeting in Progress</div>
-              <div style={{ fontSize: 12, color: C.textMuted }}>Your screen updates automatically as {hostName} advances the meeting.</div>
-            </div>
-          </div>
-
-          {/* Agenda progress */}
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted, marginBottom: 14 }}>Meeting Progress</div>
-            {agenda.map((a, i) => (
-              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${C.border}`, opacity: i > activeIdx ? 0.4 : 1, transition: "opacity 0.3s" }}>
-                <div style={{ width: 26, height: 26, borderRadius: "50%", background: i < activeIdx ? C.green : i === activeIdx ? C.red : C.surface2, color: i <= activeIdx ? "#fff" : C.textMuted, fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.3s" }}>
-                  {i < activeIdx ? "✓" : i + 1}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: i === activeIdx ? 700 : 400, color: i === activeIdx ? C.text : C.textMuted }}>{a.label}</div>
-                  {i === activeIdx && <div style={{ fontSize: 11, color: C.red, fontWeight: 700, marginTop: 2 }}>● NOW DISCUSSING</div>}
-                </div>
-                <div style={{ fontSize: 12, color: C.textMuted }}>{a.minutes}m</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Current segment spotlight */}
-          <div className="card fade-in" key={activeIdx} style={{ border: `1px solid rgba(230,51,41,0.3)`, background: C.surface }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <div style={{ background: C.red, color: "#fff", borderRadius: 6, padding: "6px 12px", fontSize: 11, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase" }}>
-                Step {activeIdx + 1} of {agenda.length}
-              </div>
-            </div>
-            <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 28, fontWeight: 800, marginBottom: 4 }}>{seg.label}</div>
-            <div style={{ fontSize: 13, color: C.textMuted }}>{seg.minutes} minutes allocated</div>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
+  // isViewer — viewer banner shown inline inside main meeting layout (see below)
+  // Viewers see the full meeting content, read-only, auto-following the host
 
   // ── Pre-meeting: live session exists → offer to join ──────────────────
   if (!started && liveSession?.active && liveSession.hostMemberId !== myMemberId) {
@@ -1694,6 +1678,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             </div>
           </div>
           <button className="btn-primary" style={{ width: "100%", padding: "16px", fontSize: 16 }} onClick={() => {
+            setIsViewer(false);
             setStarted(true);
             if (companyCode && myMemberId) {
               const hostName = (company.members || []).find(m => m.id === myMemberId)?.name || "Host";
@@ -1708,8 +1693,24 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   }
 
   return (
-    <Layout title={`${huddleName} — Live`} subtitle={`Total: ${fmt(elapsed)}`}>
+    <Layout title={`${huddleName} — Live`} subtitle={isViewer ? `Following ${liveSession?.hostName || "Host"}` : `Total: ${fmt(elapsed)}`}>
       {confetti && <Confetti message={confetti} onDone={() => setConfetti(null)} />}
+      {/* Viewer banner — shown when following host */}
+      {isViewer && liveSession?.active && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: "rgba(230,51,41,0.08)", border: "1px solid rgba(230,51,41,0.25)", borderRadius: 10, padding: "10px 16px", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.red, display: "inline-block", animation: "pulse 1.2s infinite" }} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: C.red }}>Following {liveSession.hostName || "Host"} · Live</div>
+              <div style={{ fontSize: 11, color: C.textMuted }}>Your view updates automatically. Navigation is controlled by the host.</div>
+            </div>
+          </div>
+          <button onClick={() => { setIsViewer(false); }}
+            style={{ fontSize: 11, padding: "5px 12px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, cursor: "pointer", fontFamily: "'Barlow',sans-serif", fontWeight: 700, flexShrink: 0 }}>
+            Take Control
+          </button>
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "min(280px,100%) 1fr", gap: 20 }} className="mob-stack">
         {/* Agenda sidebar */}
         <div>
@@ -1751,7 +1752,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
         {/* Content area */}
         <div style={{ position: "relative" }}>
           {/* Floating quick-add bar */}
-          {started && !done && (() => {
+          {started && !done && !isViewer && (() => {
             const closeQuickAdd = () => setQuickAdd(null);
             return (
               <div style={{ position: "sticky", top: 12, zIndex: 100, marginBottom: 12, pointerEvents: quickAdd ? "auto" : "none" }}>
@@ -2236,15 +2237,25 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               setTimeout(() => setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: false })), 2000);
             };
 
-            const addActiveAsTodo = (e) => {
-              e.stopPropagation();
+            const [todoPickerOpen, setTodoPickerOpen] = React.useState(false);
+            const [todoAssignees, setTodoAssignees] = React.useState([]);
+            const commitAddAsTodo = () => {
               if (!activeItem) return;
               const todos = company.todos ? [...company.todos] : [];
-              const t = { id: uid(), title: activeItem.title, assignees: [], dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10), huddleId: huddleId, done: false, createdAt: now() };
+              const t = { id: uid(), title: activeItem.title, assignees: todoAssignees, dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10), huddleId: huddleId, done: false, createdAt: now() };
               todos.push(t);
               onSave({ todos });
               setIDSAdded(s => ({ ...s, [activeItem.id + "_t"]: true }));
+              setTodoPickerOpen(false);
+              setTodoAssignees([]);
               setTimeout(() => setIDSAdded(s => ({ ...s, [activeItem.id + "_t"]: false })), 2000);
+            };
+            const addActiveAsTodo = (e) => {
+              e.stopPropagation();
+              if (!activeItem) return;
+              if (IDSAdded[activeItem.id + "_t"]) return;
+              setTodoAssignees([]);
+              setTodoPickerOpen(true);
             };
 
             return (
@@ -2350,10 +2361,37 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                             style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid ${IDSAdded[activeItem.id+"_h"] ? "rgba(34,197,94,0.4)" : "rgba(59,130,246,0.4)"}`, background: IDSAdded[activeItem.id+"_h"] ? "rgba(34,197,94,0.12)" : "rgba(59,130,246,0.08)", color: IDSAdded[activeItem.id+"_h"] ? C.green : C.blue, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer", transition: "all 0.2s" }}>
                             {IDSAdded[activeItem.id+"_h"] ? "✓ Added!" : "+ Add as Headline"}
                           </button>
-                          <button type="button" onClick={addActiveAsTodo}
-                            style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1px solid ${IDSAdded[activeItem.id+"_t"] ? "rgba(34,197,94,0.4)" : "rgba(34,197,94,0.4)"}`, background: IDSAdded[activeItem.id+"_t"] ? "rgba(34,197,94,0.2)" : "rgba(34,197,94,0.08)", color: C.green, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer", transition: "all 0.2s" }}>
-                            {IDSAdded[activeItem.id+"_t"] ? "✓ Added!" : "+ Add as To-Do"}
-                          </button>
+                          <div style={{ flex: 1, position: "relative" }}>
+                            <button type="button" onClick={addActiveAsTodo}
+                              style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${IDSAdded[activeItem.id+"_t"] ? "rgba(34,197,94,0.4)" : "rgba(34,197,94,0.4)"}`, background: IDSAdded[activeItem.id+"_t"] ? "rgba(34,197,94,0.2)" : "rgba(34,197,94,0.08)", color: C.green, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer", transition: "all 0.2s" }}>
+                              {IDSAdded[activeItem.id+"_t"] ? "✓ Added!" : "+ Add as To-Do"}
+                            </button>
+                            {todoPickerOpen && (
+                              <div className="card fade-in" style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 0, right: 0, zIndex: 200, padding: "12px 14px", border: `1px solid ${C.green}`, minWidth: 220 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, marginBottom: 8, letterSpacing: 0.5 }}>ASSIGN TO</div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
+                                  {members.map(m => {
+                                    const sel = todoAssignees.includes(m.name);
+                                    return (
+                                      <label key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 6px", borderRadius: 5, background: sel ? "rgba(34,197,94,0.1)" : "transparent" }}>
+                                        <input type="checkbox" checked={sel} onChange={() => setTodoAssignees(prev => sel ? prev.filter(n => n !== m.name) : [...prev, m.name])} style={{ accentColor: C.green }} />
+                                        <span style={{ fontSize: 13, fontWeight: sel ? 700 : 400 }}>{m.name}</span>
+                                      </label>
+                                    );
+                                  })}
+                                  {members.length === 0 && <div style={{ fontSize: 12, color: C.textMuted }}>No members in this huddle.</div>}
+                                </div>
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <button onClick={commitAddAsTodo} style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "none", background: C.green, color: "#fff", fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                                    Add To-Do
+                                  </button>
+                                  <button onClick={() => setTodoPickerOpen(false)} style={{ padding: "7px 10px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily: "'Barlow',sans-serif", fontSize: 12, cursor: "pointer" }}>
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                           <button onClick={() => markSolved(activeItem)}
@@ -3639,10 +3677,14 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
 
 // ─── MEETING HISTORY ──────────────────────────────────────────────────
 function MeetingHistory({ company }) {
-  const meetings = [...(company.meetings || [])].reverse();
+  const allMeetings = [...(company.meetings || [])].reverse();
   const [expanded, setExpanded] = React.useState(null);
   const [copied, setCopied] = React.useState(null);
+  const [huddleFilter, setHuddleFilter] = React.useState("all");
   const huddles = company.huddles || [];
+  const allMembers = company.members || [];
+
+  const meetings = huddleFilter === "all" ? allMeetings : allMeetings.filter(m => m.huddleId === huddleFilter);
 
   const copyRecap = (m) => {
     navigator.clipboard.writeText(m.recapText).catch(() => {});
@@ -3650,18 +3692,47 @@ function MeetingHistory({ company }) {
     setTimeout(() => setCopied(null), 2000);
   };
 
+  const sendRecapEmail = (m) => {
+    const huddleObj = huddles.find(h => h.id === m.huddleId);
+    const huddleMemberIds = huddleObj?.memberIds || [];
+    // Get emails of members assigned to this huddle (fall back to all members if none assigned)
+    const recipientPool = huddleMemberIds.length > 0
+      ? allMembers.filter(mem => huddleMemberIds.includes(mem.id))
+      : allMembers;
+    const emails = recipientPool.map(mem => mem.email).filter(Boolean).join(",");
+    const subject = encodeURIComponent(`${m.huddleName || huddleObj?.name || "Weekly Huddle"} Recap — ${dateStr(new Date(m.date))}`);
+    const body = encodeURIComponent(m.recapText || "Meeting recap not available.");
+    window.location.href = `mailto:${emails}?subject=${subject}&body=${body}`;
+  };
+
   return (
-    <Layout title="Meeting History" subtitle={`${meetings.length} meetings on record`}>
-      {meetings.length === 0 ? (
-        <div className="card"><div className="empty-state"><div>No meetings yet. Run your first Weekly Huddle to see history here.</div></div></div>
-      ) : (
-        <div style={{ maxWidth: 700 }}>
-          {meetings.map(m => {
+    <Layout title="Meeting History" subtitle={`${meetings.length} meeting${meetings.length !== 1 ? "s" : ""} on record`}>
+      <div style={{ maxWidth: 700 }}>
+        {/* Huddle filter */}
+        {huddles.length > 1 && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+            <button onClick={() => setHuddleFilter("all")}
+              style={{ padding: "6px 14px", borderRadius: 20, border: `1px solid ${huddleFilter === "all" ? C.red : C.border}`, background: huddleFilter === "all" ? "rgba(230,51,41,0.1)" : C.surface2, color: huddleFilter === "all" ? C.red : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+              All Huddles
+            </button>
+            {huddles.map(h => (
+              <button key={h.id} onClick={() => setHuddleFilter(h.id)}
+                style={{ padding: "6px 14px", borderRadius: 20, border: `1px solid ${huddleFilter === h.id ? C.red : C.border}`, background: huddleFilter === h.id ? "rgba(230,51,41,0.1)" : C.surface2, color: huddleFilter === h.id ? C.red : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                {h.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {meetings.length === 0 ? (
+          <div className="card"><div className="empty-state"><div>No meetings yet{huddleFilter !== "all" ? " for this huddle" : ""}. Run your first Weekly Huddle to see history here.</div></div></div>
+        ) : (
+          meetings.map(m => {
             const isOpen = expanded === m.id;
             const huddleLabel = m.huddleName || (huddles.find(h => h.id === m.huddleId)?.name) || null;
             return (
               <div key={m.id} className="card" style={{ marginBottom: 16 }}>
-                {/* Header row — always visible, click to expand */}
+                {/* Header row */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
                   onClick={() => setExpanded(isOpen ? null : m.id)}>
                   <div>
@@ -3688,25 +3759,31 @@ function MeetingHistory({ company }) {
                     )}
                     {m.recapText ? (
                       <div>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
                           <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted }}>Meeting Recap</span>
-                          <button onClick={e => { e.stopPropagation(); copyRecap(m); }}
-                            style={{ padding: "6px 14px", borderRadius: 6, border: `1px solid ${C.border}`, background: copied === m.id ? "rgba(34,197,94,0.15)" : C.surface2, color: copied === m.id ? C.green : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                            {copied === m.id ? "✓ Copied!" : "Copy Recap"}
-                          </button>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={e => { e.stopPropagation(); copyRecap(m); }}
+                              style={{ padding: "6px 14px", borderRadius: 6, border: `1px solid ${C.border}`, background: copied === m.id ? "rgba(34,197,94,0.15)" : C.surface2, color: copied === m.id ? C.green : C.textMuted, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                              {copied === m.id ? "✓ Copied!" : "Copy Recap"}
+                            </button>
+                            <button onClick={e => { e.stopPropagation(); sendRecapEmail(m); }}
+                              style={{ padding: "6px 14px", borderRadius: 6, border: `1px solid rgba(59,130,246,0.4)`, background: "rgba(59,130,246,0.08)", color: C.blue, fontFamily: "'Barlow',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                              <Icon.mail /> Send Recap
+                            </button>
+                          </div>
                         </div>
                         <pre style={{ fontSize: 12, lineHeight: 1.7, color: C.textMuted, whiteSpace: "pre-wrap", fontFamily: "'Barlow',sans-serif", background: C.surface2, borderRadius: 6, padding: "16px", maxHeight: 400, overflowY: "auto" }}>{m.recapText}</pre>
                       </div>
                     ) : (
-                      <div style={{ fontSize: 13, color: C.textDim, fontStyle: "italic" }}>No recap stored for this meeting. Recaps are saved automatically going forward.</div>
+                      <div style={{ fontSize: 13, color: C.textDim, fontStyle: "italic" }}>No recap stored for this meeting.</div>
                     )}
                   </div>
                 )}
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
     </Layout>
   );
 }
