@@ -950,8 +950,14 @@ function MyMeasurables({ company, onSave, memberInfo }) {
   };
 
   const setEntry = (measId, wk, val) => {
-    const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
-    onSave({ scorecard: { ...company.scorecard, entries: updated } });
+    if (_currentCompanyCode) {
+      fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${wk}`, { [measId]: val });
+      const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
+      onSave({ scorecard: { ...company.scorecard, entries: updated } });
+    } else {
+      const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
+      onSave({ scorecard: { ...company.scorecard, entries: updated } });
+    }
   };
 
   const fmtWk = (wk) => {
@@ -1267,7 +1273,15 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   const [isViewer, setIsViewer] = useState(false);   // true = following host
   const [liveSession, setLiveSession] = useState(null); // { active, activeIdx, hostName }
   const liveRef = useRef(null);
-  const myMemberId = memberInfo?.customFields?.memberId || memberInfo?.id || null;
+  // Resolve logged-in user's VAST member record — try memberId field first, then email
+  const _rawMemberId = memberInfo?.customFields?.memberId;
+  const _myEmail = memberInfo?.auth?.email || memberInfo?.email;
+  const _myVastMember = _rawMemberId
+    ? (company.members || []).find(m => m.id === _rawMemberId)
+    : _myEmail
+      ? (company.members || []).find(m => m.email?.toLowerCase() === _myEmail.toLowerCase())
+      : null;
+  const myMemberId = _myVastMember?.id || _rawMemberId || memberInfo?.id || null;
 
   // Subscribe to live session for this huddle
   useEffect(() => {
@@ -1386,8 +1400,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     lines.push(`Duration: ${Math.round(elapsed / 60)} min  |  Meeting Rating: ${avgRating}/10`);
     lines.push("");
 
-    // Attendance
-    const present = (company.members || []).filter(m => attendance[m.id] !== false);
+    // Attendance — use huddle-filtered members list, not all company members
+    const present = members.filter(m => attendance[m.id] !== false);
     if (present.length) {
       lines.push("ATTENDEES");
       lines.push(present.map(m => m.name).join(", "));
@@ -1845,8 +1859,17 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             const curWk = weekKey();
 
             const setEntry = (measId, wk, val) => {
-              const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
-              onSave({ scorecard: { ...company.scorecard, entries: updated } });
+              // Write directly to the specific entry path — prevents full-object overwrites
+              // from clobbering other team members' independently entered data
+              if (_currentCompanyCode) {
+                fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${wk}`, { [measId]: val });
+                // Also update local companyRef so UI stays consistent
+                const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
+                onSave({ scorecard: { ...company.scorecard, entries: updated } });
+              } else {
+                const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
+                onSave({ scorecard: { ...company.scorecard, entries: updated } });
+              }
             };
 
             const meetsGoal = (val, m) => {
@@ -2845,8 +2868,14 @@ function Scorecard({ company, onSave }) {
 
   const setEntry = (measId, val, targetWk) => {
     const weekToWrite = targetWk || wk;
-    const updated = { ...entries, [weekToWrite]: { ...(entries[weekToWrite] || {}), [measId]: val } };
-    onSave({ scorecard: { ...company.scorecard, entries: updated } });
+    if (_currentCompanyCode) {
+      fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${weekToWrite}`, { [measId]: val });
+      const updated = { ...entries, [weekToWrite]: { ...(entries[weekToWrite] || {}), [measId]: val } };
+      onSave({ scorecard: { ...company.scorecard, entries: updated } });
+    } else {
+      const updated = { ...entries, [weekToWrite]: { ...(entries[weekToWrite] || {}), [measId]: val } };
+      onSave({ scorecard: { ...company.scorecard, entries: updated } });
+    }
   };
 
   const deleteMeasurable = (id) => {
@@ -3107,12 +3136,23 @@ function Issues({ company, onSave }) {
 
   const add = () => {
     if (!form.title.trim()) return;
-    onSave({ issues: [...issues, { id: uid(), ...form, status: "open", createdAt: now() }] });
+    const newIssue = { id: uid(), ...form, status: "open", createdAt: now() };
+    const updated = [...issues, newIssue];
+    if (_currentCompanyCode) fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
+    onSave({ issues: updated });
     setForm({ title: "", priority: "2", notes: "", huddleId: "" });
     setShowAdd(false);
   };
-  const resolve = (id) => onSave({ issues: issues.map(i => i.id === id ? { ...i, status: "resolved" } : i) });
-  const del = (id) => onSave({ issues: issues.filter(i => i.id !== id) });
+  const resolve = (id) => {
+    const updated = issues.map(i => i.id === id ? { ...i, status: "resolved" } : i);
+    if (_currentCompanyCode) fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
+    onSave({ issues: updated });
+  };
+  const del = (id) => {
+    const updated = issues.filter(i => i.id !== id);
+    if (_currentCompanyCode) fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
+    onSave({ issues: updated });
+  };
 
   const allOpen = issues.filter(i => i.status !== "resolved");
   const allResolved = issues.filter(i => i.status === "resolved");
