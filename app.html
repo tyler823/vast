@@ -181,16 +181,20 @@ const makeSTYLE = (C) => `
 `;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-const uid = () => Math.random().toString(36).slice(2, 9);
+const uid = () => Math.random().toString(36).slice(2, 9) + Math.random().toString(36).slice(2, 5);
 const now = () => new Date().toISOString();
 const dateStr = (d = new Date()) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 // Normalize todo assignees — supports both old string and new array format
 const getAssignees = (t) => t.assignees ? t.assignees : (t.assignee ? [t.assignee] : []);
 const weekKey = () => weekKeyFromDate(new Date());
 const weekKeyFromDate = (d) => {
-  const startOfYear = new Date(d.getFullYear(), 0, 1);
-  const week = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
-  return `${d.getFullYear()}-W${String(week).padStart(2,"0")}`;
+  // ISO 8601 week: week containing Thursday, year of that Thursday
+  const date = new Date(d);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7)); // nearest Thursday
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  const week = 1 + Math.round(((date - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+  return `${date.getFullYear()}-W${String(week).padStart(2,"0")}`;
 };
 const weekLabel = (key) => {
   // Parse YYYY-Www back to a readable "Mon DD" label for the week's Monday
@@ -303,14 +307,15 @@ async function loadCompanyFromFirebase(companyCode) {
   try {
     const data = await fbGet(`companies/${companyCode}/data`);
     if (data) {
-      try { localStorage.setItem("vast:cloud-cache", JSON.stringify(data)); } catch {}
+      try { if (_currentCompanyCode) localStorage.setItem(`vast:cloud-cache:${_currentCompanyCode}`, JSON.stringify(data)); } catch {}
       console.log("[VAST] Loaded from Firebase.");
       return data;
     }
   } catch(e) { console.warn("[VAST] Firebase load failed:", e); }
   // Fallback to local cache
   try {
-    const cached = localStorage.getItem("vast:cloud-cache");
+    const cacheKey = _currentCompanyCode ? `vast:cloud-cache:${_currentCompanyCode}` : "vast:cloud-cache";
+    const cached = localStorage.getItem(cacheKey);
     if (cached) { console.log("[VAST] Loaded from local cache fallback."); return JSON.parse(cached); }
   } catch {}
   return null;
@@ -344,6 +349,10 @@ async function flushSave() {
     console.error("[VAST] Firebase save failed:", e);
     setSyncStatus("error");
     _lastWrittenJson = null;
+    // Actually retry after 5 seconds
+    setTimeout(() => {
+      if (_pendingData) flushSave();
+    }, 5000);
   }
   // Clear echo-suppression stamp after listener has had time to fire once
   setTimeout(() => { _lastWrittenJson = null; }, 2000);
@@ -950,7 +959,7 @@ function MyMeasurables({ company, onSave, memberInfo }) {
 
   const setEntry = (measId, wk, val) => {
     if (_currentCompanyCode) {
-      fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${wk}`, { [measId]: val });
+      fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${wk}`, { [measId]: val }).catch(e => console.warn("[VAST] Scorecard write failed:", e));
       const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
       onSave({ scorecard: { ...company.scorecard, entries: updated } });
     } else {
@@ -1248,6 +1257,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   const [rating, setRating] = useState(0); // final computed average
   const [memberRatings, setMemberRatings] = useState({}); // { memberId: score }
   const [showRecap, setShowRecap] = useState(false);
+  const [recapText, setRecapText] = useState("");
   const [done, setDone] = useState(false);
   const [attendance, setAttendance] = useState({});
   const [spotlight, setSpotlight] = useState(null);
@@ -1306,6 +1316,14 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     return () => ref.off();
   }, [companyCode, huddleId, myMemberId]);
 
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (spinRef.current) clearTimeout(spinRef.current);
+    };
+  }, []);
+
   // Snapshot pre-meeting todos once the meeting starts
   useEffect(() => {
     if (started && !preMeetingTodoIds.current) {
@@ -1359,19 +1377,34 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   const addHeadline = () => {
     if (!newHeadline.text.trim()) return;
     const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, huddleId: huddleId, date: now() };
-    onSave({ headlines: [...(company.headlines || []), h] });
+    const latest = companyRef.current || company;
+    if (_currentCompanyCode) {
+      const updated = [...(latest.headlines || []), h];
+      fbSet(`companies/${_currentCompanyCode}/data/headlines`, updated);
+    }
+    onSave({ headlines: [...(latest.headlines || []), h] });
     setNewHeadline(n => ({ ...n, text: "" }));
   };
   const addTodo = () => {
     if (!newTodo.title.trim()) return;
     const t = { id: uid(), title: newTodo.title, assignees: newTodo.assignees || [], dueDate: newTodo.dueDate, huddleId: huddleId, done: false, createdAt: now() };
-    onSave({ todos: [...(company.todos || []), t] });
+    const latest = companyRef.current || company;
+    if (_currentCompanyCode) {
+      const updated = [...(latest.todos || []), t];
+      fbSet(`companies/${_currentCompanyCode}/data/todos`, updated);
+    }
+    onSave({ todos: [...(latest.todos || []), t] });
     setNewTodo({ title: "", assignees: [], dueDate: defaultDueDate() });
   };
   const addIssue = () => {
     if (!newIssue.title.trim()) return;
     const iss = { id: uid(), title: newIssue.title, priority: newIssue.priority, status: "open", huddleId: huddleId, createdAt: now() };
-    onSave({ issues: [...(company.issues || []), iss] });
+    const latest = companyRef.current || company;
+    if (_currentCompanyCode) {
+      const updated = [...(latest.issues || []), iss];
+      fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
+    }
+    onSave({ issues: [...(latest.issues || []), iss] });
     setNewIssue({ title: "", priority: "2" });
   };
 
@@ -1494,6 +1527,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   };
 
   const finishMeeting = async () => {
+    if (done) return; // guard against double-submit
     const scores = Object.values(memberRatings).filter(Boolean);
     const avgRating = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : rating;
     if (!avgRating) return;
@@ -1508,7 +1542,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
         }
       } catch(e) { console.warn("[VAST] Could not pre-fetch latest data for recap:", e); }
     }
-    const recapText = buildRecap({ date: now() }, avgRating);
+    const builtRecap = buildRecap({ date: now() }, avgRating);
+    setRecapText(builtRecap);
     // Use companyRef.current (just refreshed from Firebase) for the freshest data
     const latestData = companyRef.current || company;
     const mtg = {
@@ -1519,7 +1554,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
       completedTodos: (latestData.todos || []).filter(t => t.done).slice(-20),
       todos: (latestData.todos || []).filter(t => !t.done).slice(-5),
       solvedProblems: solvedThisSession,
-      recapText
+      recapText: builtRecap
     };
     // Archive quarter snapshot (once per quarter, keyed by currentQuarter)
     const qh = latestData.quarterHistory || [];
@@ -1566,7 +1601,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   };
 
   if (done) {
-    const recap = buildRecap({ date: now() }, rating);
+    const recap = recapText || buildRecap({ date: now() }, rating);
     const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegTimes({}); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); setIDSAdded({}); setConfetti(null); confettiFired.current = { todos: false, ids: false }; preMeetingTodoIds.current = null; clearTimeout(spinRef.current); setIsViewer(false); if (companyCode && myMemberId) endLiveSession(companyCode, huddleId).catch(() => {}); };
     return (
       <Layout title="Meeting Complete!" subtitle="Great work — keep the momentum going">
@@ -2229,7 +2264,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             const markSolved = (item) => {
               setSolvedThisSession(s => [...s, { ...item, notes: issueNotes[item.id] || "", solvedAt: now() }]);
               setFocusQueue(q => q.filter(f => f.id !== item.id));
-              onSave({ problemQueue: (company.problemQueue || []).filter(p => p.id !== item.id) });
+              const latest = companyRef.current || company;
+              onSave({ problemQueue: (latest.problemQueue || []).filter(p => p.id !== item.id) });
               const next = inFocus.find(f => f.id !== item.id);
               setActiveIssueId(next ? next.id : null);
               // Celebrate if all problems are now solved
@@ -2250,9 +2286,11 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             const addActiveAsHeadline = (e) => {
               e.stopPropagation();
               if (!activeItem) return;
-              const headlines = company.headlines ? [...company.headlines] : [];
+              const latest = companyRef.current || company;
+              const headlines = latest.headlines ? [...latest.headlines] : [];
               const h = { id: uid(), type: "Customer", text: activeItem.title, huddleId: huddleId, date: now() };
               headlines.push(h);
+              if (_currentCompanyCode) fbSet(`companies/${_currentCompanyCode}/data/headlines`, headlines);
               onSave({ headlines });
               setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: true }));
               setTimeout(() => setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: false })), 2000);
@@ -2262,9 +2300,11 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             const [todoAssignees, setTodoAssignees] = React.useState([]);
             const commitAddAsTodo = () => {
               if (!activeItem) return;
-              const todos = company.todos ? [...company.todos] : [];
+              const latest = companyRef.current || company;
+              const todos = latest.todos ? [...latest.todos] : [];
               const t = { id: uid(), title: activeItem.title, assignees: todoAssignees, dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10), huddleId: huddleId, done: false, createdAt: now() };
               todos.push(t);
+              if (_currentCompanyCode) fbSet(`companies/${_currentCompanyCode}/data/todos`, todos);
               onSave({ todos });
               setIDSAdded(s => ({ ...s, [activeItem.id + "_t"]: true }));
               setTodoPickerOpen(false);
@@ -3832,7 +3872,15 @@ function Settings({ company, onSave }) {
     setNewHuddleName("");
   };
   const renameHuddle = (id, name) => onSave({ huddles: huddles.map(h => h.id === id ? { ...h, name } : h) });
-  const deleteHuddle = (id) => { if (huddles.length <= 1) return; onSave({ huddles: huddles.filter(h => h.id !== id) }); };
+  const deleteHuddle = (id) => {
+    if (huddles.length <= 1) return;
+    // Cascade: remove huddle + disassociate data linked to it (don't delete user data, just unlink)
+    onSave({
+      huddles: huddles.filter(h => h.id !== id),
+      scorecard: { ...company.scorecard, measurables: (company.scorecard?.measurables || []).map(m => m.huddleId === id ? { ...m, huddleId: "" } : m) },
+      quarterlyTasks: (company.quarterlyTasks || []).map(t => t.huddleId === id ? { ...t, huddleId: "" } : t),
+    });
+  };
 
   const addNavigator = () => {
     if (!newNavName.trim()) return;
@@ -3892,7 +3940,16 @@ function Settings({ company, onSave }) {
     setCopiedInvite(id);
     setTimeout(() => setCopiedInvite(null), 2500);
   };
-  const delMember = (id) => onSave({ members: company.members.filter(m => m.id !== id) });
+  const delMember = (id) => {
+    const m = (company.members || []).find(x => x.id === id);
+    if (!m) return;
+    onSave({
+      members: company.members.filter(x => x.id !== id),
+      huddles: (company.huddles || []).map(h => ({ ...h, memberIds: (h.memberIds || []).filter(mid => mid !== id) })),
+      todos: (company.todos || []).map(t => ({ ...t, assignees: (t.assignees || []).filter(a => a !== m.name) })),
+      scorecard: { ...company.scorecard, measurables: (company.scorecard?.measurables || []).map(ms => ms.owner === m.name ? { ...ms, owner: "" } : ms) },
+    });
+  };
 
   const renameMember = (id, newName) => {
     const oldName = (company.members || []).find(m => m.id === id)?.name;
@@ -4451,7 +4508,8 @@ function VASTApp() {
 
           // Check local cache — may have data from a previous session
           try {
-            const cached = localStorage.getItem("vast:cloud-cache");
+            const cacheKey2 = _currentCompanyCode ? `vast:cloud-cache:${_currentCompanyCode}` : "vast:cloud-cache";
+            const cached = localStorage.getItem(cacheKey2);
             if (cached) {
               const parsed = JSON.parse(cached);
               if (parsed && (parsed.name || parsed.members || parsed.huddles)) {
