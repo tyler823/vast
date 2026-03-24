@@ -235,7 +235,7 @@ function waitForMemberstack(timeout = 10000) {
       try {
         const res = await ms.getCurrentMember();
         if (res && res.data) { clearInterval(check); resolve(ms); }
-      } catch {}
+      } catch (e) { /* Memberstack polling — retries automatically on next interval */ }
     }, 150);
   });
 }
@@ -307,7 +307,7 @@ async function loadCompanyFromFirebase(companyCode) {
   try {
     const data = await fbGet(`companies/${companyCode}/data`);
     if (data) {
-      try { if (_currentCompanyCode) localStorage.setItem(`vast:cloud-cache:${_currentCompanyCode}`, JSON.stringify(data)); } catch {}
+      try { if (_currentCompanyCode) localStorage.setItem(`vast:cloud-cache:${_currentCompanyCode}`, JSON.stringify(data)); } catch (e) { /* localStorage quota exceeded or unavailable — non-critical cache */ }
       console.log("[VAST] Loaded from Firebase.");
       return data;
     }
@@ -317,7 +317,7 @@ async function loadCompanyFromFirebase(companyCode) {
     const cacheKey = _currentCompanyCode ? `vast:cloud-cache:${_currentCompanyCode}` : "vast:cloud-cache";
     const cached = localStorage.getItem(cacheKey);
     if (cached) { console.log("[VAST] Loaded from local cache fallback."); return JSON.parse(cached); }
-  } catch {}
+  } catch (e) { /* localStorage read or JSON parse failed — non-critical fallback path */ }
   return null;
 }
 
@@ -327,7 +327,7 @@ let _currentCompanyCode = null;
 
 function saveCompany(data) {
   _pendingData = data;
-  try { localStorage.setItem("vast:cloud-cache", JSON.stringify(data)); } catch {}
+  try { localStorage.setItem("vast:cloud-cache", JSON.stringify(data)); } catch (e) { /* localStorage quota exceeded or unavailable — non-critical cache */ }
   setSyncStatus("saving");
   if (_saveTimer) clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => flushSave(), 800);
@@ -361,12 +361,18 @@ async function flushSave() {
 window.addEventListener("beforeunload", () => {
   if (_saveTimer) clearTimeout(_saveTimer);
   if (_pendingData && _currentCompanyCode) {
-    try { fbRef(`companies/${_currentCompanyCode}/data`).set(_pendingData); } catch {}
+    // Best-effort save on page unload — cannot reliably show UI errors here
+    try { fbRef(`companies/${_currentCompanyCode}/data`).set(_pendingData); } catch (e) { console.error("[VAST] beforeunload save failed:", e); }
   }
 });
 
 // ── Live session helpers ──────────────────────────────────────────────────
 async function startLiveSession(companyCode, huddleId, hostMemberId, hostName) {
+  // Guard: prevent writing a live session without a valid host member ID
+  if (!companyCode || !huddleId || !hostMemberId) {
+    console.error("[VAST] Cannot start live session without companyCode, huddleId, and hostMemberId");
+    return;
+  }
   await fbSet(`companies/${companyCode}/liveSessions/${huddleId}`, {
     active: true, activeIdx: 0, hostMemberId, hostName: hostName || "Host",
     startedAt: Date.now()
@@ -744,7 +750,6 @@ function Dashboard({ company, onSave, setView, memberInfo, companyCode }) {
   const pct = total > 0 ? Math.round(((onTrack + done) / total) * 100) : 0;
   const openIssues = (company.issues || []).filter(i => i.status !== "resolved").length;
   const pendingTodos = (company.todos || []).filter(t => !t.done).length;
-  const lastMeeting = company.meetings?.slice(-1)[0];
   const avgRating = company.meetings?.length
     ? (company.meetings.reduce((a, m) => a + (m.rating || 0), 0) / company.meetings.length).toFixed(1)
     : "—";
@@ -1277,6 +1282,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   const confettiFired = useRef({ todos: false, ids: false });
   const preMeetingTodoIds = useRef(null);
   const fireConfetti = (msg) => setConfetti(msg);
+  const [meetingSaving, setMeetingSaving] = useState(false);
+  const [meetingError, setMeetingError] = useState("");
 
   // ── Live session state ─────────────────────────────────────────────────
   const [isViewer, setIsViewer] = useState(false);   // true = following host
@@ -1365,47 +1372,63 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     if (isViewer) return; // viewers can't control
     const n = Math.min(agenda.length - 1, activeIdx + 1);
     setActiveIdx(n);
-    if (companyCode) updateLiveSession(companyCode, huddleId, n).catch(() => {});
+    if (companyCode) updateLiveSession(companyCode, huddleId, n).catch(e => console.warn("[VAST] Live session sync failed (next):", e));
   };
   const prev = () => {
     if (isViewer) return;
     const n = Math.max(0, activeIdx - 1);
     setActiveIdx(n);
-    if (companyCode) updateLiveSession(companyCode, huddleId, n).catch(() => {});
+    if (companyCode) updateLiveSession(companyCode, huddleId, n).catch(e => console.warn("[VAST] Live session sync failed (prev):", e));
   };
 
-  const addHeadline = () => {
-    if (!newHeadline.text.trim()) return;
-    const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, huddleId: huddleId, date: now() };
-    const latest = companyRef.current || company;
-    if (_currentCompanyCode) {
-      const updated = [...(latest.headlines || []), h];
-      fbSet(`companies/${_currentCompanyCode}/data/headlines`, updated);
-    }
-    onSave({ headlines: [...(latest.headlines || []), h] });
-    setNewHeadline(n => ({ ...n, text: "" }));
+  const [quickAddSaving, setQuickAddSaving] = useState(false);
+  const addHeadline = async () => {
+    if (!newHeadline.text.trim() || quickAddSaving) return;
+    setQuickAddSaving(true);
+    try {
+      const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, huddleId: huddleId, date: now() };
+      const latest = companyRef.current || company;
+      if (_currentCompanyCode) {
+        const updated = [...(latest.headlines || []), h];
+        await fbSet(`companies/${_currentCompanyCode}/data/headlines`, updated);
+      }
+      onSave({ headlines: [...(latest.headlines || []), h] });
+      setNewHeadline(n => ({ ...n, text: "" }));
+    } catch (e) {
+      console.error("[VAST] Failed to add headline:", e);
+    } finally { setQuickAddSaving(false); }
   };
-  const addTodo = () => {
-    if (!newTodo.title.trim()) return;
-    const t = { id: uid(), title: newTodo.title, assignees: newTodo.assignees || [], dueDate: newTodo.dueDate, huddleId: huddleId, done: false, createdAt: now() };
-    const latest = companyRef.current || company;
-    if (_currentCompanyCode) {
-      const updated = [...(latest.todos || []), t];
-      fbSet(`companies/${_currentCompanyCode}/data/todos`, updated);
-    }
-    onSave({ todos: [...(latest.todos || []), t] });
-    setNewTodo({ title: "", assignees: [], dueDate: defaultDueDate() });
+  const addTodo = async () => {
+    if (!newTodo.title.trim() || quickAddSaving) return;
+    setQuickAddSaving(true);
+    try {
+      const t = { id: uid(), title: newTodo.title, assignees: newTodo.assignees || [], dueDate: newTodo.dueDate, huddleId: huddleId, done: false, createdAt: now() };
+      const latest = companyRef.current || company;
+      if (_currentCompanyCode) {
+        const updated = [...(latest.todos || []), t];
+        await fbSet(`companies/${_currentCompanyCode}/data/todos`, updated);
+      }
+      onSave({ todos: [...(latest.todos || []), t] });
+      setNewTodo({ title: "", assignees: [], dueDate: defaultDueDate() });
+    } catch (e) {
+      console.error("[VAST] Failed to add todo:", e);
+    } finally { setQuickAddSaving(false); }
   };
-  const addIssue = () => {
-    if (!newIssue.title.trim()) return;
-    const iss = { id: uid(), title: newIssue.title, priority: newIssue.priority, status: "open", huddleId: huddleId, createdAt: now() };
-    const latest = companyRef.current || company;
-    if (_currentCompanyCode) {
-      const updated = [...(latest.issues || []), iss];
-      fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
-    }
-    onSave({ issues: [...(latest.issues || []), iss] });
-    setNewIssue({ title: "", priority: "2" });
+  const addIssue = async () => {
+    if (!newIssue.title.trim() || quickAddSaving) return;
+    setQuickAddSaving(true);
+    try {
+      const iss = { id: uid(), title: newIssue.title, priority: newIssue.priority, status: "open", huddleId: huddleId, createdAt: now() };
+      const latest = companyRef.current || company;
+      if (_currentCompanyCode) {
+        const updated = [...(latest.issues || []), iss];
+        await fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
+      }
+      onSave({ issues: [...(latest.issues || []), iss] });
+      setNewIssue({ title: "", priority: "2" });
+    } catch (e) {
+      console.error("[VAST] Failed to add issue:", e);
+    } finally { setQuickAddSaving(false); }
   };
 
   const autoSelect = () => {
@@ -1527,10 +1550,13 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   };
 
   const finishMeeting = async () => {
-    if (done) return; // guard against double-submit
+    if (done || meetingSaving) return; // guard against double-submit
+    setMeetingSaving(true);
+    setMeetingError("");
     const scores = Object.values(memberRatings).filter(Boolean);
     const avgRating = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : rating;
-    if (!avgRating) return;
+    if (!avgRating) { setMeetingSaving(false); return; }
+    try {
     // Fetch the very latest data from Firebase before saving the recap,
     // so the meeting record reflects everyone's entries (scorecard, issues, todos)
     if (_currentCompanyCode) {
@@ -1586,9 +1612,12 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     // scorecard entries or issues that were saved via direct Firebase paths
     const newMeetings = [...(companyRef.current?.meetings || company.meetings || []), mtg];
     if (_currentCompanyCode) {
-      fbSet(`companies/${_currentCompanyCode}/data/meetings`, newMeetings);
-      fbSet(`companies/${_currentCompanyCode}/data/huddles`, updatedHuddles);
-      fbSet(`companies/${_currentCompanyCode}/data/quarterHistory`, newQH);
+      // FIX 3: Atomic multi-path update to avoid dual-write race condition
+      await window._fbDb.ref(`companies/${_currentCompanyCode}/data`).update({
+        meetings: newMeetings,
+        huddles: updatedHuddles,
+        quarterHistory: newQH,
+      });
     }
     // Also update local state so done screen renders immediately
     onSave({ huddles: updatedHuddles, meetings: newMeetings, quarterHistory: newQH });
@@ -1597,12 +1626,16 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     setDone(true);
     clearInterval(timerRef.current);
     clearTimeout(spinRef.current);
-    if (companyCode && !isViewer) endLiveSession(companyCode, huddleId).catch(() => {});
+    if (companyCode && !isViewer) endLiveSession(companyCode, huddleId).catch(e => console.warn("[VAST] Failed to end live session:", e));
+    } catch (e) {
+      console.error("[VAST] Failed to finish meeting:", e);
+      setMeetingError("Something went wrong saving the meeting. Please try again.");
+    } finally { setMeetingSaving(false); }
   };
 
   if (done) {
     const recap = recapText || buildRecap({ date: now() }, rating);
-    const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegTimes({}); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); setIDSAdded({}); setConfetti(null); confettiFired.current = { todos: false, ids: false }; preMeetingTodoIds.current = null; clearTimeout(spinRef.current); setIsViewer(false); if (companyCode && myMemberId) endLiveSession(companyCode, huddleId).catch(() => {}); };
+    const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegTimes({}); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); setIDSAdded({}); setConfetti(null); confettiFired.current = { todos: false, ids: false }; preMeetingTodoIds.current = null; clearTimeout(spinRef.current); setIsViewer(false); if (companyCode && myMemberId) endLiveSession(companyCode, huddleId).catch(e => console.warn("[VAST] Failed to end live session on reset:", e)); };
     return (
       <Layout title="Meeting Complete!" subtitle="Great work — keep the momentum going">
         <div style={{ maxWidth: 680, margin: "0 auto" }} className="fade-in">
@@ -1649,7 +1682,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             const body = encodeURIComponent(recap);
             return (
               <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-                <button onClick={() => { navigator.clipboard.writeText(recap).catch(() => {}); }}
+                <button onClick={() => { navigator.clipboard.writeText(recap).catch(e => console.warn("[VAST] Clipboard copy failed:", e)); }}
                   style={{ flex: 1, padding: "12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 14, cursor: "pointer", letterSpacing: 0.5, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   <Icon.copy /> Copy Recap
                 </button>
@@ -1734,13 +1767,14 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             </div>
           </div>
           <button className="btn-primary" style={{ width: "100%", padding: "16px", fontSize: 16 }} onClick={() => {
+            if (meetingSaving) return;
             setIsViewer(false);
             setStarted(true);
             if (companyCode && myMemberId) {
               const hostName = (company.members || []).find(m => m.id === myMemberId)?.name || "Host";
-              startLiveSession(companyCode, huddleId, myMemberId, hostName).catch(() => {});
+              startLiveSession(companyCode, huddleId, myMemberId, hostName).catch(e => console.error("[VAST] Failed to start live session:", e));
             }
-          }}>
+          }} disabled={meetingSaving}>
             Start Huddle
           </button>
         </div>
@@ -2131,7 +2165,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                       <option>Customer</option><option>Employee</option>
                     </select>
                     <input placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && addHeadline()} style={{ flex: 1, minWidth: 160 }} />
-                    <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addHeadline}>Add</button>
+                    <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addHeadline} disabled={quickAddSaving}>{quickAddSaving ? "…" : "Add"}</button>
                   </div>
                 </div>
               </div>
@@ -2210,7 +2244,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: members.length ? 8 : 0 }}>
                     <input placeholder="Task..." value={newTodo.title} onChange={e => setNewTodo(n => ({ ...n, title: e.target.value }))} style={{ flex: 2, minWidth: 160 }} />
                     <input type="date" value={newTodo.dueDate} onChange={e => setNewTodo(n => ({ ...n, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 130 }} />
-                    <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addTodo}>Add</button>
+                    <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addTodo} disabled={quickAddSaving}>{quickAddSaving ? "…" : "Add"}</button>
                   </div>
                   {members.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
@@ -2331,7 +2365,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                       <option value="2">Priority 2</option>
                       <option value="3">Priority 3</option>
                     </select>
-                    <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addIssue}>Add</button>
+                    <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={addIssue} disabled={quickAddSaving}>{quickAddSaving ? "…" : "Add"}</button>
                   </div>
                 </div>
 
@@ -2540,8 +2574,9 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                   <label className="label">Closing notes</label>
                   <textarea placeholder="Key takeaways, decisions made, action items..." value={notes.conclude || ""} onChange={e => setNotes(n => ({ ...n, conclude: e.target.value }))} />
                 </div>
-                <button className="btn-primary" style={{ width: "100%", padding: "14px", fontSize: 15 }} onClick={finishMeeting} disabled={!canFinish}>
-                  {canFinish ? `Complete Meeting & Generate Recap${avgPreview ? ` — Avg ${avgPreview}/10` : rating ? ` — ${rating}/10` : ""}` : "Rate the meeting to finish"}
+                {meetingError && <div style={{ color: C.red, background: "rgba(230,51,41,0.08)", border: "1px solid rgba(230,51,41,0.25)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 13 }}>{meetingError}</div>}
+                <button className="btn-primary" style={{ width: "100%", padding: "14px", fontSize: 15 }} onClick={finishMeeting} disabled={!canFinish || meetingSaving}>
+                  {meetingSaving ? "Saving…" : canFinish ? `Complete Meeting & Generate Recap${avgPreview ? ` — Avg ${avgPreview}/10` : rating ? ` — ${rating}/10` : ""}` : "Rate the meeting to finish"}
                 </button>
               </div>
             );
@@ -3229,28 +3264,52 @@ function Headlines({ company, onSave }) {
 function Issues({ company, onSave }) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title: "", priority: "2", notes: "", huddleId: "" });
+  const [saving, setSaving] = useState(false);
+  const [savingId, setSavingId] = useState(null); // tracks which issue is being resolved/deleted
+  const [issueError, setIssueError] = useState("");
   const issues = company.issues || [];
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
 
-  const add = () => {
-    if (!form.title.trim()) return;
-    const newIssue = { id: uid(), ...form, status: "open", createdAt: now() };
-    const updated = [...issues, newIssue];
-    if (_currentCompanyCode) fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
-    onSave({ issues: updated });
-    setForm({ title: "", priority: "2", notes: "", huddleId: "" });
-    setShowAdd(false);
+  const add = async () => {
+    if (!form.title.trim() || saving) return;
+    setSaving(true);
+    setIssueError("");
+    try {
+      const newIssue = { id: uid(), ...form, status: "open", createdAt: now() };
+      const updated = [...issues, newIssue];
+      if (_currentCompanyCode) await fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
+      onSave({ issues: updated });
+      setForm({ title: "", priority: "2", notes: "", huddleId: "" });
+      setShowAdd(false);
+    } catch (e) {
+      console.error("[VAST] Failed to add issue:", e);
+      setIssueError("Something went wrong. Please try again.");
+    } finally { setSaving(false); }
   };
-  const resolve = (id) => {
-    const updated = issues.map(i => i.id === id ? { ...i, status: "resolved" } : i);
-    if (_currentCompanyCode) fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
-    onSave({ issues: updated });
+  const resolve = async (id) => {
+    if (savingId) return;
+    setSavingId(id);
+    try {
+      const updated = issues.map(i => i.id === id ? { ...i, status: "resolved" } : i);
+      if (_currentCompanyCode) await fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
+      onSave({ issues: updated });
+    } catch (e) {
+      console.error("[VAST] Failed to resolve issue:", e);
+      setIssueError("Something went wrong. Please try again.");
+    } finally { setSavingId(null); }
   };
-  const del = (id) => {
-    const updated = issues.filter(i => i.id !== id);
-    if (_currentCompanyCode) fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
-    onSave({ issues: updated });
+  const del = async (id) => {
+    if (savingId) return;
+    setSavingId(id);
+    try {
+      const updated = issues.filter(i => i.id !== id);
+      if (_currentCompanyCode) await fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
+      onSave({ issues: updated });
+    } catch (e) {
+      console.error("[VAST] Failed to delete issue:", e);
+      setIssueError("Something went wrong. Please try again.");
+    } finally { setSavingId(null); }
   };
 
   const allOpen = issues.filter(i => i.status !== "resolved");
@@ -3263,6 +3322,7 @@ function Issues({ company, onSave }) {
       action={<button className="btn-primary" onClick={() => setShowAdd(true)}><Icon.plus /> Add Issue</button>}>
 
       <div style={{ maxWidth: 700 }}>
+        {issueError && <div style={{ color: C.red, background: "rgba(230,51,41,0.08)", border: "1px solid rgba(230,51,41,0.25)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 13 }}>{issueError}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
           <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
             style={{ padding: "6px 12px", fontSize: 13, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text }}>
@@ -3290,8 +3350,8 @@ function Issues({ company, onSave }) {
                     <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{dateStr(new Date(iss.createdAt))}</div>
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
-                    <button className="btn-ghost" style={{ fontSize: 12, color: C.green }} onClick={() => resolve(iss.id)}>✓ Resolve</button>
-                    <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(iss.id)}><Icon.trash /></button>
+                    <button className="btn-ghost" style={{ fontSize: 12, color: C.green }} onClick={() => resolve(iss.id)} disabled={savingId === iss.id}>{savingId === iss.id ? "Saving…" : "✓ Resolve"}</button>
+                    <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(iss.id)} disabled={savingId === iss.id}><Icon.trash /></button>
                   </div>
                 </div>
               </div>
@@ -3339,7 +3399,7 @@ function Issues({ company, onSave }) {
               </select>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={add}>Add Issue</button>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={add} disabled={saving}>{saving ? "Adding…" : "Add Issue"}</button>
               <button className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
             </div>
           </div>
@@ -3748,7 +3808,7 @@ function MeetingHistory({ company }) {
   const meetings = huddleFilter === "all" ? allMeetings : allMeetings.filter(m => m.huddleId === huddleFilter);
 
   const copyRecap = (m) => {
-    navigator.clipboard.writeText(m.recapText).catch(() => {});
+    navigator.clipboard.writeText(m.recapText).catch(e => console.warn("[VAST] Clipboard copy failed:", e));
     setCopied(m.id);
     setTimeout(() => setCopied(null), 2000);
   };
@@ -3903,23 +3963,33 @@ function Settings({ company, onSave }) {
   const [pendingInvites, setPendingInvites] = React.useState({}); // { memberId: code }
   const [generatingInvite, setGeneratingInvite] = React.useState(null);
   const [copiedInvite, setCopiedInvite] = React.useState(null);
+  const [addingMember, setAddingMember] = React.useState(false);
+  const [deletingMemberId, setDeletingMemberId] = React.useState(null);
+  const [settingsError, setSettingsError] = React.useState("");
 
   const addMember = async () => {
-    if (!newMember.name.trim()) return;
-    const m = { id: uid(), ...newMember, inviteCode: null };
-    onSave({ members: [...(company.members || []), m] });
-    setNewMember({ name: "", email: "", role: "member" });
-    // Generate invite code if email provided
-    if (newMember.email.trim() && company.code) {
-      setGeneratingInvite(m.id);
-      try {
-        const code = await createInvite(_currentCompanyCode || company.code, newMember.name, newMember.email, newMember.role, m.id);
-        const updatedMember = { ...m, inviteCode: code };
-        onSave({ members: [...(company.members || []), updatedMember] });
-        setPendingInvites(p => ({ ...p, [m.id]: code }));
-      } catch(e) { console.warn("Invite creation failed:", e); }
-      setGeneratingInvite(null);
-    }
+    if (!newMember.name.trim() || addingMember) return;
+    setAddingMember(true);
+    setSettingsError("");
+    try {
+      const m = { id: uid(), ...newMember, inviteCode: null };
+      onSave({ members: [...(company.members || []), m] });
+      setNewMember({ name: "", email: "", role: "member" });
+      // Generate invite code if email provided
+      if (newMember.email.trim() && company.code) {
+        setGeneratingInvite(m.id);
+        try {
+          const code = await createInvite(_currentCompanyCode || company.code, newMember.name, newMember.email, newMember.role, m.id);
+          const updatedMember = { ...m, inviteCode: code };
+          onSave({ members: [...(company.members || []), updatedMember] });
+          setPendingInvites(p => ({ ...p, [m.id]: code }));
+        } catch(e) { console.warn("Invite creation failed:", e); }
+        setGeneratingInvite(null);
+      }
+    } catch (e) {
+      console.error("[VAST] Failed to add member:", e);
+      setSettingsError("Something went wrong. Please try again.");
+    } finally { setAddingMember(false); }
   };
 
   const generateInviteForMember = async (m) => {
@@ -3936,19 +4006,27 @@ function Settings({ company, onSave }) {
   };
 
   const copyInviteCode = (id, code) => {
-    navigator.clipboard.writeText(code).catch(() => {});
+    // Clipboard is non-critical UI feedback — safe to warn-only
+    navigator.clipboard.writeText(code).catch(e => console.warn("[VAST] Clipboard copy failed:", e));
     setCopiedInvite(id);
     setTimeout(() => setCopiedInvite(null), 2500);
   };
   const delMember = (id) => {
+    if (deletingMemberId) return;
+    setDeletingMemberId(id);
     const m = (company.members || []).find(x => x.id === id);
-    if (!m) return;
-    onSave({
-      members: company.members.filter(x => x.id !== id),
-      huddles: (company.huddles || []).map(h => ({ ...h, memberIds: (h.memberIds || []).filter(mid => mid !== id) })),
-      todos: (company.todos || []).map(t => ({ ...t, assignees: (t.assignees || []).filter(a => a !== m.name) })),
-      scorecard: { ...company.scorecard, measurables: (company.scorecard?.measurables || []).map(ms => ms.owner === m.name ? { ...ms, owner: "" } : ms) },
-    });
+    if (!m) { setDeletingMemberId(null); return; }
+    try {
+      onSave({
+        members: company.members.filter(x => x.id !== id),
+        huddles: (company.huddles || []).map(h => ({ ...h, memberIds: (h.memberIds || []).filter(mid => mid !== id) })),
+        todos: (company.todos || []).map(t => ({ ...t, assignees: (t.assignees || []).filter(a => a !== m.name) })),
+        scorecard: { ...company.scorecard, measurables: (company.scorecard?.measurables || []).map(ms => ms.owner === m.name ? { ...ms, owner: "" } : ms) },
+      });
+    } catch (e) {
+      console.error("[VAST] Failed to delete member:", e);
+      setSettingsError("Something went wrong. Please try again.");
+    } finally { setDeletingMemberId(null); }
   };
 
   const renameMember = (id, newName) => {
@@ -4080,7 +4158,7 @@ function Settings({ company, onSave }) {
                         {generatingInvite === m.id ? "..." : "Invite"}
                       </button>
                     )}
-                    <button className="btn-danger" style={{ padding: "6px 10px", flexShrink: 0 }} onClick={() => delMember(m.id)}><Icon.trash /></button>
+                    <button className="btn-danger" style={{ padding: "6px 10px", flexShrink: 0 }} onClick={() => delMember(m.id)} disabled={deletingMemberId === m.id}>{deletingMemberId === m.id ? "…" : <Icon.trash />}</button>
                   </div>
                   {inviteCode && (
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, padding: "8px 10px", background: "rgba(59,130,246,0.08)", borderRadius: 6, border: "1px solid rgba(59,130,246,0.2)" }}>
@@ -4113,7 +4191,8 @@ function Settings({ company, onSave }) {
                   <option value="member">Member</option>
                 </select>
               </div>
-              <button className="btn-primary" style={{ marginTop: 10, width: "100%" }} onClick={addMember}>Add Member</button>
+              {settingsError && <div style={{ color: C.red, fontSize: 12, marginTop: 6 }}>{settingsError}</div>}
+              <button className="btn-primary" style={{ marginTop: 10, width: "100%" }} onClick={addMember} disabled={addingMember}>{addingMember ? "Adding…" : "Add Member"}</button>
             </div>
           </div>
         </div>
@@ -4408,8 +4487,9 @@ function VASTApp() {
     // Persist to Memberstack so it follows the user across devices
     try {
       const ms = window.$memberstackDom;
-      if (ms) ms.updateMember({ customFields: { theme: next } }).catch(() => {});
-    } catch {}
+      // Non-critical: theme sync to Memberstack is a convenience, not essential
+      if (ms) ms.updateMember({ customFields: { theme: next } }).catch(e => console.warn("[VAST] Theme sync to Memberstack failed:", e));
+    } catch (e) { console.warn("[VAST] Theme toggle error:", e); }
   };
 
   const [memberInfo, setMemberInfo] = useState(null); // { id, email, customFields: { companyCode, role } }
@@ -4604,7 +4684,7 @@ function VASTApp() {
         try {
           const cached = localStorage.getItem("vast:cloud-cache");
           if (cached) { setCompanyState(applyMigrations(JSON.parse(cached))); setAppState("ready"); return; }
-        } catch {}
+        } catch (e) { /* localStorage read or parse failed — non-critical last-resort fallback */ }
         setAppState("ready");
         // Don't use "myco" fallback — just show loading until real data arrives
         console.warn("[VAST] Could not load company data.");
