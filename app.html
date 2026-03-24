@@ -1567,6 +1567,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
         const fresh = await fbGet(`companies/${_currentCompanyCode}/data`);
         if (fresh && typeof fresh === "object") {
           if (fresh.code !== _currentCompanyCode) fresh.code = _currentCompanyCode;
+          applyMigrations(fresh);
           companyRef.current = fresh;
         }
       } catch(e) { console.warn("[VAST] Could not pre-fetch latest data for recap:", e); }
@@ -1629,11 +1630,17 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     setDone(true);
     clearInterval(timerRef.current);
     clearTimeout(spinRef.current);
-    if (companyCode && !isViewer) endLiveSession(companyCode, huddleId).catch(e => console.warn("[VAST] Failed to end live session:", e));
     } catch (e) {
       console.error("[VAST] Failed to finish meeting:", e);
       setMeetingError("Something went wrong saving the meeting. Please try again.");
-    } finally { setMeetingSaving(false); }
+    } finally {
+      setMeetingSaving(false);
+      if (companyCode && !isViewer) {
+        endLiveSession(companyCode, huddleId).catch(e =>
+          console.warn("[VAST] endLiveSession failed:", e)
+        );
+      }
+    }
   };
 
   if (done) {
@@ -3281,7 +3288,9 @@ function Issues({ company, onSave }) {
   const [saving, setSaving] = useState(false);
   const [savingId, setSavingId] = useState(null); // tracks which issue is being resolved/deleted
   const [issueError, setIssueError] = useState("");
-  const issues = company.issues || [];
+  const issues = Array.isArray(company.issues)
+    ? company.issues
+    : Object.values(company.issues || {});
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
 
