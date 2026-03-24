@@ -1389,8 +1389,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
       const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, huddleId: huddleId, date: now() };
       const latest = companyRef.current || company;
       if (_currentCompanyCode) {
-        const updated = [...(latest.headlines || []), h];
-        await fbSet(`companies/${_currentCompanyCode}/data/headlines`, updated);
+        await window._fbDb.ref(`companies/${_currentCompanyCode}/data/headlines`).push(h);
       }
       onSave({ headlines: [...(latest.headlines || []), h] });
       setNewHeadline(n => ({ ...n, text: "" }));
@@ -1405,8 +1404,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
       const t = { id: uid(), title: newTodo.title, assignees: newTodo.assignees || [], dueDate: newTodo.dueDate, huddleId: huddleId, done: false, createdAt: now() };
       const latest = companyRef.current || company;
       if (_currentCompanyCode) {
-        const updated = [...(latest.todos || []), t];
-        await fbSet(`companies/${_currentCompanyCode}/data/todos`, updated);
+        await window._fbDb.ref(`companies/${_currentCompanyCode}/data/todos`).push(t);
       }
       onSave({ todos: [...(latest.todos || []), t] });
       setNewTodo({ title: "", assignees: [], dueDate: defaultDueDate() });
@@ -1421,8 +1419,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
       const iss = { id: uid(), title: newIssue.title, priority: newIssue.priority, status: "open", huddleId: huddleId, createdAt: now() };
       const latest = companyRef.current || company;
       if (_currentCompanyCode) {
-        const updated = [...(latest.issues || []), iss];
-        await fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
+        await window._fbDb.ref(`companies/${_currentCompanyCode}/data/issues`).push(iss);
       }
       onSave({ issues: [...(latest.issues || []), iss] });
       setNewIssue({ title: "", priority: "2" });
@@ -1766,13 +1763,20 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               <span>Total</span><span style={{ fontWeight: 700, color: C.text }}>{agenda.reduce((s, a) => s + a.minutes, 0)} min</span>
             </div>
           </div>
-          <button className="btn-primary" style={{ width: "100%", padding: "16px", fontSize: 16 }} onClick={() => {
+          <button className="btn-primary" style={{ width: "100%", padding: "16px", fontSize: 16 }} onClick={async () => {
             if (meetingSaving) return;
             setIsViewer(false);
-            setStarted(true);
             if (companyCode && myMemberId) {
               const hostName = (company.members || []).find(m => m.id === myMemberId)?.name || "Host";
-              startLiveSession(companyCode, huddleId, myMemberId, hostName).catch(e => console.error("[VAST] Failed to start live session:", e));
+              try {
+                await startLiveSession(companyCode, huddleId, myMemberId, hostName);
+                setStarted(true);
+              } catch (e) {
+                console.error("[VAST] Failed to start live session:", e);
+                setMeetingError("Failed to start huddle. Please try again.");
+              }
+            } else {
+              setStarted(true);
             }
           }} disabled={meetingSaving}>
             Start Huddle
@@ -1859,7 +1863,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                           <input autoFocus placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))}
                             onKeyDown={e => { if (e.key === "Enter") { addHeadline(); closeQuickAdd(); } if (e.key === "Escape") closeQuickAdd(); }}
                             style={{ flex: 1, minWidth: 180 }} />
-                          <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={() => { addHeadline(); closeQuickAdd(); }}>Add</button>
+                          <button className="btn-primary" style={{ padding: "10px 16px" }} disabled={quickAddSaving} onClick={() => { addHeadline(); closeQuickAdd(); }}>Add</button>
                           <button className="btn-ghost" style={{ padding: "10px 12px" }} onClick={closeQuickAdd}>✕</button>
                         </div>
                       </div>
@@ -1872,7 +1876,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                             onKeyDown={e => { if (e.key === "Enter") { addTodo(); closeQuickAdd(); } if (e.key === "Escape") closeQuickAdd(); }}
                             style={{ flex: 2, minWidth: 180 }} />
                           <input type="date" value={newTodo.dueDate} onChange={e => setNewTodo(n => ({ ...n, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 130 }} />
-                          <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={() => { addTodo(); closeQuickAdd(); }}>Add</button>
+                          <button className="btn-primary" style={{ padding: "10px 16px" }} disabled={quickAddSaving} onClick={() => { addTodo(); closeQuickAdd(); }}>Add</button>
                           <button className="btn-ghost" style={{ padding: "10px 12px" }} onClick={closeQuickAdd}>✕</button>
                         </div>
                         {members.length > 0 && (
@@ -1904,7 +1908,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                             <option value="2">Priority 2</option>
                             <option value="3">Priority 3</option>
                           </select>
-                          <button className="btn-primary" style={{ padding: "10px 16px" }} onClick={() => { addIssue(); closeQuickAdd(); }}>Add</button>
+                          <button className="btn-primary" style={{ padding: "10px 16px" }} disabled={quickAddSaving} onClick={() => { addIssue(); closeQuickAdd(); }}>Add</button>
                           <button className="btn-ghost" style={{ padding: "10px 12px" }} onClick={closeQuickAdd}>✕</button>
                         </div>
                       </div>
@@ -2984,6 +2988,7 @@ function Tasks({ company, onSave }) {
 function Scorecard({ company, onSave }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newM, setNewM] = useState({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: "" });
+  const [scorecardError, setScorecardError] = useState("");
   const measurables = company.scorecard?.measurables || [];
   const entries = company.scorecard?.entries || {};
   const wk = weekKey();
@@ -3003,7 +3008,8 @@ function Scorecard({ company, onSave }) {
   const setEntry = (measId, val, targetWk) => {
     const weekToWrite = targetWk || wk;
     if (_currentCompanyCode) {
-      fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${weekToWrite}`, { [measId]: val });
+      fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${weekToWrite}`, { [measId]: val })
+        .catch(e => { console.error("[VAST] Scorecard save failed:", e); setScorecardError("Failed to save scorecard entry. Please try again."); });
       const updated = { ...entries, [weekToWrite]: { ...(entries[weekToWrite] || {}), [measId]: val } };
       onSave({ scorecard: { ...company.scorecard, entries: updated } });
     } else {
@@ -3024,6 +3030,8 @@ function Scorecard({ company, onSave }) {
   return (
     <Layout title="Scorecard" subtitle="Track your most important numbers"
       action={<button className="btn-primary" onClick={() => setShowAdd(true)}><Icon.plus /> Add Measurable</button>}>
+
+      {scorecardError && <div style={{ color: C.red, background: "rgba(230,51,41,0.08)", border: "1px solid rgba(230,51,41,0.25)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 13 }}>{scorecardError}</div>}
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
         <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
@@ -3069,7 +3077,7 @@ function Scorecard({ company, onSave }) {
                       {m.operator && m.operator !== "gte" ? {gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="}[m.operator] : "≥"} {m.target}{m.unit ? ` ${m.unit}` : ""}
                     </td>
                     {weeks.map(w => {
-                      const val = entries[w]?.[m.id] || "";
+                      const val = entries[w]?.[m.id] ?? "";
                       const isCurrentWeek = w === wk;
                       const checkTarget = (val, m) => {
                       if (!val || !m.target) return null;
@@ -3998,7 +4006,7 @@ function Settings({ company, onSave }) {
     setGeneratingInvite(m.id);
     try {
       const code = await createInvite(activeCode, m.name, m.email, m.role, m.id);
-      const updatedMembers = company.members.map(x => x.id === m.id ? { ...x, inviteCode: code } : x);
+      const updatedMembers = (company.members || []).map(x => x.id === m.id ? { ...x, inviteCode: code } : x);
       onSave({ members: updatedMembers });
       setPendingInvites(p => ({ ...p, [m.id]: code }));
     } catch(e) { console.warn("Invite creation failed:", e); }
@@ -4018,7 +4026,7 @@ function Settings({ company, onSave }) {
     if (!m) { setDeletingMemberId(null); return; }
     try {
       onSave({
-        members: company.members.filter(x => x.id !== id),
+        members: (company.members || []).filter(x => x.id !== id),
         huddles: (company.huddles || []).map(h => ({ ...h, memberIds: (h.memberIds || []).filter(mid => mid !== id) })),
         todos: (company.todos || []).map(t => ({ ...t, assignees: (t.assignees || []).filter(a => a !== m.name) })),
         scorecard: { ...company.scorecard, measurables: (company.scorecard?.measurables || []).map(ms => ms.owner === m.name ? { ...ms, owner: "" } : ms) },
@@ -4510,6 +4518,10 @@ function VASTApp() {
     if (!raw.annualGoals) raw.annualGoals = [{ id: "goal-1", name: "Annual Goal", futureDate: raw.yearGoal?.futureDate || "", revenue: raw.yearGoal?.revenue || "", profit: raw.yearGoal?.profit || "" }];
     if (!raw.quarterStart) raw.quarterStart = new Date().toISOString().slice(0,10);
     if (!raw.quarterEnd) raw.quarterEnd = new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10);
+    // Normalize push-key objects back to arrays (Firebase push() stores {key: item} not [item])
+    if (raw.headlines && !Array.isArray(raw.headlines)) raw.headlines = Object.values(raw.headlines);
+    if (raw.todos && !Array.isArray(raw.todos)) raw.todos = Object.values(raw.todos);
+    if (raw.issues && !Array.isArray(raw.issues)) raw.issues = Object.values(raw.issues);
     // Always stamp the real company code from the module-level var (never "myco")
     if (_currentCompanyCode && raw.code !== _currentCompanyCode) raw.code = _currentCompanyCode;
     return raw;
