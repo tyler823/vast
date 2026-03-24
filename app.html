@@ -1270,6 +1270,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   const [solvedThisSession, setSolvedThisSession] = useState([]);
   const [IDSAdded, setIDSAdded] = useState({}); // { [itemId_h/t]: bool } confirmation states
   const [noteOpen, setNoteOpen] = useState({}); // { [itemId]: bool }
+  const [todoPickerOpen, setTodoPickerOpen] = useState(false);
+  const [todoAssignees, setTodoAssignees] = useState([]);
   const toggleNote = (id) => setNoteOpen(s => ({ ...s, [id]: !s[id] }));
   const timerRef = useRef(null);
   const spinRef = useRef(null);
@@ -2080,7 +2082,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
           {/* HEADLINES */}
           {activeIdx === 3 && (() => {
             const unreviewed = (company.headlines || []).filter(h => !h.reviewed && h.huddleId === huddleId);
-            const markReviewed = (id) => onSave({ headlines: company.headlines.map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h) });
+            const markReviewed = (id) => onSave({ headlines: (company.headlines || []).map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h) });
             return (
               <div className="card">
                 <h3 style={{ fontSize: 18, marginBottom: 4 }}>Headlines</h3>
@@ -2143,7 +2145,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             // Only show todos assigned to THIS huddle
             const pending = (company.todos || []).filter(t => !t.done && t.huddleId === huddleId);
             const completeTodo = (id) => {
-              const updated = company.todos.map(x => x.id === id ? { ...x, done: true, completedAt: now() } : x);
+              const updated = (company.todos || []).map(x => x.id === id ? { ...x, done: true, completedAt: now() } : x);
               onSave({ todos: updated });
               // 80% celebration — only count pre-meeting todos
               if (!confettiFired.current.todos && preMeetingTodoIds.current && preMeetingTodoIds.current.size > 0) {
@@ -2296,8 +2298,6 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               setTimeout(() => setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: false })), 2000);
             };
 
-            const [todoPickerOpen, setTodoPickerOpen] = React.useState(false);
-            const [todoAssignees, setTodoAssignees] = React.useState([]);
             const commitAddAsTodo = () => {
               if (!activeItem) return;
               const latest = companyRef.current || company;
@@ -3034,7 +3034,7 @@ function Scorecard({ company, onSave }) {
                       {m.operator && m.operator !== "gte" ? {gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="}[m.operator] : "≥"} {m.target}{m.unit ? ` ${m.unit}` : ""}
                     </td>
                     {weeks.map(w => {
-                      const val = entries[w]?.[m.id] || "";
+                      const val = entries[w]?.[m.id] ?? "";
                       const isCurrentWeek = w === wk;
                       const checkTarget = (val, m) => {
                       if (!val || !m.target) return null;
@@ -3928,7 +3928,7 @@ function Settings({ company, onSave }) {
     setGeneratingInvite(m.id);
     try {
       const code = await createInvite(activeCode, m.name, m.email, m.role, m.id);
-      const updatedMembers = company.members.map(x => x.id === m.id ? { ...x, inviteCode: code } : x);
+      const updatedMembers = (company.members || []).map(x => x.id === m.id ? { ...x, inviteCode: code } : x);
       onSave({ members: updatedMembers });
       setPendingInvites(p => ({ ...p, [m.id]: code }));
     } catch(e) { console.warn("Invite creation failed:", e); }
@@ -3944,7 +3944,7 @@ function Settings({ company, onSave }) {
     const m = (company.members || []).find(x => x.id === id);
     if (!m) return;
     onSave({
-      members: company.members.filter(x => x.id !== id),
+      members: (company.members || []).filter(x => x.id !== id),
       huddles: (company.huddles || []).map(h => ({ ...h, memberIds: (h.memberIds || []).filter(mid => mid !== id) })),
       todos: (company.todos || []).map(t => ({ ...t, assignees: (t.assignees || []).filter(a => a !== m.name) })),
       scorecard: { ...company.scorecard, measurables: (company.scorecard?.measurables || []).map(ms => ms.owner === m.name ? { ...ms, owner: "" } : ms) },
@@ -3957,7 +3957,7 @@ function Settings({ company, onSave }) {
     const rename = (name) => name === oldName ? newName : name;
     // Cascade rename across all data that references member name
     const updates = {
-      members: company.members.map(m => m.id === id ? { ...m, name: newName } : m),
+      members: (company.members || []).map(m => m.id === id ? { ...m, name: newName } : m),
       quarterlyTasks: (company.quarterlyTasks || []).map(t => ({ ...t, who: rename(t.who) })),
       todos: (company.todos || []).map(t => ({
         ...t,
