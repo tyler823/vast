@@ -187,6 +187,7 @@ const makeSTYLE = (C) => `
 `;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
+const toArray = (val) => { if (!val) return []; if (Array.isArray(val)) return val; return Object.values(val); };
 const uid = () => Math.random().toString(36).slice(2, 9) + Math.random().toString(36).slice(2, 5);
 const now = () => new Date().toISOString();
 const dateStr = (d = new Date()) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -549,8 +550,8 @@ function useMobile() {
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────
 function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMobileOpen, collapsed, setCollapsed, companyCode }) {
-  const openIssues = company.issues?.filter(i => i.status !== "resolved").length || 0;
-  const pendingTodos = company.todos?.filter(t => !t.done).length || 0;
+  const openIssues = toArray(company.issues).filter(i => i.status !== "resolved").length;
+  const pendingTodos = toArray(company.todos).filter(t => !t.done).length;
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const navigators = company.navigators || [{ id: "nav-1", name: "Navigator" }];
   const orgCharts = company.orgCharts || [{ id: "org-1", name: "Responsibility Chart" }];
@@ -756,8 +757,9 @@ function Dashboard({ company, onSave, setView, memberInfo, companyCode }) {
   const pct = total > 0 ? Math.round(((onTrack + done) / total) * 100) : 0;
   const openIssues = (company.issues || []).filter(i => i.status !== "resolved").length;
   const pendingTodos = (company.todos || []).filter(t => !t.done).length;
-  const avgRating = company.meetings?.length
-    ? (company.meetings.reduce((a, m) => a + (m.rating || 0), 0) / company.meetings.length).toFixed(1)
+  const _meetings = toArray(company.meetings);
+  const avgRating = _meetings.length
+    ? (_meetings.reduce((a, m) => a + (m.rating || 0), 0) / _meetings.length).toFixed(1)
     : "—";
 
   // Quarter progress
@@ -817,7 +819,7 @@ function Dashboard({ company, onSave, setView, memberInfo, companyCode }) {
           { label: "Quarterly Tasks", value: `${onTrack + done}/${total}`, sub: "on or completed", color: C.red },
           { label: "Open Issues", value: openIssues, sub: "to resolve", color: C.yellow },
           { label: "Pending To-Dos", value: pendingTodos, sub: "this week", color: C.blue },
-          { label: "Avg Meeting Rating", value: avgRating, sub: `of ${company.meetings?.length || 0} meetings`, color: C.green },
+          { label: "Avg Meeting Rating", value: avgRating, sub: `of ${_meetings.length} meetings`, color: C.green },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div style={{ fontSize: 36, fontWeight: 800, color: s.color, fontFamily: "'Space Mono',monospace" }}>{s.value}</div>
@@ -1614,7 +1616,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     );
     // Write only the fields that changed — avoids overwriting other members'
     // scorecard entries or issues that were saved via direct Firebase paths
-    const newMeetings = [...(companyRef.current?.meetings || company.meetings || []), mtg];
+    const newMeetings = [...toArray(companyRef.current?.meetings || company.meetings), mtg];
     if (_currentCompanyCode) {
       // FIX 3: Atomic multi-path update to avoid dual-write race condition
       await window._fbDb.ref(`companies/${_currentCompanyCode}/data`).update({
@@ -2131,7 +2133,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
           {/* HEADLINES */}
           {activeIdx === 3 && (() => {
             const unreviewed = (company.headlines || []).filter(h => !h.reviewed && h.huddleId === huddleId);
-            const markReviewed = (id) => onSave({ headlines: company.headlines.map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h) });
+            const markReviewed = (id) => onSave({ headlines: toArray(company.headlines).map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h) });
             return (
               <div className="card">
                 <h3 style={{ fontSize: 18, marginBottom: 4 }}>Headlines</h3>
@@ -2194,7 +2196,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             // Only show todos assigned to THIS huddle
             const pending = (company.todos || []).filter(t => !t.done && t.huddleId === huddleId);
             const completeTodo = (id) => {
-              const updated = company.todos.map(x => x.id === id ? { ...x, done: true, completedAt: now() } : x);
+              const updated = toArray(company.todos).map(x => x.id === id ? { ...x, done: true, completedAt: now() } : x);
               onSave({ todos: updated });
               // 80% celebration — only count pre-meeting todos
               if (!confettiFired.current.todos && preMeetingTodoIds.current && preMeetingTodoIds.current.size > 0) {
@@ -3288,9 +3290,7 @@ function Issues({ company, onSave }) {
   const [saving, setSaving] = useState(false);
   const [savingId, setSavingId] = useState(null); // tracks which issue is being resolved/deleted
   const [issueError, setIssueError] = useState("");
-  const issues = Array.isArray(company.issues)
-    ? company.issues
-    : Object.values(company.issues || {});
+  const issues = toArray(company.issues);
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
 
@@ -4058,7 +4058,7 @@ function Settings({ company, onSave }) {
     const rename = (name) => name === oldName ? newName : name;
     // Cascade rename across all data that references member name
     const updates = {
-      members: company.members.map(m => m.id === id ? { ...m, name: newName } : m),
+      members: toArray(company.members).map(m => m.id === id ? { ...m, name: newName } : m),
       quarterlyTasks: (company.quarterlyTasks || []).map(t => ({ ...t, who: rename(t.who) })),
       todos: (company.todos || []).map(t => ({
         ...t,
@@ -4537,6 +4537,9 @@ function VASTApp() {
     if (raw.headlines && !Array.isArray(raw.headlines)) raw.headlines = Object.values(raw.headlines);
     if (raw.todos && !Array.isArray(raw.todos)) raw.todos = Object.values(raw.todos);
     if (raw.issues && !Array.isArray(raw.issues)) raw.issues = Object.values(raw.issues);
+    if (raw.problemQueue && !Array.isArray(raw.problemQueue)) raw.problemQueue = Object.values(raw.problemQueue);
+    if (raw.quarterlyTasks && !Array.isArray(raw.quarterlyTasks)) raw.quarterlyTasks = Object.values(raw.quarterlyTasks);
+    if (raw.members && !Array.isArray(raw.members)) raw.members = Object.values(raw.members);
     // Always stamp the real company code from the module-level var (never "myco")
     if (_currentCompanyCode && raw.code !== _currentCompanyCode) raw.code = _currentCompanyCode;
     return raw;
