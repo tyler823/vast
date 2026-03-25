@@ -1397,7 +1397,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     setQuickAddSaving(true);
     try {
       const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, huddleId: huddleId, date: now() };
-      const latest = companyRef.current || company;
+      const latest = company;
       if (_currentCompanyCode) {
         await window._fbDb.ref(`companies/${_currentCompanyCode}/data/headlines`).push(h);
       }
@@ -1412,7 +1412,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     setQuickAddSaving(true);
     try {
       const t = { id: uid(), title: newTodo.title, assignees: newTodo.assignees || [], dueDate: newTodo.dueDate, huddleId: huddleId, done: false, createdAt: now() };
-      const latest = companyRef.current || company;
+      const latest = company;
       if (_currentCompanyCode) {
         await window._fbDb.ref(`companies/${_currentCompanyCode}/data/todos`).push(t);
       }
@@ -1427,7 +1427,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     setQuickAddSaving(true);
     try {
       const iss = { id: uid(), title: newIssue.title, priority: newIssue.priority, status: "open", huddleId: huddleId, createdAt: now() };
-      const latest = companyRef.current || company;
+      const latest = company;
       if (_currentCompanyCode) {
         await window._fbDb.ref(`companies/${_currentCompanyCode}/data/issues`).push(iss);
       }
@@ -2319,7 +2319,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             const markSolved = (item) => {
               setSolvedThisSession(s => [...s, { ...item, notes: issueNotes[item.id] || "", solvedAt: now() }]);
               setFocusQueue(q => q.filter(f => f.id !== item.id));
-              const latest = companyRef.current || company;
+              const latest = company;
               onSave({ problemQueue: (latest.problemQueue || []).filter(p => p.id !== item.id) });
               const next = inFocus.find(f => f.id !== item.id);
               setActiveIssueId(next ? next.id : null);
@@ -2341,7 +2341,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             const addActiveAsHeadline = (e) => {
               e.stopPropagation();
               if (!activeItem) return;
-              const latest = companyRef.current || company;
+              const latest = company;
               const headlines = latest.headlines ? [...latest.headlines] : [];
               const h = { id: uid(), type: "Customer", text: activeItem.title, huddleId: huddleId, date: now() };
               headlines.push(h);
@@ -2353,7 +2353,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
 
             const commitAddAsTodo = () => {
               if (!activeItem) return;
-              const latest = companyRef.current || company;
+              const latest = company;
               const todos = latest.todos ? [...latest.todos] : [];
               const t = { id: uid(), title: activeItem.title, assignees: todoAssignees, dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10), huddleId: huddleId, done: false, createdAt: now() };
               todos.push(t);
