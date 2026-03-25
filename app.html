@@ -1283,6 +1283,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   const [solvedThisSession, setSolvedThisSession] = useState([]);
   const [IDSAdded, setIDSAdded] = useState({}); // { [itemId_h/t]: bool } confirmation states
   const [noteOpen, setNoteOpen] = useState({}); // { [itemId]: bool }
+  const [todoPickerOpen, setTodoPickerOpen] = useState(false);
+  const [todoAssignees, setTodoAssignees] = useState([]);
   const toggleNote = (id) => setNoteOpen(s => ({ ...s, [id]: !s[id] }));
   const timerRef = useRef(null);
   const spinRef = useRef(null);
@@ -2349,8 +2351,6 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               setTimeout(() => setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: false })), 2000);
             };
 
-            const [todoPickerOpen, setTodoPickerOpen] = React.useState(false);
-            const [todoAssignees, setTodoAssignees] = React.useState([]);
             const commitAddAsTodo = () => {
               if (!activeItem) return;
               const latest = companyRef.current || company;
