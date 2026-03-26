@@ -1566,20 +1566,21 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     try {
     // Fetch the very latest data from Firebase before saving the recap,
     // so the meeting record reflects everyone's entries (scorecard, issues, todos)
+    let freshData = null;
     if (_currentCompanyCode) {
       try {
         const fresh = await fbGet(`companies/${_currentCompanyCode}/data`);
         if (fresh && typeof fresh === "object") {
           if (fresh.code !== _currentCompanyCode) fresh.code = _currentCompanyCode;
           applyMigrations(fresh);
-          companyRef.current = fresh;
+          freshData = fresh;
         }
       } catch(e) { console.warn("[VAST] Could not pre-fetch latest data for recap:", e); }
     }
     const builtRecap = buildRecap({ date: now() }, avgRating);
     setRecapText(builtRecap);
-    // Use companyRef.current (just refreshed from Firebase) for the freshest data
-    const latestData = companyRef.current || company;
+    // Use freshData (just refreshed from Firebase) for the freshest data
+    const latestData = freshData || company;
     const mtg = {
       id: uid(), date: now(), rating: avgRating, memberRatings, totalMinutes: Math.round(elapsed / 60),
       huddleId, huddleName,
@@ -1618,7 +1619,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     );
     // Write only the fields that changed — avoids overwriting other members'
     // scorecard entries or issues that were saved via direct Firebase paths
-    const newMeetings = [...toArray(companyRef.current?.meetings || company.meetings), mtg];
+    const newMeetings = [...toArray(freshData?.meetings || company.meetings), mtg];
     if (_currentCompanyCode) {
       // FIX 3: Atomic multi-path update to avoid dual-write race condition
       await window._fbDb.ref(`companies/${_currentCompanyCode}/data`).update({
@@ -1975,7 +1976,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               // from clobbering other team members' independently entered data
               if (_currentCompanyCode) {
                 fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${wk}`, { [measId]: val });
-                // Also update local companyRef so UI stays consistent
+                // Also update local state so UI stays consistent
                 const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
                 onSave({ scorecard: { ...company.scorecard, entries: updated } });
               } else {
