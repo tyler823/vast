@@ -306,8 +306,9 @@ async function fbGet(path) {
   return snap.exists() ? snap.val() : null;
 }
 
-async function fbSet(path, data) { await fbRef(path).set(data); }
-async function fbUpdate(path, data) { await fbRef(path).update(data); }
+const _sanitize = (obj) => JSON.parse(JSON.stringify(obj, (k, v) => v === undefined ? null : v));
+async function fbSet(path, data) { await fbRef(path).set(_sanitize(data)); }
+async function fbUpdate(path, data) { await fbRef(path).update(_sanitize(data)); }
 
 // ── Company load/save via Firebase ────────────────────────────────────────
 async function loadCompanyFromFirebase(companyCode) {
@@ -369,7 +370,7 @@ window.addEventListener("beforeunload", () => {
   if (_saveTimer) clearTimeout(_saveTimer);
   if (_pendingData && _currentCompanyCode) {
     // Best-effort save on page unload — cannot reliably show UI errors here
-    try { fbRef(`companies/${_currentCompanyCode}/data`).set(_pendingData); } catch (e) { console.error("[VAST] beforeunload save failed:", e); }
+    try { fbRef(`companies/${_currentCompanyCode}/data`).set(_sanitize(_pendingData)); } catch (e) { console.error("[VAST] beforeunload save failed:", e); }
   }
 });
 
@@ -1639,12 +1640,12 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     // scorecard entries or issues that were saved via direct Firebase paths
     const newMeetings = [...toArray(freshData?.meetings || company.meetings), mtg];
     if (_currentCompanyCode) {
-      const sanitize = (obj) => JSON.parse(JSON.stringify(obj, (k, v) => v === undefined ? null : v));
-      await window._fbDb.ref(`companies/${_currentCompanyCode}/data`).update(sanitize({
+      // FIX 3: Atomic multi-path update to avoid dual-write race condition
+      await window._fbDb.ref(`companies/${_currentCompanyCode}/data`).update({
         meetings: newMeetings,
         huddles: updatedHuddles,
         quarterHistory: newQH,
-      }));
+      });
     }
     // Also update local state so done screen renders immediately
     onSave({ huddles: updatedHuddles, meetings: newMeetings, quarterHistory: newQH });
