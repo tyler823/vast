@@ -1639,12 +1639,12 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     // scorecard entries or issues that were saved via direct Firebase paths
     const newMeetings = [...toArray(freshData?.meetings || company.meetings), mtg];
     if (_currentCompanyCode) {
-      // FIX 3: Atomic multi-path update to avoid dual-write race condition
-      await window._fbDb.ref(`companies/${_currentCompanyCode}/data`).update({
+      const sanitize = (obj) => JSON.parse(JSON.stringify(obj, (k, v) => v === undefined ? null : v));
+      await window._fbDb.ref(`companies/${_currentCompanyCode}/data`).update(sanitize({
         meetings: newMeetings,
         huddles: updatedHuddles,
         quarterHistory: newQH,
-      });
+      }));
     }
     // Also update local state so done screen renders immediately
     onSave({ huddles: updatedHuddles, meetings: newMeetings, quarterHistory: newQH });
@@ -3471,7 +3471,7 @@ function Todos({ company, onSave }) {
 
   const startEdit = (t) => {
     setEditId(t.id);
-    setEditFields({ title: t.title, dueDate: t.dueDate || "", huddleId: t.huddleId || "" });
+    setEditFields({ title: t.title, dueDate: t.dueDate || "", huddleId: t.huddleId || "", assignees: getAssignees(t) });
   };
   const saveEdit = (id) => {
     onSave({ todos: todos.map(t => t.id === id ? { ...t, ...editFields } : t) });
@@ -3514,6 +3514,31 @@ function Todos({ company, onSave }) {
               {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
             </select>
           </div>
+          {(company.members || []).length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 10 }}>
+              <span style={{ fontSize: 12, color: C.textMuted, marginRight: 2 }}>Assign to:</span>
+              {(company.members || []).map(m => {
+                const sel = (editFields.assignees || []).includes(m.name);
+                return (
+                  <button key={m.id}
+                    onClick={() => setEditFields(f => ({ ...f, assignees: sel ? f.assignees.filter(a => a !== m.name) : [...(f.assignees || []), m.name] }))}
+                    style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Outfit',sans-serif", transition: "all 0.15s",
+                      background: sel ? "rgba(230,51,41,0.15)" : C.surface2,
+                      color: sel ? C.red : C.textMuted,
+                      border: `1px solid ${sel ? "rgba(230,51,41,0.4)" : C.border}` }}>
+                    {sel ? "✓ " : ""}{m.name}
+                  </button>
+                );
+              })}
+              <button onClick={() => {
+                const allNames = (company.members || []).map(m => m.name);
+                const allSel = allNames.every(n => (editFields.assignees || []).includes(n));
+                setEditFields(f => ({ ...f, assignees: allSel ? [] : allNames }));
+              }} style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Outfit',sans-serif", background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
+                {(company.members || []).every(m => (editFields.assignees || []).includes(m.name)) ? "✓ Everyone" : "Everyone"}
+              </button>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn-primary" style={{ padding: "6px 16px", fontSize: 12 }} onClick={() => saveEdit(t.id)}>Save</button>
             <button className="btn-ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={cancelEdit}>Cancel</button>
