@@ -435,6 +435,24 @@ async function migrateToFirebase(companyCode) {
 async function migrateLocalStorageToCloud() { return null; }
 
 // ─── Default Company Data ─────────────────────────────────────────────
+// Top-level so ALL components (including WeeklyHuddle) can call it
+function applyMigrations(raw) {
+  if (!raw.huddles) raw.huddles = [{ id: "huddle-1", name: "Weekly Huddle" }];
+  if (!raw.navigators) raw.navigators = [{ id: "nav-1", name: "Navigator", coreValues: raw.navigator?.coreValues || ["","",""], purpose: raw.navigator?.purpose || "", avenue: raw.navigator?.avenue || "", targetMarket: raw.navigator?.targetMarket || "", different: raw.navigator?.different || "", proof: raw.navigator?.proof || "", promise: raw.navigator?.promise || "", futureDate: raw.navigator?.futureDate || "", revenue: raw.navigator?.revenue || "", profit: raw.navigator?.profit || "", whatLooksLike: raw.navigator?.whatLooksLike || "", majorMotivator: raw.navigator?.majorMotivator || "" }];
+  if (!raw.orgCharts) raw.orgCharts = [{ id: "org-1", name: "Responsibility Chart", ...(raw.orgChart || { dreamer: "", doer: "", salesRoles: [{ role: "Sales/Mktg", members: [""] }], opsRoles: [{ role: "Operations", members: [""] }], financeRoles: [{ role: "Finance", members: [""] }] }) }];
+  if (!raw.annualGoals) raw.annualGoals = [{ id: "goal-1", name: "Annual Goal", futureDate: raw.yearGoal?.futureDate || "", revenue: raw.yearGoal?.revenue || "", profit: raw.yearGoal?.profit || "" }];
+  if (!raw.quarterStart) raw.quarterStart = new Date().toISOString().slice(0,10);
+  if (!raw.quarterEnd) raw.quarterEnd = new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10);
+  if (raw.headlines && !Array.isArray(raw.headlines)) raw.headlines = Object.values(raw.headlines);
+  if (raw.todos && !Array.isArray(raw.todos)) raw.todos = Object.values(raw.todos);
+  if (raw.issues && !Array.isArray(raw.issues)) raw.issues = Object.values(raw.issues);
+  if (raw.problemQueue && !Array.isArray(raw.problemQueue)) raw.problemQueue = Object.values(raw.problemQueue);
+  if (raw.quarterlyTasks && !Array.isArray(raw.quarterlyTasks)) raw.quarterlyTasks = Object.values(raw.quarterlyTasks);
+  if (raw.members && !Array.isArray(raw.members)) raw.members = Object.values(raw.members);
+  if (_currentCompanyCode && raw.code !== _currentCompanyCode) raw.code = _currentCompanyCode;
+  return raw;
+}
+
 function defaultCompany(name, code) {
   return {
     name, code,
@@ -4526,25 +4544,6 @@ function VASTApp() {
   const [newCompanyName, setNewCompanyName] = useState("");
   const fbListenerRef = useRef(null);
   const companyRef = useRef(null);      // always holds latest company data
-
-  function applyMigrations(raw) {
-    if (!raw.huddles) raw.huddles = [{ id: "huddle-1", name: "Weekly Huddle" }];
-    if (!raw.navigators) raw.navigators = [{ id: "nav-1", name: "Navigator", coreValues: raw.navigator?.coreValues || ["","",""], purpose: raw.navigator?.purpose || "", avenue: raw.navigator?.avenue || "", targetMarket: raw.navigator?.targetMarket || "", different: raw.navigator?.different || "", proof: raw.navigator?.proof || "", promise: raw.navigator?.promise || "", futureDate: raw.navigator?.futureDate || "", revenue: raw.navigator?.revenue || "", profit: raw.navigator?.profit || "", whatLooksLike: raw.navigator?.whatLooksLike || "", majorMotivator: raw.navigator?.majorMotivator || "" }];
-    if (!raw.orgCharts) raw.orgCharts = [{ id: "org-1", name: "Responsibility Chart", ...(raw.orgChart || { dreamer: "", doer: "", salesRoles: [{ role: "Sales/Mktg", members: [""] }], opsRoles: [{ role: "Operations", members: [""] }], financeRoles: [{ role: "Finance", members: [""] }] }) }];
-    if (!raw.annualGoals) raw.annualGoals = [{ id: "goal-1", name: "Annual Goal", futureDate: raw.yearGoal?.futureDate || "", revenue: raw.yearGoal?.revenue || "", profit: raw.yearGoal?.profit || "" }];
-    if (!raw.quarterStart) raw.quarterStart = new Date().toISOString().slice(0,10);
-    if (!raw.quarterEnd) raw.quarterEnd = new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10);
-    // Normalize push-key objects back to arrays (Firebase push() stores {key: item} not [item])
-    if (raw.headlines && !Array.isArray(raw.headlines)) raw.headlines = Object.values(raw.headlines);
-    if (raw.todos && !Array.isArray(raw.todos)) raw.todos = Object.values(raw.todos);
-    if (raw.issues && !Array.isArray(raw.issues)) raw.issues = Object.values(raw.issues);
-    if (raw.problemQueue && !Array.isArray(raw.problemQueue)) raw.problemQueue = Object.values(raw.problemQueue);
-    if (raw.quarterlyTasks && !Array.isArray(raw.quarterlyTasks)) raw.quarterlyTasks = Object.values(raw.quarterlyTasks);
-    if (raw.members && !Array.isArray(raw.members)) raw.members = Object.values(raw.members);
-    // Always stamp the real company code from the module-level var (never "myco")
-    if (_currentCompanyCode && raw.code !== _currentCompanyCode) raw.code = _currentCompanyCode;
-    return raw;
-  }
 
   function attachFirebaseListener(companyCode) {
     if (fbListenerRef.current) fbListenerRef.current.off();
