@@ -1641,7 +1641,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     const newMeetings = [...toArray(freshData?.meetings || company.meetings), mtg];
     if (_currentCompanyCode) {
       // FIX 3: Atomic multi-path update to avoid dual-write race condition
-      await window._fbDb.ref(`companies/${_currentCompanyCode}/data`).update({
+      await fbUpdate(`companies/${_currentCompanyCode}/data`, {
         meetings: newMeetings,
         huddles: updatedHuddles,
         quarterHistory: newQH,
