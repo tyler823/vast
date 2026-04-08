@@ -992,11 +992,6 @@ function MyMeasurables({ company, onSave, memberInfo }) {
   const setEntry = (measId, wk, val) => {
     if (_currentCompanyCode) {
       fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${wk}`, { [measId]: val }).catch(e => console.warn("[VAST] Scorecard write failed:", e));
-      const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
-      onSave({ scorecard: { ...company.scorecard, entries: updated } });
-    } else {
-      const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
-      onSave({ scorecard: { ...company.scorecard, entries: updated } });
     }
   };
 
@@ -1995,12 +1990,6 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               // from clobbering other team members' independently entered data
               if (_currentCompanyCode) {
                 fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${wk}`, { [measId]: val });
-                // Also update local state so UI stays consistent
-                const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
-                onSave({ scorecard: { ...company.scorecard, entries: updated } });
-              } else {
-                const updated = { ...entries, [wk]: { ...(entries[wk] || {}), [measId]: val } };
-                onSave({ scorecard: { ...company.scorecard, entries: updated } });
               }
             };
 
@@ -3045,11 +3034,6 @@ function Scorecard({ company, onSave }) {
     if (_currentCompanyCode) {
       fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${weekToWrite}`, { [measId]: val })
         .catch(e => { console.error("[VAST] Scorecard save failed:", e); setScorecardError("Failed to save scorecard entry. Please try again."); });
-      const updated = { ...entries, [weekToWrite]: { ...(entries[weekToWrite] || {}), [measId]: val } };
-      onSave({ scorecard: { ...company.scorecard, entries: updated } });
-    } else {
-      const updated = { ...entries, [weekToWrite]: { ...(entries[weekToWrite] || {}), [measId]: val } };
-      onSave({ scorecard: { ...company.scorecard, entries: updated } });
     }
   };
 
