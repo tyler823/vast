@@ -2330,6 +2330,12 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               setFocusQueue(q => q.filter(f => f.id !== item.id));
               const latest = company;
               onSave({ problemQueue: (latest.problemQueue || []).filter(p => p.id !== item.id) });
+              if (item.source === "issue") {
+                const updatedIssues = (latest.issues || []).map(i =>
+                  i.id === item.id ? { ...i, status: "resolved" } : i
+                );
+                onSave({ issues: updatedIssues });
+              }
               const next = inFocus.find(f => f.id !== item.id);
               setActiveIssueId(next ? next.id : null);
               // Celebrate if all problems are now solved
