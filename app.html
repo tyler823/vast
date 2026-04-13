@@ -2044,7 +2044,6 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                               {(() => {
                                 const curVal = entries[curWk]?.[m.id] ?? "";
                                 const met = meetsGoal(curVal, m);
-                                if (met !== false) return null;
                                 const alreadyQueued = (company.problemQueue || []).find(p => p.id === m.id);
                                 return (
                                   <button onClick={() => addToProblemQueue({ id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })}
