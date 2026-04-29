@@ -330,49 +330,98 @@ async function loadCompanyFromFirebase(companyCode) {
 }
 
 let _saveTimer = null;
-let _pendingData = null;
+let _pendingUpdates = {};   // accumulated top-level keys to merge into companies/{code}/data
+let _saving = false;        // guards against concurrent flushSave runs
 let _currentCompanyCode = null;
 
-function saveCompany(data) {
-  _pendingData = data;
-  try { localStorage.setItem("vast:cloud-cache", JSON.stringify(data)); } catch (e) { /* localStorage quota exceeded or unavailable — non-critical cache */ }
+// Firestore is the source of truth. saveCompany takes a PARTIAL set of top-level
+// keys and merges them into companies/{code}/data via fbUpdate, so concurrent
+// edits to other fields by other teammates are never overwritten.
+function saveCompany(updates) {
+  if (!updates || typeof updates !== "object") return;
+  Object.assign(_pendingUpdates, updates);
   setSyncStatus("saving");
   if (_saveTimer) clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(() => flushSave(), 800);
+  _saveTimer = setTimeout(() => flushSave(), 200);
 }
 
-let _lastWrittenJson = null; // tracks what we last wrote so listener can skip the echo
+// Exposed so the Firebase listener can overlay in-flight edits on top of remote
+// data, preventing optimistic UI flicker while still treating Firestore as truth.
+window._pendingUpdates = () => _pendingUpdates;
 
 async function flushSave() {
-  if (!_pendingData || !_currentCompanyCode) return;
-  const data = _pendingData;
-  _lastWrittenJson = JSON.stringify(data); // stamp before write
+  if (_saving) return;
+  if (!_currentCompanyCode) return;
+  const keys = Object.keys(_pendingUpdates);
+  if (!keys.length) return;
+
+  _saving = true;
+  const updates = _pendingUpdates;
+  _pendingUpdates = {}; // any new edits during await accumulate in a fresh object
+
   try {
-    await fbSet(`companies/${_currentCompanyCode}/data`, data);
+    await fbUpdate(`companies/${_currentCompanyCode}/data`, updates);
     console.log("[VAST] Saved to Firebase.");
     setSyncStatus("saved");
     setTimeout(() => setSyncStatus("idle"), 3000);
-    _pendingData = null;
   } catch(e) {
     console.error("[VAST] Firebase save failed:", e);
     setSyncStatus("error");
-    _lastWrittenJson = null;
-    // Actually retry after 5 seconds
-    setTimeout(() => {
-      if (_pendingData) flushSave();
-    }, 5000);
+    // Re-queue failed keys; newer pending writes win on conflict
+    _pendingUpdates = { ...updates, ..._pendingUpdates };
+    setTimeout(() => flushSave(), 5000);
+  } finally {
+    _saving = false;
+    if (Object.keys(_pendingUpdates).length) {
+      if (_saveTimer) clearTimeout(_saveTimer);
+      _saveTimer = setTimeout(() => flushSave(), 200);
+    }
   }
-  // Clear echo-suppression stamp after listener has had time to fire once
-  setTimeout(() => { _lastWrittenJson = null; }, 2000);
 }
 
 window.addEventListener("beforeunload", () => {
   if (_saveTimer) clearTimeout(_saveTimer);
-  if (_pendingData && _currentCompanyCode) {
-    // Best-effort save on page unload — cannot reliably show UI errors here
-    try { fbRef(`companies/${_currentCompanyCode}/data`).set(_sanitize(_pendingData)); } catch (e) { console.error("[VAST] beforeunload save failed:", e); }
+  if (Object.keys(_pendingUpdates).length && _currentCompanyCode) {
+    // Best-effort merge on page unload — cannot reliably show UI errors here
+    try { fbRef(`companies/${_currentCompanyCode}/data`).update(_sanitize(_pendingUpdates)); } catch (e) { console.error("[VAST] beforeunload save failed:", e); }
   }
 });
+
+// ── Logout: clear all per-company state so switching companies starts clean ──
+function clearLocalAppData() {
+  try {
+    if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+    _pendingUpdates = {};
+    _saving = false;
+    _currentCompanyCode = null;
+    // Remove every VAST company-data cache key (suffixed AND legacy unsuffixed).
+    // The legacy "vast:cloud-cache" key is especially risky: the bootstrap path
+    // will push it into a brand-new company if a different user signs in next.
+    const toRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("vast:cloud-cache")) toRemove.push(k);
+    }
+    toRemove.forEach(k => localStorage.removeItem(k));
+    // Theme and sidebar prefs are personal (not company data) — keep them.
+  } catch (e) { console.warn("[VAST] clearLocalAppData failed:", e); }
+}
+
+async function logoutAndClear() {
+  // Best-effort: flush any pending writes before we wipe local state, so the
+  // user's last edits are not silently dropped.
+  try {
+    if (Object.keys(_pendingUpdates).length && _currentCompanyCode) {
+      await fbUpdate(`companies/${_currentCompanyCode}/data`, _pendingUpdates);
+    }
+  } catch (e) { console.warn("[VAST] Final flush before logout failed:", e); }
+  clearLocalAppData();
+  try {
+    if (window._fbAuth && window._fbAuth.currentUser) await window._fbAuth.signOut();
+  } catch (e) { console.warn("[VAST] Firebase signOut failed:", e); }
+  try { await window.$memberstackDom?.logout(); } catch (e) { console.warn("[VAST] Memberstack logout failed:", e); }
+  window.location.href = "/index.html";
+}
 
 // ── Live session helpers ──────────────────────────────────────────────────
 async function startLiveSession(companyCode, huddleId, hostMemberId, hostName) {
@@ -661,7 +710,7 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
       </button>
       <button
         className="sidebar-link"
-        onClick={() => window.$memberstackDom?.logout().then(() => { window.location.href = "/index.html"; })}
+        onClick={() => logoutAndClear()}
         title={collapsed && !isMobile ? "Sign Out" : undefined}
         style={{ justifyContent: collapsed && !isMobile ? "center" : undefined, padding: collapsed && !isMobile ? "9px 0" : undefined }}
       >
@@ -2359,7 +2408,6 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               const headlines = latest.headlines ? [...latest.headlines] : [];
               const h = { id: uid(), type: "Customer", text: activeItem.title, huddleId: huddleId, date: now() };
               headlines.push(h);
-              if (_currentCompanyCode) fbSet(`companies/${_currentCompanyCode}/data/headlines`, headlines);
               onSave({ headlines });
               setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: true }));
               setTimeout(() => setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: false })), 2000);
@@ -2371,7 +2419,6 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               const todos = latest.todos ? [...latest.todos] : [];
               const t = { id: uid(), title: activeItem.title, assignees: todoAssignees, dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10), huddleId: huddleId, done: false, createdAt: now() };
               todos.push(t);
-              if (_currentCompanyCode) fbSet(`companies/${_currentCompanyCode}/data/todos`, todos);
               onSave({ todos });
               setIDSAdded(s => ({ ...s, [activeItem.id + "_t"]: true }));
               setTodoPickerOpen(false);
@@ -3026,10 +3073,18 @@ function Scorecard({ company, onSave }) {
   const [huddleFilter, setHuddleFilter] = useState("all");
   const filtered = huddleFilter === "all" ? measurables : measurables.filter(m => m.huddleId === huddleFilter);
 
+  // Write only the measurables sub-tree, never the full scorecard — so concurrent
+  // entries written by other users (data/scorecard/entries/...) are not clobbered.
+  const writeMeasurables = (next) => {
+    if (!_currentCompanyCode) return;
+    fbUpdate(`companies/${_currentCompanyCode}/data/scorecard`, { measurables: next })
+      .catch(e => { console.error("[VAST] Measurables save failed:", e); setScorecardError("Failed to save measurable. Please try again."); });
+  };
+
   const addMeasurable = () => {
     if (!newM.name.trim()) return;
     const m = { id: uid(), ...newM };
-    onSave({ scorecard: { ...company.scorecard, measurables: [...measurables, m] } });
+    writeMeasurables([...measurables, m]);
     setNewM({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: "" });
     setShowAdd(false);
   };
@@ -3043,7 +3098,7 @@ function Scorecard({ company, onSave }) {
   };
 
   const deleteMeasurable = (id) => {
-    onSave({ scorecard: { ...company.scorecard, measurables: measurables.filter(m => m.id !== id) } });
+    writeMeasurables(measurables.filter(m => m.id !== id));
   };
 
   // All weeks in the current quarter
@@ -3091,7 +3146,7 @@ function Scorecard({ company, onSave }) {
                     <td style={{ fontWeight: 600 }}>{m.name}{m.unit && <span style={{ color: C.textMuted, fontSize: 12, marginLeft: 4 }}>({m.unit})</span>}</td>
                     <td>
                       <select value={m.owner || ""} onChange={e => {
-                        onSave({ scorecard: { ...company.scorecard, measurables: measurables.map(x => x.id === m.id ? { ...x, owner: e.target.value } : x) } });
+                        writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, owner: e.target.value } : x));
                       }} style={{ width: 130, padding: "5px 8px", fontSize: 12 }}>
                         <option value="">Unassigned</option>
                         {members.map(mem => <option key={mem.id} value={mem.name}>{mem.name}</option>)}
@@ -3133,7 +3188,7 @@ function Scorecard({ company, onSave }) {
                     })}
                     <td>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <select value={m.huddleId || ""} onChange={e => onSave({ scorecard: { ...company.scorecard, measurables: measurables.map(x => x.id === m.id ? { ...x, huddleId: e.target.value } : x) } })}
+                        <select value={m.huddleId || ""} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, huddleId: e.target.value } : x))}
                           style={{ fontSize: 11, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textMuted, maxWidth: 130 }}>
                           <option value="">No Huddle</option>
                           {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
@@ -3309,9 +3364,7 @@ function Issues({ company, onSave }) {
     setIssueError("");
     try {
       const newIssue = { id: uid(), ...form, status: "open", createdAt: now() };
-      const updated = [...issues, newIssue];
-      if (_currentCompanyCode) await fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
-      onSave({ issues: updated });
+      onSave({ issues: [...issues, newIssue] });
       setForm({ title: "", priority: "2", notes: "", huddleId: "" });
       setShowAdd(false);
     } catch (e) {
@@ -3323,9 +3376,7 @@ function Issues({ company, onSave }) {
     if (savingId) return;
     setSavingId(id);
     try {
-      const updated = issues.map(i => i.id === id ? { ...i, status: "resolved" } : i);
-      if (_currentCompanyCode) await fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
-      onSave({ issues: updated });
+      onSave({ issues: issues.map(i => i.id === id ? { ...i, status: "resolved" } : i) });
     } catch (e) {
       console.error("[VAST] Failed to resolve issue:", e);
       setIssueError("Something went wrong. Please try again.");
@@ -3335,9 +3386,7 @@ function Issues({ company, onSave }) {
     if (savingId) return;
     setSavingId(id);
     try {
-      const updated = issues.filter(i => i.id !== id);
-      if (_currentCompanyCode) await fbSet(`companies/${_currentCompanyCode}/data/issues`, updated);
-      onSave({ issues: updated });
+      onSave({ issues: issues.filter(i => i.id !== id) });
     } catch (e) {
       console.error("[VAST] Failed to delete issue:", e);
       setIssueError("Something went wrong. Please try again.");
@@ -4566,10 +4615,12 @@ function VASTApp() {
     ref.on("value", snap => {
       if (!snap.exists()) return;
       const raw = snap.val();
-      // Only suppress if this is literally the data we just wrote (echo suppression).
-      // This lets real updates from other team members always come through.
-      if (_lastWrittenJson && JSON.stringify(raw) === _lastWrittenJson) return;
-      const val = applyMigrations(raw);
+      // Firestore is the source of truth, but if the user has un-flushed local
+      // edits, overlay them so their in-flight changes don't flicker away.
+      // Once flushSave completes, _pendingUpdates is empty and remote wins.
+      const pending = (typeof window._pendingUpdates === "function") ? window._pendingUpdates() : null;
+      const merged = pending && Object.keys(pending).length ? { ...raw, ...pending } : raw;
+      const val = applyMigrations(merged);
       if (val.code !== companyCode) val.code = companyCode;
       companyRef.current = val;
       setCompanyState(val);
@@ -4826,7 +4877,13 @@ function VASTApp() {
     const updated = { ...base, ...updates };
     companyRef.current = updated;   // update ref immediately so next call has fresh data
     setCompanyState(updated);
-    saveCompany(updated);
+    // Refresh local cache from full state (best-effort fallback only — Firestore is truth)
+    try {
+      if (_currentCompanyCode) localStorage.setItem(`vast:cloud-cache:${_currentCompanyCode}`, JSON.stringify(updated));
+    } catch (e) { /* localStorage quota/unavailable — non-critical */ }
+    // Send ONLY the changed top-level keys to Firestore via fbUpdate so we
+    // never overwrite concurrent edits to other fields by other teammates.
+    saveCompany(updates);
   }, []); // no dependency on company — reads from ref instead
 
   // ── Invite entry screen ──
