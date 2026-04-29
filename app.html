@@ -983,6 +983,38 @@ function Dashboard({ company, onSave, setView, memberInfo, companyCode }) {
   );
 }
 
+// ─── SCORECARD CELL ───────────────────────────────────────────────────
+// Holds the typed value in local state so a re-render or remote echo cannot
+// silently overwrite the user mid-typing. While the input is focused, prop
+// changes (Firestore listener echoes) are ignored; on blur we sync. Every
+// keystroke also writes through to Firestore so progress is durable.
+function ScorecardCell({ value, onCommit, placeholder, style }) {
+  const [local, setLocal] = useState(value ?? "");
+  const focusedRef = useRef(false);
+  useEffect(() => {
+    if (!focusedRef.current) setLocal(value ?? "");
+  }, [value]);
+  return (
+    <input
+      type="text"
+      value={local}
+      placeholder={placeholder}
+      style={style}
+      onFocus={() => { focusedRef.current = true; }}
+      onBlur={() => {
+        focusedRef.current = false;
+        if (local !== (value ?? "")) onCommit(local);
+        else setLocal(value ?? "");
+      }}
+      onChange={(e) => {
+        const v = e.target.value;
+        setLocal(v);
+        onCommit(v);
+      }}
+    />
+  );
+}
+
 // ─── MY MEASURABLES WIDGET ────────────────────────────────────────────
 function MyMeasurables({ company, onSave, memberInfo }) {
   const curWk = weekKey();
@@ -1104,10 +1136,9 @@ function MyMeasurables({ company, onSave, memberInfo }) {
                         const isCur = wk === curWk;
                         return (
                           <td key={wk} style={{ textAlign: "center", padding: "8px 4px", borderTop: `1px solid ${C.border}`, background: isCur ? "rgba(230,51,41,0.04)" : "transparent" }}>
-                            <input
-                              type="text"
+                            <ScorecardCell
                               value={val}
-                              onChange={e => setEntry(m.id, wk, e.target.value)}
+                              onCommit={(v) => setEntry(m.id, wk, v)}
                               placeholder="—"
                               style={{ width: 60, textAlign: "center", padding: "5px 4px", fontSize: 13, fontWeight: val !== "" ? 700 : 400,
                                 border: `1px solid ${isCur ? (met === true ? C.green : met === false ? C.red : "rgba(230,51,41,0.5)") : (met === true ? C.green : met === false ? C.red : C.border)}`,
@@ -2115,10 +2146,9 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                             const inputColor = met === true ? C.green : met === false ? C.red : C.text;
                             return (
                               <td key={wk} style={{ textAlign: "center", padding: "6px 4px", borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${isCur ? "rgba(230,51,41,0.3)" : C.border}`, background: isCur ? `rgba(230,51,41,0.05)` : "transparent" }}>
-                                <input
-                                  type="text"
+                                <ScorecardCell
                                   value={val}
-                                  onChange={e => setEntry(m.id, wk, e.target.value)}
+                                  onCommit={(v) => setEntry(m.id, wk, v)}
                                   placeholder="—"
                                   style={{ width: 60, textAlign: "center", padding: "5px 4px", fontSize: 13, fontWeight: val !== "" ? 700 : 400, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 5, color: val !== "" ? inputColor : C.textDim, outline: "none", fontFamily: "'Outfit',sans-serif", cursor: "text" }}
                                 />
@@ -3173,9 +3203,9 @@ function Scorecard({ company, onSave }) {
                     const onTarget = checkTarget(val, m);
                       return (
                         <td key={w} style={{ textAlign: "center", background: isCurrentWeek ? "rgba(230,51,41,0.04)" : "transparent" }}>
-                          <input
+                          <ScorecardCell
                             value={val}
-                            onChange={e => setEntry(m.id, e.target.value, w)}
+                            onCommit={(v) => setEntry(m.id, v, w)}
                             placeholder="—"
                             style={{ width: 70, textAlign: "center", padding: "6px 8px", fontSize: 13, fontWeight: val ? 700 : 400,
                               border: `1px solid ${isCurrentWeek ? C.red : onTarget === true ? C.green : onTarget === false ? C.red : C.border}`,
@@ -4748,15 +4778,38 @@ function VASTApp() {
         // ── Existing member: load company from Firebase ──
         _currentCompanyCode = companyCode; setCurrentCompanyCode(companyCode);
 
-        // First time owner (companyCode set but Firebase record not yet created)
         let raw = await fbGet(`companies/${companyCode}/data`);
         if (!raw) {
           // Check for Memberstack migration
           raw = await migrateToFirebase(companyCode);
         }
         if (!raw) {
-          raw = defaultCompany("My Company", companyCode);
-          await fbSet(`companies/${companyCode}/data`, raw);
+          // /data is missing for this companyCode. Brand-new company creation
+          // already seeds /data in handleCreateCompany, so reaching this point
+          // means either (a) a transient read/auth error or (b) data was wiped
+          // somewhere. We do NOT overwrite with defaultCompany here — that
+          // would clobber any real data that becomes readable a moment later.
+          // Try local cache for this specific code first; if that also fails,
+          // attach the listener and let it deliver data when it becomes
+          // available, rather than seeding blanks on top.
+          try {
+            const cachedSelf = localStorage.getItem(`vast:cloud-cache:${companyCode}`);
+            if (cachedSelf) {
+              const parsed = JSON.parse(cachedSelf);
+              if (parsed && (parsed.name || parsed.members || parsed.huddles)) {
+                console.warn("[VAST] Firebase /data missing — using local cache for", companyCode);
+                raw = parsed;
+              }
+            }
+          } catch (e) { console.warn("[VAST] Local cache read failed:", e); }
+        }
+        if (!raw) {
+          // Still nothing. Render whatever the listener delivers (could be
+          // empty until data appears or a network/auth issue clears).
+          console.warn("[VAST] No company data available yet for", companyCode);
+          attachFirebaseListener(companyCode);
+          setAppState("ready");
+          return;
         }
         raw = applyMigrations(raw);
         // Backfill memberId: if logged-in member doesn't have one yet, match by email
