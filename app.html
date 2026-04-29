@@ -387,6 +387,42 @@ window.addEventListener("beforeunload", () => {
   }
 });
 
+// ── Logout: clear all per-company state so switching companies starts clean ──
+function clearLocalAppData() {
+  try {
+    if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+    _pendingUpdates = {};
+    _saving = false;
+    _currentCompanyCode = null;
+    // Remove every VAST company-data cache key (suffixed AND legacy unsuffixed).
+    // The legacy "vast:cloud-cache" key is especially risky: the bootstrap path
+    // will push it into a brand-new company if a different user signs in next.
+    const toRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("vast:cloud-cache")) toRemove.push(k);
+    }
+    toRemove.forEach(k => localStorage.removeItem(k));
+    // Theme and sidebar prefs are personal (not company data) — keep them.
+  } catch (e) { console.warn("[VAST] clearLocalAppData failed:", e); }
+}
+
+async function logoutAndClear() {
+  // Best-effort: flush any pending writes before we wipe local state, so the
+  // user's last edits are not silently dropped.
+  try {
+    if (Object.keys(_pendingUpdates).length && _currentCompanyCode) {
+      await fbUpdate(`companies/${_currentCompanyCode}/data`, _pendingUpdates);
+    }
+  } catch (e) { console.warn("[VAST] Final flush before logout failed:", e); }
+  clearLocalAppData();
+  try {
+    if (window._fbAuth && window._fbAuth.currentUser) await window._fbAuth.signOut();
+  } catch (e) { console.warn("[VAST] Firebase signOut failed:", e); }
+  try { await window.$memberstackDom?.logout(); } catch (e) { console.warn("[VAST] Memberstack logout failed:", e); }
+  window.location.href = "/index.html";
+}
+
 // ── Live session helpers ──────────────────────────────────────────────────
 async function startLiveSession(companyCode, huddleId, hostMemberId, hostName) {
   // Guard: prevent writing a live session without a valid host member ID
@@ -674,7 +710,7 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
       </button>
       <button
         className="sidebar-link"
-        onClick={() => window.$memberstackDom?.logout().then(() => { window.location.href = "/index.html"; })}
+        onClick={() => logoutAndClear()}
         title={collapsed && !isMobile ? "Sign Out" : undefined}
         style={{ justifyContent: collapsed && !isMobile ? "center" : undefined, padding: collapsed && !isMobile ? "9px 0" : undefined }}
       >
