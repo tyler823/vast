@@ -1452,9 +1452,11 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     : allMembers;
 
   const addToProblemQueue = (item) => {
-    const pq = company.problemQueue || [];
-    if (pq.find(p => p.id === item.id)) return; // already in queue
-    onSave({ problemQueue: [...pq, { ...item, huddleId: huddleId }] });
+    onSave(latest => {
+      const pq = latest.problemQueue || [];
+      if (pq.find(p => p.id === item.id)) return null; // already queued — no-op
+      return { problemQueue: [...pq, { ...item, huddleId: huddleId }] };
+    });
   };
   const seg = agenda[activeIdx];
   const segLimit = seg.minutes * 60;
@@ -1490,12 +1492,12 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     if (!newHeadline.text.trim() || quickAddSaving) return;
     setQuickAddSaving(true);
     try {
+      // Use a functional onSave only — the previous code also did a
+      // `.push()` straight to /data/headlines which turned the parent into an
+      // object map and then got immediately overwritten by the onSave's array
+      // form, creating a race window where snapshots could land mid-write.
       const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, huddleId: huddleId, date: now() };
-      const latest = company;
-      if (_currentCompanyCode) {
-        await window._fbDb.ref(`companies/${_currentCompanyCode}/data/headlines`).push(h);
-      }
-      onSave({ headlines: [...(latest.headlines || []), h] });
+      onSave(latest => ({ headlines: [...(latest.headlines || []), h] }));
       setNewHeadline(n => ({ ...n, text: "" }));
     } catch (e) {
       console.error("[VAST] Failed to add headline:", e);
@@ -1506,11 +1508,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     setQuickAddSaving(true);
     try {
       const t = { id: uid(), title: newTodo.title, assignees: newTodo.assignees || [], dueDate: newTodo.dueDate, huddleId: huddleId, done: false, createdAt: now() };
-      const latest = company;
-      if (_currentCompanyCode) {
-        await window._fbDb.ref(`companies/${_currentCompanyCode}/data/todos`).push(t);
-      }
-      onSave({ todos: [...(latest.todos || []), t] });
+      onSave(latest => ({ todos: [...(latest.todos || []), t] }));
       setNewTodo({ title: "", assignees: [], dueDate: defaultDueDate() });
     } catch (e) {
       console.error("[VAST] Failed to add todo:", e);
@@ -1521,11 +1519,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     setQuickAddSaving(true);
     try {
       const iss = { id: uid(), title: newIssue.title, priority: newIssue.priority, status: "open", huddleId: huddleId, createdAt: now() };
-      const latest = company;
-      if (_currentCompanyCode) {
-        await window._fbDb.ref(`companies/${_currentCompanyCode}/data/issues`).push(iss);
-      }
-      onSave({ issues: [...(latest.issues || []), iss] });
+      onSave(latest => ({ issues: [...(latest.issues || []), iss] }));
       setNewIssue({ title: "", priority: "2" });
     } catch (e) {
       console.error("[VAST] Failed to add issue:", e);
@@ -1545,7 +1539,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
       setSpotlight(pool[idx]);
       count++;
       if (count < total) {
-        spinRef.current = setTimeout(cycle, 80 + count * 12);
+        spinRef.current = setTimeout(cycle, 40 + count * 6);
       } else {
         setSpinning(false);
         setAlreadySelected(s => [...s, pool[idx].id]);
@@ -2184,7 +2178,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                         const col = isActive ? (s === "off" ? C.red : C.green) : C.textMuted;
                         const bor = isActive ? (s === "off" ? C.red : C.green) : C.border;
                         return (
-                          <button key={s} onClick={() => onSave({ quarterlyTasks: (company.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s } : x) })}
+                          <button key={s} onClick={() => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s } : x) }))}
                             style={{ padding: "5px 12px", borderRadius: 5, fontSize: 11, fontWeight: 700, fontFamily: "'Outfit',sans-serif", cursor: "pointer", border: `1px solid ${bor}`, background: bg, color: col }}>
                             {label}
                           </button>
@@ -2208,7 +2202,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                         autoFocus
                         placeholder="Add notes about this task..."
                         value={t.notes || ""}
-                        onChange={e => onSave({ quarterlyTasks: (company.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, notes: e.target.value } : x) })}
+                        onChange={e => { const text = e.target.value; onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, notes: text } : x) })); }}
                         style={{ width: "100%", minHeight: 72, fontSize: 13, padding: "8px 10px", borderRadius: 6, border: `1px solid ${C.blue}`, background: `rgba(59,130,246,0.05)`, color: C.text, resize: "vertical", fontFamily: "'Outfit',sans-serif", boxSizing: "border-box" }}
                       />
                     </div>
@@ -2222,7 +2216,13 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
           {/* HEADLINES */}
           {activeIdx === 3 && (() => {
             const unreviewed = (company.headlines || []).filter(h => !h.reviewed && h.huddleId === huddleId);
-            const markReviewed = (id) => onSave({ headlines: toArray(company.headlines).map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h) });
+            console.debug("[VAST/headlines] Huddle filter", { huddleId, totalHeadlines: (company.headlines || []).length, activeInHuddle: unreviewed.length, activeIds: unreviewed.map(h => h.id), allFlags: (company.headlines || []).map(h => ({ id: h.id, reviewed: !!h.reviewed, huddleId: h.huddleId })) });
+            const markReviewed = (id) => onSave(latest => {
+              const updated = toArray(latest.headlines).map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h);
+              const target = updated.find(h => h.id === id);
+              console.debug("[VAST/headlines] Huddle markReviewed", { id, matchFound: !!target, reviewedAfter: !!target?.reviewed, totalAfter: updated.length, activeAfter: updated.filter(h => !h.reviewed).length });
+              return { headlines: updated };
+            });
             return (
               <div className="card">
                 <h3 style={{ fontSize: 18, marginBottom: 4 }}>Headlines</h3>
@@ -2259,7 +2259,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                           autoFocus
                           placeholder="Add notes about this headline..."
                           value={h.notes || ""}
-                          onChange={e => onSave({ headlines: (company.headlines||[]).map(x => x.id === h.id ? { ...x, notes: e.target.value } : x) })}
+                          onChange={e => { const text = e.target.value; onSave(latest => ({ headlines: (latest.headlines||[]).map(x => x.id === h.id ? { ...x, notes: text } : x) })); }}
                           style={{ width: "100%", minHeight: 72, fontSize: 13, padding: "8px 10px", borderRadius: 6, border: `1px solid ${C.blue}`, background: `rgba(59,130,246,0.05)`, color: C.text, resize: "vertical", fontFamily: "'Outfit',sans-serif", boxSizing: "border-box" }}
                         />
                       </div>
@@ -2285,17 +2285,20 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             // Only show todos assigned to THIS huddle
             const pending = (company.todos || []).filter(t => !t.done && t.huddleId === huddleId);
             const completeTodo = (id) => {
-              const updated = toArray(company.todos).map(x => x.id === id ? { ...x, done: true, completedAt: now() } : x);
-              onSave({ todos: updated });
-              // 80% celebration — only count pre-meeting todos
-              if (!confettiFired.current.todos && preMeetingTodoIds.current && preMeetingTodoIds.current.size > 0) {
-                const completed = updated.filter(t => preMeetingTodoIds.current.has(t.id) && t.done).length;
-                if (completed / preMeetingTodoIds.current.size >= 0.8) {
-                  confettiFired.current.todos = true;
-                  const pct = Math.round(completed / preMeetingTodoIds.current.size * 100);
-                  fireConfetti({ emoji: "celebrate", title: `${pct}% To-Dos Complete!`, sub: `${completed} of ${preMeetingTodoIds.current.size} to-dos knocked out` });
+              onSave(latest => {
+                const updated = toArray(latest.todos).map(x => x.id === id ? { ...x, done: true, completedAt: now() } : x);
+                // 80% celebration — only count pre-meeting todos. Evaluating inside
+                // the functional updater so it's based on the freshest array.
+                if (!confettiFired.current.todos && preMeetingTodoIds.current && preMeetingTodoIds.current.size > 0) {
+                  const completed = updated.filter(t => preMeetingTodoIds.current.has(t.id) && t.done).length;
+                  if (completed / preMeetingTodoIds.current.size >= 0.8) {
+                    confettiFired.current.todos = true;
+                    const pct = Math.round(completed / preMeetingTodoIds.current.size * 100);
+                    fireConfetti({ emoji: "celebrate", title: `${pct}% To-Dos Complete!`, sub: `${completed} of ${preMeetingTodoIds.current.size} to-dos knocked out` });
+                  }
                 }
-              }
+                return { todos: updated };
+              });
             };
             return (
               <div className="card">
@@ -2339,7 +2342,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
                             autoFocus
                             placeholder="Add notes about this to-do..."
                             value={t.notes || ""}
-                            onChange={e => onSave({ todos: (company.todos||[]).map(x => x.id === t.id ? { ...x, notes: e.target.value } : x) })}
+                            onChange={e => { const text = e.target.value; onSave(latest => ({ todos: (latest.todos||[]).map(x => x.id === t.id ? { ...x, notes: text } : x) })); }}
                             style={{ width: "100%", minHeight: 72, fontSize: 13, padding: "8px 10px", borderRadius: 6, border: `1px solid ${C.blue}`, background: `rgba(59,130,246,0.05)`, color: C.text, resize: "vertical", fontFamily: "'Outfit',sans-serif", boxSizing: "border-box" }}
                           />
                         </div>
@@ -2409,19 +2412,24 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               console.debug("[VAST/issues] markSolved CALLED", { id: item.id, title: item.title, source: item.source, sourceLabel: item.sourceLabel, huddleId });
               setSolvedThisSession(s => [...s, { ...item, notes: issueNotes[item.id] || "", solvedAt: now() }]);
               setFocusQueue(q => q.filter(f => f.id !== item.id));
-              const latest = company;
-              console.debug("[VAST/issues] markSolved latest snapshot", { issuesCount: (latest.issues || []).length, openCount: (latest.issues || []).filter(i => i.status !== "resolved").length, pqCount: (latest.problemQueue || []).length });
-              onSave({ problemQueue: (latest.problemQueue || []).filter(p => p.id !== item.id) });
-              if (item.source === "issue") {
-                const updatedIssues = (latest.issues || []).map(i =>
-                  i.id === item.id ? { ...i, status: "resolved" } : i
-                );
-                const matched = updatedIssues.find(i => i.id === item.id);
-                console.debug("[VAST/issues] markSolved → onSave issues[]", { id: item.id, matchFound: !!matched, matchedStatus: matched?.status, totalAfter: updatedIssues.length, openAfter: updatedIssues.filter(i => i.status !== "resolved").length });
-                onSave({ issues: updatedIssues });
-              } else {
-                console.debug("[VAST/issues] markSolved SKIPPED issue update — source !== 'issue'", { id: item.id, source: item.source });
-              }
+              // Functional onSave: problemQueue + issues are both built from the
+              // freshest companyRef.current at write time, so two rapid resolves
+              // can't clobber each other with stale closures.
+              onSave(latest => {
+                console.debug("[VAST/issues] markSolved fresh snapshot at save", { issuesCount: (latest.issues || []).length, openCount: (latest.issues || []).filter(i => i.status !== "resolved").length, pqCount: (latest.problemQueue || []).length });
+                const out = { problemQueue: (latest.problemQueue || []).filter(p => p.id !== item.id) };
+                if (item.source === "issue") {
+                  const updatedIssues = (latest.issues || []).map(i =>
+                    i.id === item.id ? { ...i, status: "resolved" } : i
+                  );
+                  out.issues = updatedIssues;
+                  const matched = updatedIssues.find(i => i.id === item.id);
+                  console.debug("[VAST/issues] markSolved writing issues[]", { id: item.id, matchFound: !!matched, matchedStatus: matched?.status, totalAfter: updatedIssues.length, openAfter: updatedIssues.filter(i => i.status !== "resolved").length });
+                } else {
+                  console.debug("[VAST/issues] markSolved SKIPPED issue update — source !== 'issue'", { id: item.id, source: item.source });
+                }
+                return out;
+              });
               const next = inFocus.find(f => f.id !== item.id);
               setActiveIssueId(next ? next.id : null);
               // Celebrate if all problems are now solved
@@ -2442,22 +2450,16 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             const addActiveAsHeadline = (e) => {
               e.stopPropagation();
               if (!activeItem) return;
-              const latest = company;
-              const headlines = latest.headlines ? [...latest.headlines] : [];
               const h = { id: uid(), type: "Customer", text: activeItem.title, huddleId: huddleId, date: now() };
-              headlines.push(h);
-              onSave({ headlines });
+              onSave(latest => ({ headlines: [...(latest.headlines || []), h] }));
               setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: true }));
               setTimeout(() => setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: false })), 2000);
             };
 
             const commitAddAsTodo = () => {
               if (!activeItem) return;
-              const latest = company;
-              const todos = latest.todos ? [...latest.todos] : [];
               const t = { id: uid(), title: activeItem.title, assignees: todoAssignees, dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10), huddleId: huddleId, done: false, createdAt: now() };
-              todos.push(t);
-              onSave({ todos });
+              onSave(latest => ({ todos: [...(latest.todos || []), t] }));
               setIDSAdded(s => ({ ...s, [activeItem.id + "_t"]: true }));
               setTodoPickerOpen(false);
               setTodoAssignees([]);
@@ -2849,19 +2851,20 @@ function Tasks({ company, onSave }) {
 
   const addTask = () => {
     if (!form.title.trim()) return;
-    onSave({ quarterlyTasks: [...tasks, { id: uid(), ...form, createdAt: now() }] });
+    const newTask = { id: uid(), ...form, createdAt: now() };
+    onSave(latest => ({ quarterlyTasks: [...(latest.quarterlyTasks || []), newTask] }));
     setForm({ title: "", who: "", smart: false, status: "on", huddleId: "", target: "", operator: "" });
     setShowAdd(false);
   };
-  const updateStatus = (id, status) => onSave({ quarterlyTasks: tasks.map(t => t.id === id ? { ...t, status } : t) });
-  const deleteTask = (id) => onSave({ quarterlyTasks: tasks.filter(t => t.id !== id) });
+  const updateStatus = (id, status) => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks || []).map(t => t.id === id ? { ...t, status } : t) }));
+  const deleteTask = (id) => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks || []).filter(t => t.id !== id) }));
 
   const startEdit = (t) => {
     setEditId(t.id);
     setEditFields({ title: t.title, who: t.who || "", huddleId: t.huddleId || "" });
   };
   const saveEdit = (id) => {
-    onSave({ quarterlyTasks: tasks.map(t => t.id === id ? { ...t, ...editFields } : t) });
+    onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks || []).map(t => t.id === id ? { ...t, ...editFields } : t) }));
     setEditId(null);
   };
 
@@ -3303,16 +3306,27 @@ function Headlines({ company, onSave }) {
 
   const add = () => {
     if (!form.text.trim()) return;
-    onSave({ headlines: [...headlines, { id: uid(), ...form, date: now() }] });
+    const newH = { id: uid(), ...form, date: now() };
+    onSave(latest => ({ headlines: [...(latest.headlines || []), newH] }));
     setForm(f => ({ ...f, text: "" }));
   };
-  const del = (id) => onSave({ headlines: headlines.filter(h => h.id !== id) });
-  const markReviewed = (id) => onSave({ headlines: headlines.map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h) });
-  const unmarkReviewed = (id) => onSave({ headlines: headlines.map(h => h.id === id ? { ...h, reviewed: false, reviewedAt: null } : h) });
+  const del = (id) => onSave(latest => ({ headlines: (latest.headlines || []).filter(h => h.id !== id) }));
+  const markReviewed = (id) => onSave(latest => {
+    const updated = (latest.headlines || []).map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h);
+    const target = updated.find(h => h.id === id);
+    console.debug("[VAST/headlines] Panel markReviewed", { id, matchFound: !!target, reviewedAfter: !!target?.reviewed, totalAfter: updated.length, activeAfter: updated.filter(h => !h.reviewed).length });
+    return { headlines: updated };
+  });
+  const unmarkReviewed = (id) => onSave(latest => {
+    const updated = (latest.headlines || []).map(h => h.id === id ? { ...h, reviewed: false, reviewedAt: null } : h);
+    console.debug("[VAST/headlines] Panel unmarkReviewed", { id, totalAfter: updated.length, activeAfter: updated.filter(h => !h.reviewed).length });
+    return { headlines: updated };
+  });
 
   const applyHuddleFilter = (arr) => huddleFilter === "all" ? arr : arr.filter(h => h.huddleId === huddleFilter);
   const active = applyHuddleFilter(headlines.filter(h => !h.reviewed));
   const reviewed = applyHuddleFilter(headlines.filter(h => h.reviewed));
+  console.debug("[VAST/headlines] Panel filter", { total: headlines.length, active: active.length, reviewed: reviewed.length, allFlags: headlines.map(h => ({ id: h.id, text: h.text, reviewed: !!h.reviewed, huddleId: h.huddleId })) });
 
   const HeadlineRow = ({ h, isReviewed }) => (
     <div key={h.id} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}`, gap: 8, opacity: isReviewed ? 0.6 : 1 }}>
@@ -3402,7 +3416,7 @@ function Issues({ company, onSave }) {
     setIssueError("");
     try {
       const newIssue = { id: uid(), ...form, status: "open", createdAt: now() };
-      onSave({ issues: [...issues, newIssue] });
+      onSave(latest => ({ issues: [...(latest.issues || []), newIssue] }));
       setForm({ title: "", priority: "2", notes: "", huddleId: "" });
       setShowAdd(false);
     } catch (e) {
@@ -3414,10 +3428,12 @@ function Issues({ company, onSave }) {
     if (savingId) return;
     setSavingId(id);
     try {
-      const updated = issues.map(i => i.id === id ? { ...i, status: "resolved" } : i);
-      const target = updated.find(i => i.id === id);
-      console.debug("[VAST/issues] Issues panel resolve()", { id, matchFound: !!target, matchedStatus: target?.status, totalAfter: updated.length, openAfter: updated.filter(i => i.status !== "resolved").length });
-      onSave({ issues: updated });
+      onSave(latest => {
+        const updated = (latest.issues || []).map(i => i.id === id ? { ...i, status: "resolved" } : i);
+        const target = updated.find(i => i.id === id);
+        console.debug("[VAST/issues] Issues panel resolve()", { id, matchFound: !!target, matchedStatus: target?.status, totalAfter: updated.length, openAfter: updated.filter(i => i.status !== "resolved").length });
+        return { issues: updated };
+      });
     } catch (e) {
       console.error("[VAST] Failed to resolve issue:", e);
       setIssueError("Something went wrong. Please try again.");
@@ -3427,7 +3443,7 @@ function Issues({ company, onSave }) {
     if (savingId) return;
     setSavingId(id);
     try {
-      onSave({ issues: issues.filter(i => i.id !== id) });
+      onSave(latest => ({ issues: (latest.issues || []).filter(i => i.id !== id) }));
     } catch (e) {
       console.error("[VAST] Failed to delete issue:", e);
       setIssueError("Something went wrong. Please try again.");
@@ -3545,18 +3561,19 @@ function Todos({ company, onSave }) {
 
   const add = () => {
     if (!form.title.trim()) return;
-    onSave({ todos: [...todos, { id: uid(), title: form.title, assignees: form.assignees, dueDate: form.dueDate, huddleId: form.huddleId, done: false, createdAt: now() }] });
+    const newTodo = { id: uid(), title: form.title, assignees: form.assignees, dueDate: form.dueDate, huddleId: form.huddleId, done: false, createdAt: now() };
+    onSave(latest => ({ todos: [...(latest.todos || []), newTodo] }));
     setForm({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: form.huddleId });
   };
-  const toggle = (id) => onSave({ todos: todos.map(t => t.id === id ? { ...t, done: !t.done } : t) });
-  const del = (id) => onSave({ todos: todos.filter(t => t.id !== id) });
+  const toggle = (id) => onSave(latest => ({ todos: (latest.todos || []).map(t => t.id === id ? { ...t, done: !t.done } : t) }));
+  const del = (id) => onSave(latest => ({ todos: (latest.todos || []).filter(t => t.id !== id) }));
 
   const startEdit = (t) => {
     setEditId(t.id);
     setEditFields({ title: t.title, dueDate: t.dueDate || "", huddleId: t.huddleId || "", assignees: getAssignees(t) });
   };
   const saveEdit = (id) => {
-    onSave({ todos: todos.map(t => t.id === id ? { ...t, ...editFields } : t) });
+    onSave(latest => ({ todos: (latest.todos || []).map(t => t.id === id ? { ...t, ...editFields } : t) }));
     setEditId(null);
   };
   const cancelEdit = () => setEditId(null);
@@ -4667,6 +4684,8 @@ function VASTApp() {
       if (val.code !== companyCode) val.code = companyCode;
       const rawIssuesArr = Array.isArray(raw.issues) ? raw.issues : (raw.issues ? Object.values(raw.issues) : []);
       const valIssuesArr = Array.isArray(val.issues) ? val.issues : [];
+      const rawHeadlinesArr = Array.isArray(raw.headlines) ? raw.headlines : (raw.headlines ? Object.values(raw.headlines) : []);
+      const valHeadlinesArr = Array.isArray(val.headlines) ? val.headlines : [];
       // eslint-disable-next-line no-console
       console.debug("[VAST/issues] Firestore snapshot received", {
         rawTotal: rawIssuesArr.length,
@@ -4675,6 +4694,15 @@ function VASTApp() {
         valOpen: valIssuesArr.filter(i => i.status !== "resolved").length,
         pendingHasIssues: !!(pending && Object.prototype.hasOwnProperty.call(pending, "issues")),
         rawStatuses: rawIssuesArr.map(i => i && { id: i.id, status: i.status, huddleId: i.huddleId })
+      });
+      // eslint-disable-next-line no-console
+      console.debug("[VAST/headlines] Firestore snapshot received", {
+        rawTotal: rawHeadlinesArr.length,
+        rawActive: rawHeadlinesArr.filter(h => h && !h.reviewed).length,
+        valTotal: valHeadlinesArr.length,
+        valActive: valHeadlinesArr.filter(h => !h.reviewed).length,
+        pendingHasHeadlines: !!(pending && Object.prototype.hasOwnProperty.call(pending, "headlines")),
+        rawFlags: rawHeadlinesArr.map(h => h && { id: h.id, reviewed: !!h.reviewed, huddleId: h.huddleId })
       });
       companyRef.current = val;
       setCompanyState(val);
@@ -4948,10 +4976,17 @@ function VASTApp() {
     setInviteLoading(false);
   };
 
-  const handleSave = useCallback((updates) => {
+  const handleSave = useCallback((updatesOrFn) => {
     const base = companyRef.current;
     if (!base) return;
-    if (updates && Object.prototype.hasOwnProperty.call(updates, "issues")) {
+    // Accept either an updates object or a `(prev) => updates` function.
+    // The functional form reads from companyRef.current at write time so two
+    // rapid mutations of the same array key can't clobber each other with
+    // stale closures (which is exactly how resolved issues / reviewed
+    // headlines were silently coming back).
+    const updates = typeof updatesOrFn === "function" ? updatesOrFn(base) : updatesOrFn;
+    if (!updates || typeof updates !== "object" || Object.keys(updates).length === 0) return;
+    if (Object.prototype.hasOwnProperty.call(updates, "issues")) {
       const incoming = Array.isArray(updates.issues) ? updates.issues : [];
       const baseArr = Array.isArray(base.issues) ? base.issues : [];
       console.debug("[VAST/issues] handleSave writing issues[]", {
@@ -4960,6 +4995,17 @@ function VASTApp() {
         afterTotal: incoming.length,
         afterOpen: incoming.filter(i => i.status !== "resolved").length,
         afterStatuses: incoming.map(i => ({ id: i.id, status: i.status }))
+      });
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, "headlines")) {
+      const incoming = Array.isArray(updates.headlines) ? updates.headlines : [];
+      const baseArr = Array.isArray(base.headlines) ? base.headlines : [];
+      console.debug("[VAST/headlines] handleSave writing headlines[]", {
+        beforeTotal: baseArr.length,
+        beforeActive: baseArr.filter(h => !h.reviewed).length,
+        afterTotal: incoming.length,
+        afterActive: incoming.filter(h => !h.reviewed).length,
+        afterFlags: incoming.map(h => ({ id: h.id, reviewed: !!h.reviewed }))
       });
     }
     const updated = { ...base, ...updates };
@@ -5110,3 +5156,4 @@ root.render(React.createElement(VASTApp));
   </script>
 </body>
 </html>
+
