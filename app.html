@@ -309,6 +309,15 @@ async function fbGet(path) {
 const _sanitize = (obj) => JSON.parse(JSON.stringify(obj, (k, v) => v === undefined ? null : v));
 async function fbSet(path, data) { await fbRef(path).set(_sanitize(data)); }
 async function fbUpdate(path, data) { await fbRef(path).update(_sanitize(data)); }
+// Atomically write a single item to a collection map keyed by item.id.
+// Two teammates adding to the same collection at the same time both
+// survive — different ids -> different paths -> no overwrite. The
+// existing applyMigrations() already converts the resulting object back
+// to an array on read, so callers downstream see no shape change.
+async function fbAddItem(collectionPath, item) {
+  if (!item || !item.id) throw new Error("fbAddItem requires item.id");
+  await fbRef(`${collectionPath}/${item.id}`).set(_sanitize(item));
+}
 
 // ── Company load/save via Firebase ────────────────────────────────────────
 async function loadCompanyFromFirebase(companyCode) {
@@ -1351,7 +1360,7 @@ function Confetti({ message, onDone }) {
   );
 }
 
-function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, companyCode }) {
+function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo, companyCode }) {
   // Build agenda using per-huddle custom durations if set
   const customMins = ((company.huddles || []).find(h => h.id === huddleId) || {}).agendaMins || {};
   const agenda = AGENDA.map(a => ({ ...a, minutes: customMins[a.id] ?? a.minutes }));
@@ -1460,11 +1469,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     : allMembers;
 
   const addToProblemQueue = (item) => {
-    onSave(latest => {
-      const pq = latest.problemQueue || [];
-      if (pq.find(p => p.id === item.id)) return null; // already queued — no-op
-      return { problemQueue: [...pq, { ...item, huddleId: huddleId }] };
-    });
+    if ((company.problemQueue || []).find(p => p.id === item.id)) return; // already queued — no-op
+    onAdd("problemQueue", { ...item, huddleId: huddleId, id: item.id });
   };
   const seg = agenda[activeIdx];
   const segLimit = seg.minutes * 60;
@@ -1545,7 +1551,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
       // object map and then got immediately overwritten by the onSave's array
       // form, creating a race window where snapshots could land mid-write.
       const h = { id: uid(), type: newHeadline.type, text: newHeadline.text, huddleId: huddleId, date: now() };
-      onSave(latest => ({ headlines: [...(latest.headlines || []), h] }));
+      onAdd("headlines", h);
       setNewHeadline(n => ({ ...n, text: "" }));
     } catch (e) {
       console.error("[VAST] Failed to add headline:", e);
@@ -1556,7 +1562,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     setQuickAddSaving(true);
     try {
       const t = { id: uid(), title: newTodo.title, assignees: newTodo.assignees || [], dueDate: newTodo.dueDate, huddleId: huddleId, done: false, createdAt: now() };
-      onSave(latest => ({ todos: [...(latest.todos || []), t] }));
+      onAdd("todos", t);
       setNewTodo({ title: "", assignees: [], dueDate: defaultDueDate() });
     } catch (e) {
       console.error("[VAST] Failed to add todo:", e);
@@ -1567,7 +1573,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     setQuickAddSaving(true);
     try {
       const iss = { id: uid(), title: newIssue.title, priority: newIssue.priority, status: "open", huddleId: huddleId, createdAt: now() };
-      onSave(latest => ({ issues: [...(latest.issues || []), iss] }));
+      onAdd("issues", iss);
       setNewIssue({ title: "", priority: "2" });
     } catch (e) {
       console.error("[VAST] Failed to add issue:", e);
@@ -2515,7 +2521,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               e.stopPropagation();
               if (!activeItem) return;
               const h = { id: uid(), type: "Customer", text: activeItem.title, huddleId: huddleId, date: now() };
-              onSave(latest => ({ headlines: [...(latest.headlines || []), h] }));
+              onAdd("headlines", h);
               setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: true }));
               setTimeout(() => setIDSAdded(s => ({ ...s, [activeItem.id + "_h"]: false })), 2000);
             };
@@ -2523,7 +2529,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             const commitAddAsTodo = () => {
               if (!activeItem) return;
               const t = { id: uid(), title: activeItem.title, assignees: todoAssignees, dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10), huddleId: huddleId, done: false, createdAt: now() };
-              onSave(latest => ({ todos: [...(latest.todos || []), t] }));
+              onAdd("todos", t);
               setIDSAdded(s => ({ ...s, [activeItem.id + "_t"]: true }));
               setTodoPickerOpen(false);
               setTodoAssignees([]);
@@ -2903,7 +2909,7 @@ const meetsTarget = (task) => {
   return null; // "on track" = neutral
 };
 
-function Tasks({ company, onSave }) {
+function Tasks({ company, onSave, onAdd }) {
   const [tab, setTab] = useState("company");
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title: "", who: "", smart: false, status: "on", huddleId: "", target: "", operator: "" });
@@ -2916,7 +2922,7 @@ function Tasks({ company, onSave }) {
   const addTask = () => {
     if (!form.title.trim()) return;
     const newTask = { id: uid(), ...form, createdAt: now() };
-    onSave(latest => ({ quarterlyTasks: [...(latest.quarterlyTasks || []), newTask] }));
+    onAdd("quarterlyTasks", newTask);
     setForm({ title: "", who: "", smart: false, status: "on", huddleId: "", target: "", operator: "" });
     setShowAdd(false);
   };
@@ -3361,7 +3367,7 @@ function Scorecard({ company, onSave }) {
 }
 
 // ─── HEADLINES ────────────────────────────────────────────────────────
-function Headlines({ company, onSave }) {
+function Headlines({ company, onSave, onAdd }) {
   const [form, setForm] = useState({ type: "Customer", text: "", huddleId: "" });
   const headlines = company.headlines || [];
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
@@ -3371,7 +3377,7 @@ function Headlines({ company, onSave }) {
   const add = () => {
     if (!form.text.trim()) return;
     const newH = { id: uid(), ...form, date: now() };
-    onSave(latest => ({ headlines: [...(latest.headlines || []), newH] }));
+    onAdd("headlines", newH);
     setForm(f => ({ ...f, text: "" }));
   };
   const del = (id) => onSave(latest => ({ headlines: (latest.headlines || []).filter(h => h.id !== id) }));
@@ -3464,7 +3470,7 @@ function Headlines({ company, onSave }) {
 }
 
 // ─── ISSUES ───────────────────────────────────────────────────────────
-function Issues({ company, onSave }) {
+function Issues({ company, onSave, onAdd }) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title: "", priority: "2", notes: "", huddleId: "" });
   const [saving, setSaving] = useState(false);
@@ -3480,7 +3486,7 @@ function Issues({ company, onSave }) {
     setIssueError("");
     try {
       const newIssue = { id: uid(), ...form, status: "open", createdAt: now() };
-      onSave(latest => ({ issues: [...(latest.issues || []), newIssue] }));
+      onAdd("issues", newIssue);
       setForm({ title: "", priority: "2", notes: "", huddleId: "" });
       setShowAdd(false);
     } catch (e) {
@@ -3614,7 +3620,7 @@ function Issues({ company, onSave }) {
 }
 
 // ─── TO-DOS ───────────────────────────────────────────────────────────
-function Todos({ company, onSave }) {
+function Todos({ company, onSave, onAdd }) {
   const todoDueDefault = () => new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10);
   const [form, setForm] = useState({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: "" });
   const [editId, setEditId] = useState(null);
@@ -3626,7 +3632,7 @@ function Todos({ company, onSave }) {
   const add = () => {
     if (!form.title.trim()) return;
     const newTodo = { id: uid(), title: form.title, assignees: form.assignees, dueDate: form.dueDate, huddleId: form.huddleId, done: false, createdAt: now() };
-    onSave(latest => ({ todos: [...(latest.todos || []), newTodo] }));
+    onAdd("todos", newTodo);
     setForm({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: form.huddleId });
   };
   const toggle = (id) => onSave(latest => ({ todos: (latest.todos || []).map(t => t.id === id ? { ...t, done: !t.done } : t) }));
@@ -5084,6 +5090,25 @@ function VASTApp() {
     saveCompany(updates);
   }, []); // no dependency on company — reads from ref instead
 
+  // Atomic add helper. Use for *adding new items* to top-level collections
+  // (todos, issues, headlines, problemQueue, quarterlyTasks). Writes to a
+  // per-id path in Firebase, so a concurrent add by another teammate cannot
+  // be clobbered by a wholesale array overwrite from this client.
+  const handleAdd = useCallback((key, item) => {
+    if (!key || !item || !item.id) return;
+    const base = companyRef.current;
+    if (!base) return;
+    const updated = { ...base, [key]: [...(base[key] || []), item] };
+    companyRef.current = updated;
+    setCompanyState(updated);
+    try {
+      if (_currentCompanyCode) localStorage.setItem(`vast:cloud-cache:${_currentCompanyCode}`, JSON.stringify(updated));
+    } catch (e) { /* non-critical */ }
+    if (_currentCompanyCode) {
+      fbAddItem(`companies/${_currentCompanyCode}/data/${key}`, item).catch(e => console.warn(`[VAST] Atomic add to ${key} failed:`, e));
+    }
+  }, []);
+
   // ── Invite entry screen ──
   if (appState === "invite") return (
     <><GlobalStyles theme={theme} />
@@ -5165,7 +5190,7 @@ function VASTApp() {
     </div></>
   );
 
-  const viewProps = { company, onSave: handleSave };
+  const viewProps = { company, onSave: handleSave, onAdd: handleAdd };
 
   return (
     <SidebarCollapsedContext.Provider value={sidebarCollapsed}>
