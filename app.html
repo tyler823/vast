@@ -436,8 +436,13 @@ async function startLiveSession(companyCode, huddleId, hostMemberId, hostName) {
   });
 }
 
-async function updateLiveSession(companyCode, huddleId, activeIdx) {
-  await fbUpdate(`companies/${companyCode}/liveSessions/${huddleId}`, { activeIdx });
+async function updateLiveSession(companyCode, huddleId, patchOrActiveIdx) {
+  // Backward-compatible: accept either a patch object (preferred — can carry
+  // a state snapshot) or a bare activeIdx number.
+  const patch = (patchOrActiveIdx && typeof patchOrActiveIdx === "object")
+    ? patchOrActiveIdx
+    : { activeIdx: patchOrActiveIdx };
+  await fbUpdate(`companies/${companyCode}/liveSessions/${huddleId}`, patch);
 }
 
 async function endLiveSession(companyCode, huddleId) {
@@ -1418,6 +1423,9 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
           return true;
         });
         setActiveIdx(session.activeIdx || 0);
+        // Mirror the host's state for the viewer in real time. This is a
+        // one-way push — viewers don't write back.
+        applySnapshot(session.snapshot);
       } else if (!session?.active) {
         // Session ended — exit viewer mode
         setIsViewer(false);
@@ -1474,17 +1482,57 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
     return () => clearInterval(timerRef.current);
   }, [started, activeIdx, done]);
 
+  // ── Snapshot persistence ────────────────────────────────────────────────
+  // Save the substantive local state to liveSessions/{huddleId} so a reload
+  // (or another device) can resume mid-meeting from the last stage change.
+  // Called on every step navigation — NOT on every keystroke, which would be
+  // wasteful. Intermediate edits within a step are best-effort: if the host
+  // reloads before advancing, in-progress notes for that step are lost.
+  const persistSessionSnapshot = (newActiveIdx) => {
+    if (isViewer) return;
+    if (!companyCode || !huddleId) return;
+    const snapshot = {
+      elapsed,
+      segTimes,
+      notes,
+      attendance,
+      spotlight,
+      alreadySelected,
+      focusQueue,
+      activeIssueId,
+      issueNotes,
+      solvedThisSession,
+      memberRatings,
+    };
+    updateLiveSession(companyCode, huddleId, { activeIdx: newActiveIdx, snapshot }).catch(e => console.warn("[VAST] Live session sync failed:", e));
+  };
+
+  const applySnapshot = (s) => {
+    if (!s) return;
+    if (typeof s.elapsed === "number") setElapsed(s.elapsed);
+    if (s.segTimes) setSegTimes(s.segTimes);
+    if (s.notes) setNotes(s.notes);
+    if (s.attendance) setAttendance(s.attendance);
+    if (s.spotlight !== undefined) setSpotlight(s.spotlight);
+    if (s.alreadySelected) setAlreadySelected(s.alreadySelected);
+    if (s.focusQueue) setFocusQueue(s.focusQueue);
+    if (s.activeIssueId !== undefined) setActiveIssueId(s.activeIssueId);
+    if (s.issueNotes) setIssueNotes(s.issueNotes);
+    if (s.solvedThisSession) setSolvedThisSession(s.solvedThisSession);
+    if (s.memberRatings) setMemberRatings(s.memberRatings);
+  };
+
   const next = () => {
     if (isViewer) return; // viewers can't control
     const n = Math.min(agenda.length - 1, activeIdx + 1);
     setActiveIdx(n);
-    if (companyCode) updateLiveSession(companyCode, huddleId, n).catch(e => console.warn("[VAST] Live session sync failed (next):", e));
+    persistSessionSnapshot(n);
   };
   const prev = () => {
     if (isViewer) return;
     const n = Math.max(0, activeIdx - 1);
     setActiveIdx(n);
-    if (companyCode) updateLiveSession(companyCode, huddleId, n).catch(e => console.warn("[VAST] Live session sync failed (prev):", e));
+    persistSessionSnapshot(n);
   };
 
   const [quickAddSaving, setQuickAddSaving] = useState(false);
@@ -1832,8 +1880,15 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
   }
 
   if (!started) {
+    // Host-resumable: there's already an active session and I'm the one who
+    // started it (typical case: I reloaded the browser mid-huddle). Clicking
+    // the button will pick up at the current activeIdx instead of stamping
+    // a fresh session record.
+    const isResumable = liveSession?.active && liveSession.hostMemberId === myMemberId;
     return (
-      <Layout title={huddleName} subtitle={`${agenda.reduce((s,a)=>s+a.minutes,0)} min · Adjust times before starting`}>
+      <Layout title={huddleName} subtitle={isResumable
+        ? `In progress · Step ${(liveSession.activeIdx || 0) + 1} of ${agenda.length} — click Resume to continue`
+        : `${agenda.reduce((s,a)=>s+a.minutes,0)} min · Adjust times before starting`}>
         <div style={{ maxWidth: 600, margin: "0 auto" }}>
           <div className="card" style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 20, marginBottom: 16 }}>Meeting Agenda</h3>
@@ -1872,6 +1927,15 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
           <button className="btn-primary" style={{ width: "100%", padding: "16px", fontSize: 16 }} onClick={async () => {
             if (meetingSaving) return;
             setIsViewer(false);
+            // Resume path: I'm already the host of an active session (e.g., I
+            // reloaded mid-meeting). Restore the saved activeIdx and drop me
+            // back into the live view without re-creating the session record.
+            if (isResumable) {
+              setActiveIdx(liveSession.activeIdx || 0);
+              applySnapshot(liveSession.snapshot);
+              setStarted(true);
+              return;
+            }
             if (companyCode && myMemberId) {
               const hostName = (company.members || []).find(m => m.id === myMemberId)?.name || "Host";
               try {
@@ -1885,7 +1949,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               setStarted(true);
             }
           }} disabled={meetingSaving}>
-            Start Huddle
+            {isResumable ? "Resume Huddle" : "Start Huddle"}
           </button>
         </div>
       </Layout>
@@ -1929,7 +1993,7 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
             const isActive = i === activeIdx;
             return (
               <div key={a.id} className={`huddle-item ${isActive ? "active" : ""} ${isDone ? "done" : ""}`}
-                onClick={() => setActiveIdx(i)}
+                onClick={() => { if (isViewer) return; setActiveIdx(i); persistSessionSnapshot(i); }}
                 style={{ borderLeft: isOver ? `3px solid ${C.red}` : undefined }}>
                 <div style={{ width: 22, height: 22, background: isDone ? C.green : isActive ? C.red : C.surface2, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   {isDone ? <Icon.check /> : <span style={{ fontSize: 10, fontWeight: 700 }}>{i + 1}</span>}
@@ -5156,4 +5220,5 @@ root.render(React.createElement(VASTApp));
   </script>
 </body>
 </html>
+
 
