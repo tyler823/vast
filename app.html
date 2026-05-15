@@ -2387,6 +2387,8 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
           {activeIdx === 5 && (() => {
             const pq = (company.problemQueue || []).filter(p => p.huddleId === huddleId);
             const openIssues = (company.issues || []).filter(i => i.status !== "resolved" && i.huddleId === huddleId);
+            // eslint-disable-next-line no-console
+            console.debug("[VAST/issues] ProblemSolving openIssues filter", { huddleId, totalIssues: (company.issues || []).length, openInHuddle: openIssues.length, openIds: openIssues.map(i => i.id), allIssueStatuses: (company.issues || []).map(i => ({ id: i.id, status: i.status, huddleId: i.huddleId })) });
             // All items available for problem solving (queue + open issues not already in queue)
             const allItems = [
               ...pq,
@@ -2404,15 +2406,21 @@ function WeeklyHuddle({ company, onSave, huddleId, huddleName, memberInfo, compa
               if (!activeIssueId) setActiveIssueId(item.id);
             };
             const markSolved = (item) => {
+              console.debug("[VAST/issues] markSolved CALLED", { id: item.id, title: item.title, source: item.source, sourceLabel: item.sourceLabel, huddleId });
               setSolvedThisSession(s => [...s, { ...item, notes: issueNotes[item.id] || "", solvedAt: now() }]);
               setFocusQueue(q => q.filter(f => f.id !== item.id));
               const latest = company;
+              console.debug("[VAST/issues] markSolved latest snapshot", { issuesCount: (latest.issues || []).length, openCount: (latest.issues || []).filter(i => i.status !== "resolved").length, pqCount: (latest.problemQueue || []).length });
               onSave({ problemQueue: (latest.problemQueue || []).filter(p => p.id !== item.id) });
               if (item.source === "issue") {
                 const updatedIssues = (latest.issues || []).map(i =>
                   i.id === item.id ? { ...i, status: "resolved" } : i
                 );
+                const matched = updatedIssues.find(i => i.id === item.id);
+                console.debug("[VAST/issues] markSolved → onSave issues[]", { id: item.id, matchFound: !!matched, matchedStatus: matched?.status, totalAfter: updatedIssues.length, openAfter: updatedIssues.filter(i => i.status !== "resolved").length });
                 onSave({ issues: updatedIssues });
+              } else {
+                console.debug("[VAST/issues] markSolved SKIPPED issue update — source !== 'issue'", { id: item.id, source: item.source });
               }
               const next = inFocus.find(f => f.id !== item.id);
               setActiveIssueId(next ? next.id : null);
@@ -3406,7 +3414,10 @@ function Issues({ company, onSave }) {
     if (savingId) return;
     setSavingId(id);
     try {
-      onSave({ issues: issues.map(i => i.id === id ? { ...i, status: "resolved" } : i) });
+      const updated = issues.map(i => i.id === id ? { ...i, status: "resolved" } : i);
+      const target = updated.find(i => i.id === id);
+      console.debug("[VAST/issues] Issues panel resolve()", { id, matchFound: !!target, matchedStatus: target?.status, totalAfter: updated.length, openAfter: updated.filter(i => i.status !== "resolved").length });
+      onSave({ issues: updated });
     } catch (e) {
       console.error("[VAST] Failed to resolve issue:", e);
       setIssueError("Something went wrong. Please try again.");
@@ -3425,6 +3436,8 @@ function Issues({ company, onSave }) {
 
   const allOpen = issues.filter(i => i.status !== "resolved");
   const allResolved = issues.filter(i => i.status === "resolved");
+  // eslint-disable-next-line no-console
+  console.debug("[VAST/issues] Issues panel filter", { total: issues.length, open: allOpen.length, resolved: allResolved.length, allStatuses: issues.map(i => ({ id: i.id, title: i.title, status: i.status, huddleId: i.huddleId })) });
   const open = (huddleFilter === "all" ? allOpen : allOpen.filter(i => i.huddleId === huddleFilter)).sort((a, b) => a.priority - b.priority);
   const resolved = huddleFilter === "all" ? allResolved : allResolved.filter(i => i.huddleId === huddleFilter);
 
@@ -4652,6 +4665,17 @@ function VASTApp() {
       const merged = pending && Object.keys(pending).length ? { ...raw, ...pending } : raw;
       const val = applyMigrations(merged);
       if (val.code !== companyCode) val.code = companyCode;
+      const rawIssuesArr = Array.isArray(raw.issues) ? raw.issues : (raw.issues ? Object.values(raw.issues) : []);
+      const valIssuesArr = Array.isArray(val.issues) ? val.issues : [];
+      // eslint-disable-next-line no-console
+      console.debug("[VAST/issues] Firestore snapshot received", {
+        rawTotal: rawIssuesArr.length,
+        rawOpen: rawIssuesArr.filter(i => i && i.status !== "resolved").length,
+        valTotal: valIssuesArr.length,
+        valOpen: valIssuesArr.filter(i => i.status !== "resolved").length,
+        pendingHasIssues: !!(pending && Object.prototype.hasOwnProperty.call(pending, "issues")),
+        rawStatuses: rawIssuesArr.map(i => i && { id: i.id, status: i.status, huddleId: i.huddleId })
+      });
       companyRef.current = val;
       setCompanyState(val);
     });
@@ -4927,6 +4951,17 @@ function VASTApp() {
   const handleSave = useCallback((updates) => {
     const base = companyRef.current;
     if (!base) return;
+    if (updates && Object.prototype.hasOwnProperty.call(updates, "issues")) {
+      const incoming = Array.isArray(updates.issues) ? updates.issues : [];
+      const baseArr = Array.isArray(base.issues) ? base.issues : [];
+      console.debug("[VAST/issues] handleSave writing issues[]", {
+        beforeTotal: baseArr.length,
+        beforeOpen: baseArr.filter(i => i.status !== "resolved").length,
+        afterTotal: incoming.length,
+        afterOpen: incoming.filter(i => i.status !== "resolved").length,
+        afterStatuses: incoming.map(i => ({ id: i.id, status: i.status }))
+      });
+    }
     const updated = { ...base, ...updates };
     companyRef.current = updated;   // update ref immediately so next call has fresh data
     setCompanyState(updated);
