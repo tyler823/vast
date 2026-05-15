@@ -455,7 +455,13 @@ async function updateLiveSession(companyCode, huddleId, patchOrActiveIdx) {
 }
 
 async function endLiveSession(companyCode, huddleId) {
-  await fbSet(`companies/${companyCode}/liveSessions/${huddleId}`, { active: false });
+  // Robust: fall back to the module-global code if the caller passes
+  // undefined (can happen if a prop is briefly stale). Use fbSet so the
+  // node is replaced wholesale — no stale snapshot/activeIdx/hostMemberId
+  // is left behind that could confuse the sidebar.
+  const code = companyCode || _currentCompanyCode;
+  if (!code || !huddleId) return;
+  await fbSet(`companies/${code}/liveSessions/${huddleId}`, { active: false, endedAt: Date.now() });
 }
 
 // ── Invite code helpers ───────────────────────────────────────────────────
@@ -1495,7 +1501,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
   // wasteful. Intermediate edits within a step are best-effort: if the host
   // reloads before advancing, in-progress notes for that step are lost.
   const persistSessionSnapshot = (newActiveIdx) => {
-    if (isViewer) return;
+    if (isViewer || done) return;
     if (!companyCode || !huddleId) return;
     const snapshot = {
       elapsed,
@@ -1781,18 +1787,24 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
       console.error("[VAST] Failed to finish meeting:", e);
       setMeetingError("Something went wrong saving the meeting. Please try again.");
     } finally {
-      setMeetingSaving(false);
-      if (companyCode && !isViewer) {
-        endLiveSession(companyCode, huddleId).catch(e =>
-          console.warn("[VAST] endLiveSession failed:", e)
-        );
+      // End the live session FIRST so the sidebar indicator clears before
+      // the meeting UI unmounts. await means the local Firebase cache is
+      // updated synchronously and the sidebar listener fires immediately.
+      if (!isViewer) {
+        try {
+          await endLiveSession(companyCode || _currentCompanyCode, huddleId);
+          console.debug("[VAST/session] endLiveSession completed", { huddleId });
+        } catch (e) {
+          console.warn("[VAST] endLiveSession failed:", e);
+        }
       }
+      setMeetingSaving(false);
     }
   };
 
   if (done) {
     const recap = recapText || buildRecap({ date: now() }, rating);
-    const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegTimes({}); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); setIDSAdded({}); setConfetti(null); confettiFired.current = { todos: false, ids: false }; preMeetingTodoIds.current = null; clearTimeout(spinRef.current); setIsViewer(false); if (companyCode && myMemberId) endLiveSession(companyCode, huddleId).catch(e => console.warn("[VAST] Failed to end live session on reset:", e)); };
+    const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegTimes({}); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); setIDSAdded({}); setConfetti(null); confettiFired.current = { todos: false, ids: false }; preMeetingTodoIds.current = null; clearTimeout(spinRef.current); setIsViewer(false); endLiveSession(companyCode || _currentCompanyCode, huddleId).catch(e => console.warn("[VAST] Failed to end live session on reset:", e)); };
     return (
       <Layout title="Meeting Complete!" subtitle="Great work — keep the momentum going">
         <div style={{ maxWidth: 680, margin: "0 auto" }} className="fade-in">
