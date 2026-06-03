@@ -4203,7 +4203,8 @@ function MeetingHistory({ company }) {
 function Settings({ company, onSave, memberInfo }) {
   // Owner/admin gate for team-management tools (same role source used elsewhere).
   const myRole = memberInfo?.customFields?.role;
-  const canManageTeam = myRole === "owner" || myRole === "admin";
+  const r = (myRole || "").toLowerCase();
+  const canManageTeam = r === "owner" || r === "admin";
   const [newMember, setNewMember] = useState({ name: "", email: "", role: "member" });
   const [syncingTeam, setSyncingTeam] = useState(false);
   const [syncResult, setSyncResult] = useState("");
@@ -4860,12 +4861,15 @@ function VASTApp() {
     // Persist to Memberstack so it follows the user across devices
     try {
       const ms = window.$memberstackDom;
-      // Non-critical: theme sync to Memberstack is a convenience, not essential
-      if (ms) ms.updateMember({ customFields: { theme: next } }).catch(e => console.warn("[VAST] Theme sync to Memberstack failed:", e));
+      // Non-critical: theme sync to Memberstack is a convenience, not essential.
+      // Read-merge-write so we never drop existing custom fields (company-code, role, memberId).
+      if (ms) ms.getCurrentMember()
+        .then(res => ms.updateMember({ customFields: { ...(res?.data?.customFields || {}), theme: next } }))
+        .catch(e => console.warn("[VAST] Theme sync to Memberstack failed:", e));
     } catch (e) { console.warn("[VAST] Theme toggle error:", e); }
   };
 
-  const [memberInfo, setMemberInfo] = useState(null); // { id, email, customFields: { companyCode, role } }
+  const [memberInfo, setMemberInfo] = useState(null); // { id, email, customFields: { "company-code", role } }
   const [currentCompanyCode, setCurrentCompanyCode] = useState(null);
   const [appState, setAppState] = useState("loading"); // "loading" | "invite" | "ready"
   const [inviteMode, setInviteMode] = useState("choose"); // "choose" | "join" | "create"
@@ -4949,7 +4953,7 @@ function VASTApp() {
         const memberId = member.customFields?.memberId || member.id;
         await signInToFirebase(memberId);
 
-        const companyCode = member.customFields?.companyCode;
+        const companyCode = member.customFields?.["company-code"];
         const role = member.customFields?.role;
 
         // ── No company code yet → try to recover existing data first ──
@@ -4974,7 +4978,7 @@ function VASTApp() {
             _currentCompanyCode = code; setCurrentCompanyCode(code);
             const existing = await fbGet(`companies/${code}/data`);
             if (!existing) await fbSet(`companies/${code}/data`, legacyData);
-            await ms.updateMember({ customFields: { companyCode: code, role: "owner" } });
+            await ms.updateMember({ customFields: { ...(member.customFields || {}), "company-code": code, role: "owner" } });
             await ms.updateMemberJSON({ json: { vastData: null } });
             const raw = applyMigrations(await fbGet(`companies/${code}/data`));
             companyRef.current = raw; setCompanyState(raw);
@@ -5002,7 +5006,7 @@ function VASTApp() {
                 );
                 if (match) {
                   const [, invite] = match;
-                  const fields = { companyCode: invite.companyCode, role: invite.role || "member" };
+                  const fields = { ...(member.customFields || {}), "company-code": invite.companyCode, role: invite.role || "member" };
                   if (invite.memberId) fields.memberId = invite.memberId;
                   // Write the fields, then RE-READ to confirm they persisted.
                   // ms.updateMember can resolve without the change sticking, so
@@ -5016,7 +5020,7 @@ function VASTApp() {
                     }
                     try {
                       const check = await ms.getCurrentMember();
-                      confirmed = check?.data?.customFields?.companyCode === invite.companyCode;
+                      confirmed = check?.data?.customFields?.["company-code"] === invite.companyCode;
                     } catch (e) { /* verification read failed — retry */ }
                     if (!confirmed && attempt < 2) await new Promise(r => setTimeout(r, 1000));
                   }
@@ -5095,7 +5099,7 @@ function VASTApp() {
           const email = currentMemberData.data.auth.email.toLowerCase();
           const matched = (raw.members || []).find(m => m.email && m.email.toLowerCase() === email);
           if (matched) {
-            await msForBackfill.updateMember({ customFields: { memberId: matched.id } });
+            await msForBackfill.updateMember({ customFields: { ...currentFields, memberId: matched.id } });
             console.log("[VAST] Backfilled memberId:", matched.id);
           }
         }
@@ -5125,8 +5129,10 @@ function VASTApp() {
     try {
       const code = genCode(8);
       const ms = await waitForMemberstack();
-      // Save role + companyCode to Memberstack custom fields
-      await ms.updateMember({ customFields: { companyCode: code, role: "owner" } });
+      // Save role + company-code to Memberstack custom fields.
+      // Read-merge-write so existing fields (e.g. theme, memberId) are preserved.
+      const currentCreateFields = (await ms.getCurrentMember())?.data?.customFields || {};
+      await ms.updateMember({ customFields: { ...currentCreateFields, "company-code": code, role: "owner" } });
       // Create fresh company record in Firebase
       const fresh = defaultCompany(newCompanyName.trim(), code);
       await fbSet(`companies/${code}/data`, fresh);
@@ -5153,8 +5159,11 @@ function VASTApp() {
       const invite = await redeemInvite(inviteInput);
       const ms = await waitForMemberstack();
 
+      // Read current custom fields up front so the write below merges (never drops) them.
+      const currentRedeemFields = (await ms.getCurrentMember())?.data?.customFields || {};
+
       // Build custom fields to save
-      const fields = { companyCode: invite.companyCode, role: invite.role || "member" };
+      const fields = { ...currentRedeemFields, "company-code": invite.companyCode, role: invite.role || "member" };
 
       // If invite has a memberId, use it. Otherwise try to match by email.
       if (invite.memberId) {
