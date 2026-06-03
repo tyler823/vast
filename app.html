@@ -4174,8 +4174,13 @@ function MeetingHistory({ company }) {
 }
 
 // ─── SETTINGS ────────────────────────────────────────────────────────
-function Settings({ company, onSave }) {
+function Settings({ company, onSave, memberInfo }) {
+  // Owner/admin gate for team-management tools (same role source used elsewhere).
+  const myRole = memberInfo?.customFields?.role;
+  const canManageTeam = myRole === "owner" || myRole === "admin";
   const [newMember, setNewMember] = useState({ name: "", email: "", role: "member" });
+  const [syncingTeam, setSyncingTeam] = useState(false);
+  const [syncResult, setSyncResult] = useState("");
   const [quarterLabel, setQuarterLabel] = useState(company.currentQuarter || "");
   const [quarterStart, setQuarterStart] = useState(company.quarterStart || new Date().toISOString().slice(0,10));
   const [quarterEnd, setQuarterEnd] = useState(company.quarterEnd || new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10));
@@ -4285,6 +4290,52 @@ function Settings({ company, onSave }) {
       setPendingInvites(p => ({ ...p, [m.id]: code }));
     } catch(e) { console.warn("Invite creation failed:", e); }
     setGeneratingInvite(null);
+  };
+
+  // Owner-only one-click: ensure every team member with an email has an invite
+  // in the "invites" node so the email auto-match (PART A) links them to this
+  // company automatically the next time they log in. Purely client-side, using
+  // the owner's own authenticated session — no Admin API, no secret key.
+  const syncTeamAccess = async () => {
+    if (syncingTeam) return;
+    const activeCode = _currentCompanyCode || company.code;
+    if (!activeCode) { setSyncResult("Your team isn't fully set up yet — please reload and try again."); return; }
+    setSyncingTeam(true);
+    setSyncResult("");
+    try {
+      // Authoritative read of the member list (owner can read under auth != null).
+      const membersRaw = await fbGet(`companies/${activeCode}/data/members`);
+      const members = Array.isArray(membersRaw)
+        ? membersRaw
+        : (membersRaw ? Object.values(membersRaw) : (company.members || []));
+      // Index existing UNUSED invites by companyCode|email to avoid duplicates.
+      const existingInvites = (await fbGet("invites")) || {};
+      const haveUnused = new Set();
+      Object.values(existingInvites).forEach(inv => {
+        if (inv && inv.email && inv.companyCode && inv.used !== true) {
+          haveUnused.add(`${inv.companyCode}|${String(inv.email).toLowerCase()}`);
+        }
+      });
+      let linked = 0, already = 0, noEmail = 0;
+      for (const m of members) {
+        if (!m) continue;
+        const email = (m.email || "").trim();
+        if (!email) { noEmail++; continue; }
+        const key = `${activeCode}|${email.toLowerCase()}`;
+        if (haveUnused.has(key)) { already++; continue; }
+        // createInvite writes { companyCode, name, email, role, memberId, used:false, createdAt }
+        await createInvite(activeCode, m.name, email, m.role || "member", m.id);
+        haveUnused.add(key);
+        linked++;
+      }
+      const parts = [`Linked ${linked} teammate${linked === 1 ? "" : "s"} — they'll be set automatically the next time they log in.`];
+      if (already) parts.push(`${already} already linked.`);
+      if (noEmail) parts.push(`${noEmail} skipped (no email on file).`);
+      setSyncResult(parts.join(" "));
+    } catch (e) {
+      console.error("[VAST] Sync team access failed:", e);
+      setSyncResult("Sync failed — please try again.");
+    } finally { setSyncingTeam(false); }
   };
 
   const copyInviteCode = (id, code) => {
@@ -4476,6 +4527,20 @@ function Settings({ company, onSave }) {
               {settingsError && <div style={{ color: C.red, fontSize: 12, marginTop: 6 }}>{settingsError}</div>}
               <button className="btn-primary" style={{ marginTop: 10, width: "100%" }} onClick={addMember} disabled={addingMember || !newMember.name.trim() || !newMember.email.trim()}>{addingMember ? "Adding…" : "Add Member"}</button>
             </div>
+
+            {/* ── Owner/admin: one-click team access sync ── */}
+            {canManageTeam && (
+              <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                <h4 style={{ fontSize: 15, marginBottom: 4 }}>Sync team access</h4>
+                <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
+                  Link every teammate who has an email on file so they're added to this team automatically the next time they log in — no invite codes to share.
+                </div>
+                <button className="btn-primary" style={{ width: "100%" }} onClick={syncTeamAccess} disabled={syncingTeam}>
+                  {syncingTeam ? "Syncing…" : "Sync team access"}
+                </button>
+                {syncResult && <div style={{ color: C.green, fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>{syncResult}</div>}
+              </div>
+            )}
           </div>
         </div>
 
@@ -5298,7 +5363,7 @@ function VASTApp() {
       })()}
       {view === "history" && <MeetingHistory {...viewProps} />}
       {view === "quarterhistory" && <QuarterHistory {...viewProps} />}
-      {view === "settings" && <Settings {...viewProps} />}
+      {view === "settings" && <Settings {...viewProps} memberInfo={memberInfo} />}
       </MobileMenuContext.Provider>
     </div>
     </SidebarCollapsedContext.Provider>
