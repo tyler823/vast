@@ -1378,6 +1378,9 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
 
   const [started, setStarted] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
+  // Huddle scorecard: default to a rolling window of the most recent weeks so
+  // the current week is visible without scrolling. Toggle reveals full history.
+  const [scorecardShowAll, setScorecardShowAll] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [segTimes, setSegTimes] = useState({}); // { [segIdx]: seconds accumulated }
   const [quickAdd, setQuickAdd] = useState(null); // null | "headline" | "todo" | "issue"
@@ -2145,6 +2148,17 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
             const qEnd = company.quarterEnd ? new Date(company.quarterEnd) : new Date();
             const weeks = weeksInRange(qStart, qEnd);
             const curWk = weekKey();
+            // Rolling window: by default show only the latest 6 weeks up to and
+            // including the current week (rightmost), so the current week is
+            // visible without horizontal scrolling. "Show all weeks" reveals the
+            // full history. Display-only — never changes stored scorecard data.
+            const RECENT_WEEKS = 6;
+            const curIdx = weeks.indexOf(curWk);
+            const windowEnd = curIdx >= 0 ? curIdx + 1 : weeks.length; // current week is last visible
+            const displayWeeks = scorecardShowAll
+              ? weeks
+              : weeks.slice(Math.max(0, windowEnd - RECENT_WEEKS), windowEnd);
+            const hiddenCount = weeks.length - displayWeeks.length;
 
             const setEntry = (measId, wk, val) => {
               // Write directly to the specific entry path — prevents full-object overwrites
@@ -2175,9 +2189,21 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
 
             return (
               <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-                <div style={{ padding: "16px 20px 12px", borderBottom: `1px solid ${C.border}` }}>
-                  <h3 style={{ fontSize: 18, margin: 0 }}>Scorecard — {company.currentQuarter || "This Quarter"}</h3>
-                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>{weeks.length} weeks · enter this week's numbers in the <span style={{ color: C.red, fontWeight: 700 }}>highlighted column</span></div>
+                <div style={{ padding: "16px 20px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <h3 style={{ fontSize: 18, margin: 0 }}>Scorecard — {company.currentQuarter || "This Quarter"}</h3>
+                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
+                      {scorecardShowAll
+                        ? <>Showing all {weeks.length} weeks · enter this week's numbers in the <span style={{ color: C.red, fontWeight: 700 }}>highlighted column</span></>
+                        : <>Showing the latest {displayWeeks.length} week{displayWeeks.length === 1 ? "" : "s"}{hiddenCount > 0 ? ` of ${weeks.length}` : ""} · enter this week's numbers in the <span style={{ color: C.red, fontWeight: 700 }}>highlighted column</span></>}
+                    </div>
+                  </div>
+                  {weeks.length > RECENT_WEEKS && (
+                    <button onClick={() => setScorecardShowAll(s => !s)}
+                      style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}>
+                      {scorecardShowAll ? `Show recent ${RECENT_WEEKS}` : "Show all weeks"}
+                    </button>
+                  )}
                 </div>
                 <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -2185,7 +2211,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
                       <tr>
                         <th style={{ textAlign: "left", padding: "10px 16px", fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted, background: C.surface2, position: "sticky", left: 0, zIndex: 2, minWidth: 140, borderBottom: `1px solid ${C.border}` }}>Measurable</th>
                         <th style={{ textAlign: "center", padding: "10px 8px", fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted, background: C.surface2, minWidth: 60, borderBottom: `1px solid ${C.border}` }}>Goal</th>
-                        {weeks.map(wk => (
+                        {displayWeeks.map(wk => (
                           <th key={wk} style={{ textAlign: "center", padding: "8px 6px", fontWeight: wk === curWk ? 800 : 600, fontSize: 11, color: wk === curWk ? C.red : C.textMuted, background: wk === curWk ? `rgba(230,51,41,0.07)` : C.surface2, minWidth: 72, borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${wk === curWk ? "rgba(230,51,41,0.3)" : C.border}`, whiteSpace: "nowrap" }}>
                             {weekLabel(wk)}
                             {wk === curWk && <div style={{ fontSize: 9, letterSpacing: 0.5 }}>THIS WEEK</div>}
@@ -2217,7 +2243,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
                             </div>
                           </td>
                           <td style={{ textAlign: "center", padding: "10px 8px", color: C.textMuted, fontSize: 12, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{({gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="})[m.operator||"gte"]} {m.target}{m.unit ? ` ${m.unit}` : ""}</td>
-                          {weeks.map(wk => {
+                          {displayWeeks.map(wk => {
                             const val = entries[wk]?.[m.id] ?? "";
                             const met = meetsGoal(val, m);
                             const isCur = wk === curWk;
