@@ -290,12 +290,12 @@ function setSyncStatus(s) {
   _syncStatus = s;
   const el = document.getElementById("vast-sync-status");
   if (!el) return;
-  const map = { idle: "", saving: "Syncing...", saved: "Saved", error: "Sync failed — will retry" };
+  const map = { idle: "", saving: "Syncing...", saved: "Saved", error: "Sync failed — retrying. Your changes are NOT saved yet." };
   const col = { idle: "", saving: "#888", saved: "#22c55e", error: "#E63329" };
   el.textContent = map[s] || "";
   el.style.color = col[s] || "";
-  // Auto-clear error after 5s so it doesn't persist on screen
-  if (s === "error") setTimeout(() => setSyncStatus("idle"), 5000);
+  // Do NOT auto-clear the error: it must stay visible until a save actually
+  // succeeds (which sets status to "saved"/"idle"), so failures can't hide.
 }
 
 // ── Firebase helpers ───────────────────────────────────────────────────────
@@ -649,7 +649,8 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
   React.useEffect(() => {
     if (!companyCode) return;
     const ref = window._fbDb.ref(`companies/${companyCode}/liveSessions`);
-    ref.on("value", snap => setLiveSessions(snap.exists() ? snap.val() : {}));
+    ref.on("value", snap => setLiveSessions(snap.exists() ? snap.val() : {}),
+      err => console.warn("[VAST] liveSessions listener cancelled:", err && err.message));
     return () => ref.off();
   }, [companyCode]);
 
@@ -835,7 +836,8 @@ function Dashboard({ company, onSave, setView, memberInfo, companyCode }) {
   React.useEffect(() => {
     if (!companyCode) return;
     const ref = window._fbDb.ref(`companies/${companyCode}/liveSessions`);
-    ref.on("value", snap => setLiveSessions(snap.exists() ? snap.val() : {}));
+    ref.on("value", snap => setLiveSessions(snap.exists() ? snap.val() : {}),
+      err => console.warn("[VAST] liveSessions listener cancelled:", err && err.message));
     return () => ref.off();
   }, [companyCode]);
   const onTrack = tasks.filter(t => t.status === "on").length;
@@ -1092,7 +1094,10 @@ function MyMeasurables({ company, onSave, memberInfo }) {
 
   const setEntry = (measId, wk, val) => {
     if (_currentCompanyCode) {
-      fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${wk}`, { [measId]: val }).catch(e => console.warn("[VAST] Scorecard write failed:", e));
+      setSyncStatus("saving");
+      fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${wk}`, { [measId]: val })
+        .then(() => setSyncStatus("saved"))
+        .catch(e => { console.error("[VAST] Scorecard write failed:", e); setSyncStatus("error"); });
     }
   };
 
@@ -1373,6 +1378,9 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
 
   const [started, setStarted] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
+  // Huddle scorecard: default to a rolling window of the most recent weeks so
+  // the current week is visible without scrolling. Toggle reveals full history.
+  const [scorecardShowAll, setScorecardShowAll] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [segTimes, setSegTimes] = useState({}); // { [segIdx]: seconds accumulated }
   const [quickAdd, setQuickAdd] = useState(null); // null | "headline" | "todo" | "issue"
@@ -1445,7 +1453,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
         // Session ended — exit viewer mode
         setIsViewer(false);
       }
-    });
+    }, err => console.warn("[VAST] live session listener cancelled:", err && err.message));
     liveRef.current = ref;
     return () => ref.off();
   }, [companyCode, huddleId, myMemberId]);
@@ -1462,7 +1470,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
   useEffect(() => {
     if (started && !preMeetingTodoIds.current) {
       preMeetingTodoIds.current = new Set(
-        (company.todos || []).filter(t => t.huddleId === huddleId && !t.done).map(t => t.id)
+        (company.todos || []).filter(t => (t.huddleId === huddleId || !t.huddleId) && !t.done).map(t => t.id)
       );
     }
   }, [started]);
@@ -1626,7 +1634,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
     }
 
     // Headlines
-    const activeHeadlines = (company.headlines || []).filter(h => !h.reviewed && h.huddleId === huddleId);
+    const activeHeadlines = (company.headlines || []).filter(h => !h.reviewed && (h.huddleId === huddleId || !h.huddleId));
     if (activeHeadlines.length) {
       lines.push("HEADLINES FROM THE WEEK");
       activeHeadlines.forEach(h => lines.push(`  [${h.type.toUpperCase()}] ${h.text}`));
@@ -1634,7 +1642,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
     }
 
     // Quarterly tasks — off track
-    const offTrack = (company.quarterlyTasks || []).filter(t => t.status === "off" && t.huddleId === huddleId);
+    const offTrack = (company.quarterlyTasks || []).filter(t => t.status === "off" && (t.huddleId === huddleId || !t.huddleId));
     if (offTrack.length) {
       lines.push("OFF-TRACK QUARTERLY TASKS");
       offTrack.forEach(t => lines.push(`  ✗ ${t.title}${t.who ? ` (${t.who})` : ""}`));
@@ -1644,7 +1652,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
     // All open to-dos grouped by assignee
     const today = new Date(); today.setHours(0,0,0,0);
     const todayStr = new Date().toISOString().slice(0,10);
-    const allOpen = (company.todos || []).filter(t => !t.done && t.huddleId === huddleId);
+    const allOpen = (company.todos || []).filter(t => !t.done && (t.huddleId === huddleId || !t.huddleId));
     if (allOpen.length) {
       lines.push("OPEN TO-DOS BY TEAM MEMBER");
       // Group by assignee
@@ -2133,13 +2141,24 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
           {/* SCORING segment */}
           {activeIdx === 1 && (() => {
             const allMeasurables = company.scorecard?.measurables || [];
-            const measurables = allMeasurables.filter(m => m.huddleId === huddleId);
+            const measurables = allMeasurables.filter(m => (m.huddleId === huddleId || !m.huddleId));
             const entries = company.scorecard?.entries || {};
             // Build week list for this quarter
             const qStart = company.quarterStart ? new Date(company.quarterStart) : new Date(Date.now() - 12 * 7 * 86400000);
             const qEnd = company.quarterEnd ? new Date(company.quarterEnd) : new Date();
             const weeks = weeksInRange(qStart, qEnd);
             const curWk = weekKey();
+            // Rolling window: by default show only the latest 6 weeks up to and
+            // including the current week (rightmost), so the current week is
+            // visible without horizontal scrolling. "Show all weeks" reveals the
+            // full history. Display-only — never changes stored scorecard data.
+            const RECENT_WEEKS = 6;
+            const curIdx = weeks.indexOf(curWk);
+            const windowEnd = curIdx >= 0 ? curIdx + 1 : weeks.length; // current week is last visible
+            const displayWeeks = scorecardShowAll
+              ? weeks
+              : weeks.slice(Math.max(0, windowEnd - RECENT_WEEKS), windowEnd);
+            const hiddenCount = weeks.length - displayWeeks.length;
 
             const setEntry = (measId, wk, val) => {
               // Write directly to the specific entry path — prevents full-object overwrites
@@ -2170,9 +2189,21 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
 
             return (
               <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-                <div style={{ padding: "16px 20px 12px", borderBottom: `1px solid ${C.border}` }}>
-                  <h3 style={{ fontSize: 18, margin: 0 }}>Scorecard — {company.currentQuarter || "This Quarter"}</h3>
-                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>{weeks.length} weeks · enter this week's numbers in the <span style={{ color: C.red, fontWeight: 700 }}>highlighted column</span></div>
+                <div style={{ padding: "16px 20px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <h3 style={{ fontSize: 18, margin: 0 }}>Scorecard — {company.currentQuarter || "This Quarter"}</h3>
+                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
+                      {scorecardShowAll
+                        ? <>Showing all {weeks.length} weeks · enter this week's numbers in the <span style={{ color: C.red, fontWeight: 700 }}>highlighted column</span></>
+                        : <>Showing the latest {displayWeeks.length} week{displayWeeks.length === 1 ? "" : "s"}{hiddenCount > 0 ? ` of ${weeks.length}` : ""} · enter this week's numbers in the <span style={{ color: C.red, fontWeight: 700 }}>highlighted column</span></>}
+                    </div>
+                  </div>
+                  {weeks.length > RECENT_WEEKS && (
+                    <button onClick={() => setScorecardShowAll(s => !s)}
+                      style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}>
+                      {scorecardShowAll ? `Show recent ${RECENT_WEEKS}` : "Show all weeks"}
+                    </button>
+                  )}
                 </div>
                 <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -2180,7 +2211,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
                       <tr>
                         <th style={{ textAlign: "left", padding: "10px 16px", fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted, background: C.surface2, position: "sticky", left: 0, zIndex: 2, minWidth: 140, borderBottom: `1px solid ${C.border}` }}>Measurable</th>
                         <th style={{ textAlign: "center", padding: "10px 8px", fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted, background: C.surface2, minWidth: 60, borderBottom: `1px solid ${C.border}` }}>Goal</th>
-                        {weeks.map(wk => (
+                        {displayWeeks.map(wk => (
                           <th key={wk} style={{ textAlign: "center", padding: "8px 6px", fontWeight: wk === curWk ? 800 : 600, fontSize: 11, color: wk === curWk ? C.red : C.textMuted, background: wk === curWk ? `rgba(230,51,41,0.07)` : C.surface2, minWidth: 72, borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${wk === curWk ? "rgba(230,51,41,0.3)" : C.border}`, whiteSpace: "nowrap" }}>
                             {weekLabel(wk)}
                             {wk === curWk && <div style={{ fontSize: 9, letterSpacing: 0.5 }}>THIS WEEK</div>}
@@ -2212,7 +2243,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
                             </div>
                           </td>
                           <td style={{ textAlign: "center", padding: "10px 8px", color: C.textMuted, fontSize: 12, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{({gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="})[m.operator||"gte"]} {m.target}{m.unit ? ` ${m.unit}` : ""}</td>
-                          {weeks.map(wk => {
+                          {displayWeeks.map(wk => {
                             const val = entries[wk]?.[m.id] ?? "";
                             const met = meetsGoal(val, m);
                             const isCur = wk === curWk;
@@ -2245,7 +2276,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
             <div className="card">
               <h3 style={{ fontSize: 18, marginBottom: 4 }}>Quarterly Task Review</h3>
               <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Showing tasks for <strong>{huddleName}</strong>. Update each task's status for this week.</div>
-              {((company.quarterlyTasks || []).filter(t => t.huddleId === huddleId)).map(t => (
+              {((company.quarterlyTasks || []).filter(t => (t.huddleId === huddleId || !t.huddleId))).map(t => (
                 <div key={t.id} style={{ padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -2291,13 +2322,13 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
                   )}
                 </div>
               ))}
-              {!((company.quarterlyTasks || []).filter(t => t.huddleId === huddleId)).length && <div style={{ color: C.textMuted, padding: "16px 0" }}>No tasks assigned to this huddle. Assign tasks in Quarterly Tasks.</div>}
+              {!((company.quarterlyTasks || []).filter(t => (t.huddleId === huddleId || !t.huddleId))).length && <div style={{ color: C.textMuted, padding: "16px 0" }}>No tasks assigned to this huddle. Assign tasks in Quarterly Tasks.</div>}
             </div>
           )}
 
           {/* HEADLINES */}
           {activeIdx === 3 && (() => {
-            const unreviewed = (company.headlines || []).filter(h => !h.reviewed && h.huddleId === huddleId);
+            const unreviewed = (company.headlines || []).filter(h => !h.reviewed && (h.huddleId === huddleId || !h.huddleId));
             console.debug("[VAST/headlines] Huddle filter", { huddleId, totalHeadlines: (company.headlines || []).length, activeInHuddle: unreviewed.length, activeIds: unreviewed.map(h => h.id), allFlags: (company.headlines || []).map(h => ({ id: h.id, reviewed: !!h.reviewed, huddleId: h.huddleId })) });
             const markReviewed = (id) => onSave(latest => {
               const updated = toArray(latest.headlines).map(h => h.id === id ? { ...h, reviewed: true, reviewedAt: now() } : h);
@@ -2365,7 +2396,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
           {/* TO-DOS */}
           {activeIdx === 4 && (() => {
             // Only show todos assigned to THIS huddle
-            const pending = (company.todos || []).filter(t => !t.done && t.huddleId === huddleId);
+            const pending = (company.todos || []).filter(t => !t.done && (t.huddleId === huddleId || !t.huddleId));
             const completeTodo = (id) => {
               onSave(latest => {
                 const updated = toArray(latest.todos).map(x => x.id === id ? { ...x, done: true, completedAt: now() } : x);
@@ -2470,8 +2501,8 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
 
           {/* PROBLEM SOLVING */}
           {activeIdx === 5 && (() => {
-            const pq = (company.problemQueue || []).filter(p => p.huddleId === huddleId);
-            const openIssues = (company.issues || []).filter(i => i.status !== "resolved" && i.huddleId === huddleId);
+            const pq = (company.problemQueue || []).filter(p => (p.huddleId === huddleId || !p.huddleId));
+            const openIssues = (company.issues || []).filter(i => i.status !== "resolved" && (i.huddleId === huddleId || !i.huddleId));
             // eslint-disable-next-line no-console
             console.debug("[VAST/issues] ProblemSolving openIssues filter", { huddleId, totalIssues: (company.issues || []).length, openInHuddle: openIssues.length, openIds: openIssues.map(i => i.id), allIssueStatuses: (company.issues || []).map(i => ({ id: i.id, status: i.status, huddleId: i.huddleId })) });
             // All items available for problem solving (queue + open issues not already in queue)
@@ -2922,9 +2953,12 @@ const meetsTarget = (task) => {
 };
 
 function Tasks({ company, onSave, onAdd }) {
+  // Default new items to the team's first/active huddle so out-of-meeting adds
+  // are never orphaned with an empty huddleId.
+  const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
   const [tab, setTab] = useState("company");
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ title: "", who: "", smart: false, status: "on", huddleId: "", target: "", operator: "" });
+  const [form, setForm] = useState({ title: "", who: "", smart: false, status: "on", huddleId: defaultHuddleId, target: "", operator: "" });
   const [editId, setEditId] = useState(null);
   const [editFields, setEditFields] = useState({});
   const tasks = company.quarterlyTasks || [];
@@ -2935,7 +2969,7 @@ function Tasks({ company, onSave, onAdd }) {
     if (!form.title.trim()) return;
     const newTask = { id: uid(), ...form, createdAt: now() };
     onAdd("quarterlyTasks", newTask);
-    setForm({ title: "", who: "", smart: false, status: "on", huddleId: "", target: "", operator: "" });
+    setForm({ title: "", who: "", smart: false, status: "on", huddleId: defaultHuddleId, target: "", operator: "" });
     setShowAdd(false);
   };
   const updateStatus = (id, status) => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks || []).map(t => t.id === id ? { ...t, status } : t) }));
@@ -3185,8 +3219,10 @@ function Tasks({ company, onSave, onAdd }) {
 
 // ─── SCORECARD ────────────────────────────────────────────────────────
 function Scorecard({ company, onSave }) {
+  // Default new measurables to the team's first/active huddle (no orphans).
+  const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
   const [showAdd, setShowAdd] = useState(false);
-  const [newM, setNewM] = useState({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: "" });
+  const [newM, setNewM] = useState({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: defaultHuddleId });
   const [scorecardError, setScorecardError] = useState("");
   const measurables = company.scorecard?.measurables || [];
   const entries = company.scorecard?.entries || {};
@@ -3208,7 +3244,7 @@ function Scorecard({ company, onSave }) {
     if (!newM.name.trim()) return;
     const m = { id: uid(), ...newM };
     writeMeasurables([...measurables, m]);
-    setNewM({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: "" });
+    setNewM({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: defaultHuddleId });
     setShowAdd(false);
   };
 
@@ -3380,7 +3416,9 @@ function Scorecard({ company, onSave }) {
 
 // ─── HEADLINES ────────────────────────────────────────────────────────
 function Headlines({ company, onSave, onAdd }) {
-  const [form, setForm] = useState({ type: "Customer", text: "", huddleId: "" });
+  // Default new items to the team's first/active huddle (no orphans).
+  const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
+  const [form, setForm] = useState({ type: "Customer", text: "", huddleId: defaultHuddleId });
   const headlines = company.headlines || [];
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
@@ -3483,8 +3521,10 @@ function Headlines({ company, onSave, onAdd }) {
 
 // ─── ISSUES ───────────────────────────────────────────────────────────
 function Issues({ company, onSave, onAdd }) {
+  // Default new items to the team's first/active huddle (no orphans).
+  const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ title: "", priority: "2", notes: "", huddleId: "" });
+  const [form, setForm] = useState({ title: "", priority: "2", notes: "", huddleId: defaultHuddleId });
   const [saving, setSaving] = useState(false);
   const [savingId, setSavingId] = useState(null); // tracks which issue is being resolved/deleted
   const [issueError, setIssueError] = useState("");
@@ -3499,7 +3539,7 @@ function Issues({ company, onSave, onAdd }) {
     try {
       const newIssue = { id: uid(), ...form, status: "open", createdAt: now() };
       onAdd("issues", newIssue);
-      setForm({ title: "", priority: "2", notes: "", huddleId: "" });
+      setForm({ title: "", priority: "2", notes: "", huddleId: defaultHuddleId });
       setShowAdd(false);
     } catch (e) {
       console.error("[VAST] Failed to add issue:", e);
@@ -3633,8 +3673,10 @@ function Issues({ company, onSave, onAdd }) {
 
 // ─── TO-DOS ───────────────────────────────────────────────────────────
 function Todos({ company, onSave, onAdd }) {
+  // Default new items to the team's first/active huddle (no orphans).
+  const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
   const todoDueDefault = () => new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10);
-  const [form, setForm] = useState({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: "" });
+  const [form, setForm] = useState({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: defaultHuddleId });
   const [editId, setEditId] = useState(null);
   const [editFields, setEditFields] = useState({});
   const todos = company.todos || [];
@@ -4158,8 +4200,13 @@ function MeetingHistory({ company }) {
 }
 
 // ─── SETTINGS ────────────────────────────────────────────────────────
-function Settings({ company, onSave }) {
+function Settings({ company, onSave, memberInfo }) {
+  // Owner/admin gate for team-management tools (same role source used elsewhere).
+  const myRole = memberInfo?.customFields?.role;
+  const canManageTeam = myRole === "owner" || myRole === "admin";
   const [newMember, setNewMember] = useState({ name: "", email: "", role: "member" });
+  const [syncingTeam, setSyncingTeam] = useState(false);
+  const [syncResult, setSyncResult] = useState("");
   const [quarterLabel, setQuarterLabel] = useState(company.currentQuarter || "");
   const [quarterStart, setQuarterStart] = useState(company.quarterStart || new Date().toISOString().slice(0,10));
   const [quarterEnd, setQuarterEnd] = useState(company.quarterEnd || new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10));
@@ -4217,23 +4264,41 @@ function Settings({ company, onSave }) {
 
   const addMember = async () => {
     if (!newMember.name.trim() || addingMember) return;
+    // Email is now REQUIRED: it's the key we use to auto-link a teammate to
+    // this company (via the invite + email auto-match on their first login).
+    // Without it they could never reliably receive their companyCode.
+    const email = newMember.email.trim();
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setSettingsError("A valid email is required to invite a teammate.");
+      return;
+    }
+    const activeCode = _currentCompanyCode || company.code;
+    if (!activeCode) {
+      setSettingsError("Your team isn't fully set up yet — please reload and try again.");
+      return;
+    }
     setAddingMember(true);
     setSettingsError("");
     try {
-      const m = { id: uid(), ...newMember, inviteCode: null };
-      onSave({ members: [...(company.members || []), m] });
-      setNewMember({ name: "", email: "", role: "member" });
-      // Generate invite code if email provided
-      if (newMember.email.trim() && company.code) {
-        setGeneratingInvite(m.id);
-        try {
-          const code = await createInvite(_currentCompanyCode || company.code, newMember.name, newMember.email, newMember.role, m.id);
-          const updatedMember = { ...m, inviteCode: code };
-          onSave({ members: [...(company.members || []), updatedMember] });
-          setPendingInvites(p => ({ ...p, [m.id]: code }));
-        } catch(e) { console.warn("Invite creation failed:", e); }
+      const m = { id: uid(), ...newMember, email, inviteCode: null };
+      // ALWAYS create the invite (no longer conditional). Create it first so we
+      // can store its code on the member record in a single save.
+      setGeneratingInvite(m.id);
+      let code = null;
+      try {
+        code = await createInvite(activeCode, newMember.name, email, newMember.role, m.id);
+      } catch(e) {
+        console.error("[VAST] Invite creation failed:", e);
+        setSettingsError("Couldn't generate an invite code. Please try again.");
         setGeneratingInvite(null);
+        setAddingMember(false);
+        return;
       }
+      const newMemberRecord = { ...m, inviteCode: code };
+      onSave({ members: [...(company.members || []), newMemberRecord] });
+      setPendingInvites(p => ({ ...p, [m.id]: code }));
+      setNewMember({ name: "", email: "", role: "member" });
+      setGeneratingInvite(null);
     } catch (e) {
       console.error("[VAST] Failed to add member:", e);
       setSettingsError("Something went wrong. Please try again.");
@@ -4251,6 +4316,52 @@ function Settings({ company, onSave }) {
       setPendingInvites(p => ({ ...p, [m.id]: code }));
     } catch(e) { console.warn("Invite creation failed:", e); }
     setGeneratingInvite(null);
+  };
+
+  // Owner-only one-click: ensure every team member with an email has an invite
+  // in the "invites" node so the email auto-match (PART A) links them to this
+  // company automatically the next time they log in. Purely client-side, using
+  // the owner's own authenticated session — no Admin API, no secret key.
+  const syncTeamAccess = async () => {
+    if (syncingTeam) return;
+    const activeCode = _currentCompanyCode || company.code;
+    if (!activeCode) { setSyncResult("Your team isn't fully set up yet — please reload and try again."); return; }
+    setSyncingTeam(true);
+    setSyncResult("");
+    try {
+      // Authoritative read of the member list (owner can read under auth != null).
+      const membersRaw = await fbGet(`companies/${activeCode}/data/members`);
+      const members = Array.isArray(membersRaw)
+        ? membersRaw
+        : (membersRaw ? Object.values(membersRaw) : (company.members || []));
+      // Index existing UNUSED invites by companyCode|email to avoid duplicates.
+      const existingInvites = (await fbGet("invites")) || {};
+      const haveUnused = new Set();
+      Object.values(existingInvites).forEach(inv => {
+        if (inv && inv.email && inv.companyCode && inv.used !== true) {
+          haveUnused.add(`${inv.companyCode}|${String(inv.email).toLowerCase()}`);
+        }
+      });
+      let linked = 0, already = 0, noEmail = 0;
+      for (const m of members) {
+        if (!m) continue;
+        const email = (m.email || "").trim();
+        if (!email) { noEmail++; continue; }
+        const key = `${activeCode}|${email.toLowerCase()}`;
+        if (haveUnused.has(key)) { already++; continue; }
+        // createInvite writes { companyCode, name, email, role, memberId, used:false, createdAt }
+        await createInvite(activeCode, m.name, email, m.role || "member", m.id);
+        haveUnused.add(key);
+        linked++;
+      }
+      const parts = [`Linked ${linked} teammate${linked === 1 ? "" : "s"} — they'll be set automatically the next time they log in.`];
+      if (already) parts.push(`${already} already linked.`);
+      if (noEmail) parts.push(`${noEmail} skipped (no email on file).`);
+      setSyncResult(parts.join(" "));
+    } catch (e) {
+      console.error("[VAST] Sync team access failed:", e);
+      setSyncResult("Sync failed — please try again.");
+    } finally { setSyncingTeam(false); }
   };
 
   const copyInviteCode = (id, code) => {
@@ -4432,7 +4543,7 @@ function Settings({ company, onSave }) {
                 <input placeholder="Full name" value={newMember.name} onChange={e => setNewMember(m => ({ ...m, name: e.target.value }))} />
               </div>
               <div className="grid2">
-                <input placeholder="Email" value={newMember.email} onChange={e => setNewMember(m => ({ ...m, email: e.target.value }))} />
+                <input placeholder="Email (required)" type="email" value={newMember.email} onChange={e => setNewMember(m => ({ ...m, email: e.target.value }))} />
                 <select value={newMember.role} onChange={e => setNewMember(m => ({ ...m, role: e.target.value }))}>
                   <option value="owner">Owner</option>
                   <option value="admin">Admin</option>
@@ -4440,8 +4551,22 @@ function Settings({ company, onSave }) {
                 </select>
               </div>
               {settingsError && <div style={{ color: C.red, fontSize: 12, marginTop: 6 }}>{settingsError}</div>}
-              <button className="btn-primary" style={{ marginTop: 10, width: "100%" }} onClick={addMember} disabled={addingMember}>{addingMember ? "Adding…" : "Add Member"}</button>
+              <button className="btn-primary" style={{ marginTop: 10, width: "100%" }} onClick={addMember} disabled={addingMember || !newMember.name.trim() || !newMember.email.trim()}>{addingMember ? "Adding…" : "Add Member"}</button>
             </div>
+
+            {/* ── Owner/admin: one-click team access sync ── */}
+            {canManageTeam && (
+              <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                <h4 style={{ fontSize: 15, marginBottom: 4 }}>Sync team access</h4>
+                <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
+                  Link every teammate who has an email on file so they're added to this team automatically the next time they log in — no invite codes to share.
+                </div>
+                <button className="btn-primary" style={{ width: "100%" }} onClick={syncTeamAccess} disabled={syncingTeam}>
+                  {syncingTeam ? "Syncing…" : "Sync team access"}
+                </button>
+                {syncResult && <div style={{ color: C.green, fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>{syncResult}</div>}
+              </div>
+            )}
           </div>
         </div>
 
@@ -4745,6 +4870,12 @@ function VASTApp() {
   const [appState, setAppState] = useState("loading"); // "loading" | "invite" | "ready"
   const [inviteMode, setInviteMode] = useState("choose"); // "choose" | "join" | "create"
   const [inviteError, setInviteError] = useState("");
+  // Surfaced when a live read is denied/cancelled so we never silently leave
+  // stale cache on screen pretending to be live data.
+  const [loadError, setLoadError] = useState(null);
+  // Friendly notice shown on the invite screen when we can't link this member
+  // to any team (empty companyCode + no matching invite).
+  const [linkNotice, setLinkNotice] = useState("");
   const [inviteInput, setInviteInput] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState("");
@@ -4788,6 +4919,12 @@ function VASTApp() {
       });
       companyRef.current = val;
       setCompanyState(val);
+      setLoadError(null); // a successful live read clears any prior error
+    }, err => {
+      // Read was cancelled (e.g. permission denied / token no longer valid).
+      // Surface it instead of silently leaving stale cache on screen.
+      console.error("[VAST] Live data listener cancelled:", err && err.message);
+      setLoadError(err && err.message ? err.message : "We lost the live connection to your team's data.");
     });
     fbListenerRef.current = ref;
   }
@@ -4846,30 +4983,14 @@ function VASTApp() {
             return;
           }
 
-          // Check local cache — may have data from a previous session
-          try {
-            const cacheKey2 = _currentCompanyCode ? `vast:cloud-cache:${_currentCompanyCode}` : "vast:cloud-cache";
-            const cached = localStorage.getItem(cacheKey2);
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              if (parsed && (parsed.name || parsed.members || parsed.huddles)) {
-                // Recover from cache: push to Firebase and set companyCode
-                const code = parsed.code || genCode(8);
-                parsed.code = code;
-                _currentCompanyCode = code; setCurrentCompanyCode(code);
-                await fbSet(`companies/${code}/data`, parsed);
-                await ms.updateMember({ customFields: { companyCode: code, role: "owner" } });
-                const raw = applyMigrations(parsed);
-                companyRef.current = raw; setCompanyState(raw);
-                attachFirebaseListener(code);
-                setAppState("ready");
-                console.log("[VAST] Recovered from local cache.");
-                return;
-              }
-            }
-          } catch(e) { console.warn("[VAST] Cache recovery failed:", e); }
+          // NOTE: We deliberately do NOT recover from the local "vast:cloud-cache"
+          // here. When companyCode is empty we don't actually know which company
+          // this member belongs to, so pushing a stale cache back to Firebase
+          // (the old behaviour) could overwrite live data and render stale data
+          // as if it were current. Cache is treated as read-only display only,
+          // and only for a KNOWN companyCode (see the existing-member path below).
 
-          // Last resort: try to find a matching invite by email
+          // Try to find a matching invite by email and link the member to it.
           try {
             const memberRes = await ms.getCurrentMember();
             const email = memberRes?.data?.auth?.email?.toLowerCase();
@@ -4883,7 +5004,25 @@ function VASTApp() {
                   const [, invite] = match;
                   const fields = { companyCode: invite.companyCode, role: invite.role || "member" };
                   if (invite.memberId) fields.memberId = invite.memberId;
-                  await ms.updateMember({ customFields: fields });
+                  // Write the fields, then RE-READ to confirm they persisted.
+                  // ms.updateMember can resolve without the change sticking, so
+                  // we verify and retry once before trusting it.
+                  let confirmed = false;
+                  for (let attempt = 1; attempt <= 2 && !confirmed; attempt++) {
+                    try {
+                      await ms.updateMember({ customFields: fields });
+                    } catch (e) {
+                      console.warn(`[VAST] updateMember (email match) attempt ${attempt} threw:`, e);
+                    }
+                    try {
+                      const check = await ms.getCurrentMember();
+                      confirmed = check?.data?.customFields?.companyCode === invite.companyCode;
+                    } catch (e) { /* verification read failed — retry */ }
+                    if (!confirmed && attempt < 2) await new Promise(r => setTimeout(r, 1000));
+                  }
+                  if (!confirmed) {
+                    console.warn("[VAST] companyCode did not persist after email match; will still load this session.");
+                  }
                   _currentCompanyCode = invite.companyCode; setCurrentCompanyCode(invite.companyCode);
                   const raw = applyMigrations(await fbGet(`companies/${invite.companyCode}/data`));
                   companyRef.current = raw; setCompanyState(raw);
@@ -4904,7 +5043,9 @@ function VASTApp() {
             }
           } catch(e) { console.warn("[VAST] Anonymous sign-in failed:", e); }
 
-          // Truly new user with no data anywhere
+          // We could not link this member to any team. Show a clear, friendly
+          // screen asking them to enter an invite code — never stale cache.
+          setLinkNotice("We couldn't link your account to a team yet — enter your invite code below, or contact your team owner.");
           setAppState("invite");
           return;
         }
@@ -5117,7 +5258,10 @@ function VASTApp() {
       if (_currentCompanyCode) localStorage.setItem(`vast:cloud-cache:${_currentCompanyCode}`, JSON.stringify(updated));
     } catch (e) { /* non-critical */ }
     if (_currentCompanyCode) {
-      fbAddItem(`companies/${_currentCompanyCode}/data/${key}`, item).catch(e => console.warn(`[VAST] Atomic add to ${key} failed:`, e));
+      setSyncStatus("saving");
+      fbAddItem(`companies/${_currentCompanyCode}/data/${key}`, item)
+        .then(() => setSyncStatus("saved"))
+        .catch(e => { console.error(`[VAST] Atomic add to ${key} failed:`, e); setSyncStatus("error"); });
     }
   }, []);
 
@@ -5127,6 +5271,13 @@ function VASTApp() {
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 40, maxWidth: 440, width: "100%", textAlign: "center" }}>
         <VASTLogo size="lg" />
+
+        {/* ── Account-not-linked notice (empty companyCode + no matching invite) ── */}
+        {linkNotice && (
+          <div style={{ marginTop: 20, marginBottom: 4, padding: "12px 14px", borderRadius: 8, background: C.redGlow, border: `1px solid ${C.red}`, color: C.text, fontSize: 13, lineHeight: 1.5 }}>
+            {linkNotice}
+          </div>
+        )}
 
         {/* ── Mode: choose ── */}
         {inviteMode === "choose" && (<>
@@ -5208,6 +5359,11 @@ function VASTApp() {
     <SidebarCollapsedContext.Provider value={sidebarCollapsed}>
     <div style={{ minHeight: "100vh", background: C.bg }}>
       <GlobalStyles theme={theme} />
+      {loadError && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 10000, background: C.red, color: "#fff", padding: "10px 16px", fontSize: 13, fontWeight: 600, textAlign: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.3)" }}>
+          Connection problem — showing the last data we loaded. Recent changes may not be saved. Please reload or sign in again.
+        </div>
+      )}
       <MobileMenuContext.Provider value={() => setMobileOpen(true)}>
       <Sidebar view={view} setView={v => { setView(v); setMobileOpen(false); }} company={company} theme={theme} toggleTheme={toggleTheme} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} companyCode={currentCompanyCode} />
       {view === "dashboard" && <Dashboard {...viewProps} setView={setView} memberInfo={memberInfo} companyCode={currentCompanyCode} />}
@@ -5233,7 +5389,7 @@ function VASTApp() {
       })()}
       {view === "history" && <MeetingHistory {...viewProps} />}
       {view === "quarterhistory" && <QuarterHistory {...viewProps} />}
-      {view === "settings" && <Settings {...viewProps} />}
+      {view === "settings" && <Settings {...viewProps} memberInfo={memberInfo} />}
       </MobileMenuContext.Provider>
     </div>
     </SidebarCollapsedContext.Provider>
