@@ -2312,12 +2312,12 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
                           </button>
                         );
                       })}
-                      {t.status === "off" && (
-                        <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
-                          style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(228,53,49,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(228,53,49,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                          {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "Flag Issue"}
-                        </button>
-                      )}
+                      {/* Send to Problem Solving — available regardless of on/off-track status */}
+                      <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
+                        title={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in Problem Solving" : "Send to Problem Solving"}
+                        style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                        {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "Flag Issue"}
+                      </button>
                       <button onClick={() => toggleNote(t.id)}
                         style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid ${noteOpen[t.id] || t.notes ? C.blue : C.border}`, background: noteOpen[t.id] ? `rgba(228,53,49,0.1)` : C.surface2, color: noteOpen[t.id] || t.notes ? C.blue : C.textMuted, fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer" }}>
                         <Icon.note size={11} />
@@ -2372,7 +2372,8 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
                           ✓ Reviewed
                         </button>
                         <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
-                          style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(228,53,49,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===h.id) ? "rgba(228,53,49,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===h.id) ? C.red : C.textMuted, fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                          title={(company.problemQueue||[]).find(p=>p.id===h.id) ? "Already in Problem Solving" : "Send to Problem Solving"}
+                          style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===h.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===h.id) ? C.red : C.textMuted, fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
                           {(company.problemQueue||[]).find(p=>p.id===h.id) ? "✓ Queued" : "Flag Issue"}
                         </button>
                         <button onClick={() => toggleNote(h.id)}
@@ -2455,7 +2456,8 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
                             ✓ Complete
                           </button>
                           <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
-                            style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(228,53,49,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(228,53,49,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                            title={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in Problem Solving" : "Send to Problem Solving"}
+                            style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid rgba(230,51,41,0.4)`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? "rgba(230,51,41,0.2)" : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.red : C.textMuted, fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
                             {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "Flag Issue"}
                           </button>
                           <button onClick={() => toggleNote(t.id)}
