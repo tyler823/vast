@@ -1081,6 +1081,7 @@ function ScorecardCell({ value, onCommit, placeholder, style }) {
 
 // ─── MY MEASURABLES WIDGET ────────────────────────────────────────────
 function MyMeasurables({ company, onSave, memberInfo }) {
+  const mobile = useMobile();
   const curWk = weekKey();
   const members = company.members || [];
   const measurables = company.scorecard?.measurables || [];
@@ -1119,7 +1120,9 @@ function MyMeasurables({ company, onSave, memberInfo }) {
   const allWeeks = weeksInRange(qStart, qEnd);
   // Show up to 4 weeks: last 2 past, current, next 1
   const curIdx = allWeeks.indexOf(curWk);
-  const displayWeeks = allWeeks.slice(Math.max(0, curIdx - 2), curIdx + 2);
+  const displayWeeks = mobile
+    ? allWeeks.slice(Math.max(0, curIdx - 1), curIdx + 1)   // last week + this week
+    : allWeeks.slice(Math.max(0, curIdx - 2), curIdx + 2);  // unchanged desktop
 
   const meetsGoal = (val, m) => {
     if (val === "" || val === undefined || val === null) return null;
