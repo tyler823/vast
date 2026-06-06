@@ -1175,6 +1175,7 @@ function MyMeasurables({ company, onSave, memberInfo }) {
               <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", color: C.red, marginBottom: 10 }}>{hudName}</div>
             )}
             {/* Week header row */}
+            {!mobile && (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 360 }}>
                 <thead>
@@ -1225,6 +1226,50 @@ function MyMeasurables({ company, onSave, memberInfo }) {
                 </tbody>
               </table>
             </div>
+            )}
+            {/* Mobile: stacked layout — no horizontal scroll */}
+            {mobile && (
+              <div>
+                {hMeasurables.map(m => (
+                  <div key={m.id} style={{ borderTop: `1px solid ${C.border}`, padding: "12px 0" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>{m.name}</div>
+                        {m.unit && <div style={{ fontSize: 11, color: C.textMuted }}>{m.unit}</div>}
+                      </div>
+                      <div style={{ fontSize: 12, color: C.textMuted, whiteSpace: "nowrap" }}>
+                        Goal: {({ gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" })[m.operator || "gte"]} {m.target}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {displayWeeks.map(wk => {
+                        const val = entries[wk]?.[m.id] ?? "";
+                        const met = meetsGoal(val, m);
+                        const isCur = wk === curWk;
+                        return (
+                          <div key={wk} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "4px 8px", borderRadius: 5, background: isCur ? "rgba(228,53,49,0.04)" : "transparent" }}>
+                            <div style={{ fontSize: 11, fontWeight: isCur ? 800 : 600, color: isCur ? C.red : C.textMuted }}>
+                              {fmtWk(wk)}{isCur && <span style={{ fontSize: 9, letterSpacing: 0.5, color: C.red, marginLeft: 6 }}>THIS WEEK</span>}
+                            </div>
+                            <ScorecardCell
+                              value={val}
+                              onCommit={(v) => setEntry(m.id, wk, v)}
+                              placeholder="—"
+                              style={{ width: 90, textAlign: "center", padding: "6px 4px", fontSize: 14, fontWeight: val !== "" ? 700 : 400,
+                                border: `1px solid ${isCur ? (met === true ? C.green : met === false ? C.red : "rgba(228,53,49,0.5)") : (met === true ? C.green : met === false ? C.red : C.border)}`,
+                                borderRadius: 5,
+                                background: met === true ? "rgba(140,140,148,0.12)" : met === false ? "rgba(228,53,49,0.1)" : isCur ? C.surface2 : "transparent",
+                                color: met === true ? C.green : met === false ? C.red : val !== "" ? C.text : C.textDim,
+                                outline: "none", fontFamily: "'Google Sans',sans-serif" }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       })}
@@ -3520,6 +3565,7 @@ function Scorecard({ company, onSave }) {
 
 // ─── HEADLINES ────────────────────────────────────────────────────────
 function Headlines({ company, onSave, onAdd }) {
+  const isMobile = useMobile();
   // Default new items to the team's first/active huddle (no orphans).
   const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
   const [form, setForm] = useState({ type: "Customer", text: "", huddleId: defaultHuddleId });
@@ -3553,7 +3599,7 @@ function Headlines({ company, onSave, onAdd }) {
   console.debug("[VAST/headlines] Panel filter", { total: headlines.length, active: active.length, reviewed: reviewed.length, allFlags: headlines.map(h => ({ id: h.id, text: h.text, reviewed: !!h.reviewed, huddleId: h.huddleId })) });
 
   const HeadlineRow = ({ h, isReviewed }) => (
-    <div key={h.id} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}`, gap: 8, opacity: isReviewed ? 0.6 : 1 }}>
+    <div key={h.id} style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "flex-start", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}`, gap: 8, opacity: isReviewed ? 0.6 : 1 }}>
       <div style={{ flex: 1 }}>
         <div style={{ marginBottom: 4 }}>
           <span className="chip" style={{ marginRight: 8, fontSize: 10, background: h.type === "Customer" ? "rgba(228,53,49,0.15)" : "rgba(140,140,148,0.1)", borderColor: h.type === "Customer" ? "rgba(228,53,49,0.3)" : "rgba(140,140,148,0.2)", color: h.type === "Customer" ? C.blue : C.green }}>{h.type}</span>
@@ -3581,15 +3627,15 @@ function Headlines({ company, onSave, onAdd }) {
         <div className="card" style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: 18, marginBottom: 16 }}>Add Headline</h3>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} style={{ width: 140 }}>
+            <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} style={{ width: isMobile ? "calc(50% - 5px)" : 140 }}>
               <option>Customer</option><option>Employee</option>
             </select>
-            <select value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ width: 150 }}>
+            <select value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ width: isMobile ? "calc(50% - 5px)" : 150 }}>
               <option value="">No Huddle</option>
               {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
             </select>
-            <input placeholder="What happened this week?" value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: 1 }} />
-            <button className="btn-primary" style={{ padding: "10px 20px" }} onClick={add}>Add</button>
+            <input placeholder="What happened this week?" value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: isMobile ? "1 1 100%" : 1 }} />
+            <button className="btn-primary" style={{ padding: "10px 20px", width: isMobile ? "100%" : undefined }} onClick={add}>Add</button>
           </div>
         </div>
 
@@ -3625,6 +3671,7 @@ function Headlines({ company, onSave, onAdd }) {
 
 // ─── ISSUES ───────────────────────────────────────────────────────────
 function Issues({ company, onSave, onAdd }) {
+  const isMobile = useMobile();
   // Default new items to the team's first/active huddle (no orphans).
   const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
   const [showAdd, setShowAdd] = useState(false);
@@ -3703,7 +3750,7 @@ function Issues({ company, onSave, onAdd }) {
             <h3 style={{ fontSize: 18, marginBottom: 16 }}>Open Issues ({open.length})</h3>
             {open.map(iss => (
               <div key={iss.id} style={{ padding: "14px 0", borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "flex-start", justifyContent: "space-between", gap: isMobile ? 8 : 0 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: iss.priority == 1 ? C.red : iss.priority == 2 ? C.yellow : C.blue, background: iss.priority == 1 ? "rgba(228,53,49,0.1)" : iss.priority == 2 ? "rgba(140,140,148,0.1)" : "rgba(228,53,49,0.1)", padding: "2px 8px", borderRadius: 4 }}>
@@ -3715,7 +3762,7 @@ function Issues({ company, onSave, onAdd }) {
                     {iss.notes && <div style={{ fontSize: 13, color: C.textMuted }}>{iss.notes}</div>}
                     <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{dateStr(new Date(iss.createdAt))}</div>
                   </div>
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                     <button className="btn-ghost" style={{ fontSize: 12, color: C.green }} onClick={() => resolve(iss.id)} disabled={savingId === iss.id}>{savingId === iss.id ? "Saving…" : "✓ Resolve"}</button>
                     <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(iss.id)} disabled={savingId === iss.id}><Icon.trash /></button>
                   </div>
@@ -3777,6 +3824,7 @@ function Issues({ company, onSave, onAdd }) {
 
 // ─── TO-DOS ───────────────────────────────────────────────────────────
 function Todos({ company, onSave, onAdd }) {
+  const isMobile = useMobile();
   // Default new items to the team's first/active huddle (no orphans).
   const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
   const todoDueDefault = () => new Date(Date.now() + 7 * 86400000).toISOString().slice(0,10);
@@ -3898,13 +3946,13 @@ function Todos({ company, onSave, onAdd }) {
         <div className="card" style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: 18, marginBottom: 16 }}>Add To-Do</h3>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: (company.members||[]).length ? 10 : 0 }}>
-            <input placeholder="What needs to happen?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: 2, minWidth: 200 }} />
-            <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 130 }} />
-            <select value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ flex: 1, minWidth: 140 }}>
+            <input placeholder="What needs to happen?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: isMobile ? "1 1 100%" : 2, minWidth: isMobile ? 0 : 200 }} />
+            <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} style={{ flex: isMobile ? "1 1 calc(50% - 5px)" : 1, minWidth: isMobile ? 0 : 130 }} />
+            <select value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ flex: isMobile ? "1 1 calc(50% - 5px)" : 1, minWidth: isMobile ? 0 : 140 }}>
               <option value="">No Huddle</option>
               {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
             </select>
-            <button className="btn-primary" style={{ padding: "10px 20px" }} onClick={add}>Add</button>
+            <button className="btn-primary" style={{ padding: "10px 20px", width: isMobile ? "100%" : undefined }} onClick={add}>Add</button>
           </div>
           {(company.members || []).length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
@@ -4832,7 +4880,7 @@ function QuarterHistory({ company }) {
                 onClick={() => setExpanded(isOpen ? null : q.quarter)}>
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                   <div style={{ background: C.red, color: "#fff", fontFamily: "'Google Sans',sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 2, padding: "6px 14px", borderRadius: 6 }}>{q.quarter}</div>
-                  <div style={{ display: "flex", gap: 20 }}>
+                  <div className="mob-wrap" style={{ display: "flex", gap: 20 }}>
                     <span style={{ fontSize: 12, color: C.textMuted }}><span style={{ color: C.text, fontWeight: 700 }}>{tasks.length}</span> Tasks</span>
                     <span style={{ fontSize: 12, color: C.textMuted }}><span style={{ color: C.text, fontWeight: 700 }}>{todos.length}</span> To-Dos</span>
                     <span style={{ fontSize: 12, color: C.textMuted }}><span style={{ color: C.green, fontWeight: 700 }}>{solved.length}</span> Solved</span>
