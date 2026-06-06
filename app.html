@@ -3267,6 +3267,7 @@ function Scorecard({ company, onSave }) {
   const wk = weekKey();
   const members = company.members || [];
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
+  const isMobile = useMobile();
   const [huddleFilter, setHuddleFilter] = useState("all");
   const filtered = huddleFilter === "all" ? measurables : measurables.filter(m => m.huddleId === huddleFilter);
 
@@ -3325,6 +3326,8 @@ function Scorecard({ company, onSave }) {
           </div>
         </div>
       ) : (
+        <>
+          {!isMobile && (
         <div style={{ overflowX: "auto" }}>
           <div className="card">
             <table className="table" style={{ minWidth: 700 }}>
@@ -3399,6 +3402,62 @@ function Scorecard({ company, onSave }) {
             </table>
           </div>
         </div>
+          )}
+          {isMobile && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {filtered.map(m => (
+                <div key={m.id} className="card">
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>
+                    {m.name}{m.unit && <span style={{ color: C.textMuted, fontSize: 12, marginLeft: 4 }}>({m.unit})</span>}
+                  </div>
+                  <div style={{ color: C.textMuted, fontSize: 13, marginTop: 2 }}>
+                    Target: {m.operator && m.operator !== "gte" ? {gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="}[m.operator] : "≥"} {m.target}{m.unit ? ` ${m.unit}` : ""}
+                  </div>
+                  <div style={{ color: C.textMuted, fontSize: 13, marginTop: 2 }}>
+                    Responsible: {m.owner || "Unassigned"}
+                  </div>
+                  <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {weeks.slice(-6).reverse().map(w => {
+                      const val = entries[w]?.[m.id] ?? "";
+                      const isCurrentWeek = w === wk;
+                      const checkTarget = (val, m) => {
+                      if (!val || !m.target) return null;
+                      const v = parseFloat(val), t = parseFloat(m.target);
+                      if (isNaN(v) || isNaN(t)) return null;
+                      const op = m.operator || "gte";
+                      if (op === "gte") return v >= t;
+                      if (op === "lte") return v <= t;
+                      if (op === "gt")  return v > t;
+                      if (op === "lt")  return v < t;
+                      if (op === "eq")  return v === t;
+                      return null;
+                    };
+                    const onTarget = checkTarget(val, m);
+                      return (
+                        <div key={w} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "6px 0", borderTop: `1px solid ${C.border}` }}>
+                          <span style={{ fontSize: 13, fontWeight: isCurrentWeek ? 800 : 600, color: isCurrentWeek ? C.red : C.textMuted }}>
+                            {w.split("-W")[1] ? `W${w.split("-W")[1]}` : w}
+                            {isCurrentWeek && <span style={{ fontSize: 10, marginLeft: 6, color: C.red }}>THIS WEEK</span>}
+                          </span>
+                          <ScorecardCell
+                            value={val}
+                            onCommit={(v) => setEntry(m.id, v, w)}
+                            placeholder="—"
+                            style={{ width: 90, textAlign: "center", padding: "8px 8px", fontSize: 14, fontWeight: val ? 700 : 400,
+                              border: `1px solid ${isCurrentWeek ? C.red : onTarget === true ? C.green : onTarget === false ? C.red : C.border}`,
+                              borderRadius: 5, background: onTarget === true ? "rgba(140,140,148,0.1)" : onTarget === false ? "rgba(228,53,49,0.1)" : C.surface2,
+                              color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.text) : C.textDim,
+                              outline: "none", fontFamily: "'Google Sans',sans-serif" }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {showAdd && (
