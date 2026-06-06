@@ -199,6 +199,13 @@ const makeSTYLE = (C) => `
     .table th{font-size:12px!important;padding:10px 12px!important}
     .table td{font-size:14px!important;padding:12px!important}
   }
+  /* ── Tablet — Step 2: 769px–1024px lane, two-column grids ── */
+  @media (min-width:769px) and (max-width:1024px){
+    .grid2{grid-template-columns:1fr 1fr!important}
+    .grid3{grid-template-columns:1fr 1fr!important}
+    .card{padding:18px!important}
+    .modal{max-width:640px!important}
+  }
   .stat-card{background:${C.surface2};border:1px solid ${C.border};border-radius:12px;padding:20px;text-align:center;box-shadow:${C.shadow}}
   .vast-logo-text{font-family:'Google Sans',sans-serif;font-size:28px;font-weight:800;color:${C.text}}
   .vast-logo-mark{color:${C.red};font-size:22px;margin-left:2px}
