@@ -3009,6 +3009,7 @@ function Tasks({ company, onSave, onAdd }) {
   const tasks = company.quarterlyTasks || [];
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
+  const isMobile = useMobile();
 
   const addTask = () => {
     if (!form.title.trim()) return;
@@ -3059,6 +3060,8 @@ function Tasks({ company, onSave, onAdd }) {
       </div>
 
       {tab === "company" && (
+        <>
+        {!isMobile && (
         <div className="card">
           <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
             {[["on", C.green, "On Track"], ["off", C.red, "Off Track"], ["done", C.blue, "Done"]].map(([s, c, l]) => (
@@ -3148,6 +3151,54 @@ function Tasks({ company, onSave, onAdd }) {
             </tbody>
           </table>
         </div>
+        )}
+        {isMobile && (
+        <div>
+          <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+            {[["on", C.green, "On Track"], ["off", C.red, "Off Track"], ["done", C.blue, "Done"]].map(([s, c, l]) => (
+              <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: C.textMuted }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />{visibleTasks.filter(t => t.status === s).length} {l}
+              </div>
+            ))}
+          </div>
+          {visibleTasks.length === 0 && <div className="card"><div className="empty-state"><div style={{ fontSize: 14 }}>{huddleFilter !== "all" ? "No tasks assigned to this huddle." : "No tasks yet. Add your first quarterly task!"}</div></div></div>}
+          {visibleTasks.map(t => {
+            const met = meetsTarget(t);
+            const statusColor = t.status === "off" || met === false ? C.red : t.status === "done" || met === true ? C.green : C.yellow;
+            const statusLabel = t.status === "done" ? "Done" : t.status === "off" ? "Off Track" : "On Track";
+            return (
+              <div key={t.id} className="card" style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, flex: 1, minWidth: 0 }}>{t.title}</div>
+                  {t.smart && <span className="tag-on" style={{ flexShrink: 0 }}>SMART</span>}
+                </div>
+                {t.operator && t.target && (
+                  <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>{OPERATORS[t.operator]} {t.target}</div>
+                )}
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+                  <span className="label" style={{ marginBottom: 0 }}>Who</span>
+                  <span style={{ fontSize: 14, color: C.textMuted }}>{t.who || "—"}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+                  <span className="label" style={{ marginBottom: 0 }}>Huddle</span>
+                  <span style={{ fontSize: 14, color: C.textMuted }}>{t.huddleId ? (huddles.find(h => h.id === t.huddleId)?.name || "—") : "—"}</span>
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: `${statusColor}20`, border: `1px solid ${statusColor}50`, borderRadius: 20, padding: "2px 10px" }}>{statusLabel}</span>
+                </div>
+                <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
+                  style={{ width: "100%", padding: "10px 12px", fontSize: 14, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, marginBottom: 10 }}>
+                  <option value="on">On Track</option>
+                  <option value="off">Off Track</option>
+                  <option value="done">Done</option>
+                </select>
+                <button className="btn-danger" style={{ width: "100%" }} onClick={() => deleteTask(t.id)}><Icon.trash /> Delete</button>
+              </div>
+            );
+          })}
+        </div>
+        )}
+        </>
       )}
 
       {tab === "individual" && (
