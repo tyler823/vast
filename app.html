@@ -125,6 +125,7 @@ const makeSTYLE = (C) => `
   :root{--bg:${C.bg};--s1:${C.surface};--s2:${C.surface2};--s3:${C.surface3};--s4:${C.surface3};--acc:${C.red};--acc-lo:${C.redGlow};--acc-glo:${C.offBorder};--t1:${C.text};--t2:${C.textMuted};--t3:${C.textDim};--green:${C.green};--amber:${C.yellow};--red:${C.red};--purple:${C.textMuted};--br:${C.border};--br-hi:${C.okBorder};--ui:'Google Sans',sans-serif;--mono:'Google Sans',sans-serif}
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:${C.bg};color:${C.text};font-family:'Google Sans',sans-serif;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;font-feature-settings:'tnum' 1,'lnum' 1}
+  html,body,#root{overflow-x:clip}
   ::-webkit-scrollbar{width:4px;background:transparent}
   ::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.18);border-radius:2px}
   input,textarea,select{background:${C.surface3};border:1px solid ${C.border};color:${C.text};font-family:'Google Sans',sans-serif;border-radius:8px;padding:8px 11px;width:100%;font-size:12px;outline:none;transition:border-color 0.12s,box-shadow 0.12s;font-feature-settings:'tnum' 1,'lnum' 1}
@@ -183,6 +184,9 @@ const makeSTYLE = (C) => `
     .mob-stack{flex-direction:column!important}
     .mob-hide{display:none!important}
     .mob-full{width:100%!important}
+    .mob-wrap{flex-wrap:wrap!important}
+    .section-header{flex-wrap:wrap;gap:8px}
+    .section-header h3{min-width:0}
     /* ── Step 1: mobile touch targets & readability — CSS-only, additive ── */
     body{font-size:14px}
     button{min-height:44px;font-size:13px!important;padding:11px 16px!important}
@@ -904,7 +908,7 @@ function Dashboard({ company, onSave, setView, memberInfo, companyCode }) {
     <Layout title={`Welcome to ${company.name}`} subtitle={dateStr()}>
       {/* Quarter Progress Banner */}
       <div className="card" style={{ marginBottom: 20, padding: "16px 20px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div className="mob-wrap" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <div>
             <span style={{ fontFamily: "'Google Sans',sans-serif", fontFeatureSettings: '"tnum" 1, "lnum" 1', fontWeight: 800, fontSize: 16, letterSpacing: 1 }}>{q}</span>
             {qStart && qEnd && (
@@ -921,7 +925,7 @@ function Dashboard({ company, onSave, setView, memberInfo, companyCode }) {
             )}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+        <div className="mob-wrap" style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4, display: "flex", justifyContent: "space-between" }}>
               <span>Time elapsed</span><span>{qTimePct}%</span>
