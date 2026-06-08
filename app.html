@@ -178,7 +178,7 @@ const makeSTYLE = (C) => `
     .grid2{grid-template-columns:1fr!important}
     .grid3{grid-template-columns:1fr!important}
     .card{padding:14px!important}
-    .modal{padding:16px!important;max-height:88vh!important;width:100%!important;max-width:100%!important;border-radius:14px!important}
+    .modal{padding:16px!important;max-height:88vh!important;width:100%!important;max-width:520px!important;margin:0 auto!important;border-radius:14px!important}
     .modal-overlay{padding:12px!important;align-items:flex-start!important}
     .timer-display{font-size:36px!important}
     .mob-stack{flex-direction:column!important}
@@ -3820,7 +3820,7 @@ function Issues({ company, onSave, onAdd }) {
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button className="btn-primary" style={{ flex: 1 }} onClick={add} disabled={saving}>{saving ? "Adding…" : "Add Issue"}</button>
-              <button className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
+              <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setShowAdd(false)}>Cancel</button>
             </div>
           </div>
         </div>
