@@ -3355,6 +3355,13 @@ function Scorecard({ company, onSave }) {
   const qStart = company.quarterStart ? new Date(company.quarterStart) : new Date(Date.now() - 12 * 7 * 86400000);
   const qEnd = company.quarterEnd ? new Date(company.quarterEnd) : new Date();
   const weeks = weeksInRange(qStart, qEnd);
+  // Desktop table shows a rolling window of the 9 most recent weeks ending at the
+  // current week (rightmost). Display-only — `weeks` itself is never mutated and
+  // cells stay keyed by their own week, so saving is unaffected.
+  const curIdx = weeks.indexOf(wk);
+  const visibleWeeks = curIdx >= 0
+    ? weeks.slice(Math.max(0, curIdx - 8), curIdx + 1)
+    : weeks.slice(-9);
 
   return (
     <Layout title="Scorecard" subtitle="Track your most important numbers"
@@ -3380,15 +3387,15 @@ function Scorecard({ company, onSave }) {
       ) : (
         <>
           {!isMobile && (
-        <div style={{ overflowX: "auto" }}>
-          <div className="card">
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
             <table className="table" style={{ minWidth: 700 }}>
               <thead>
                 <tr>
                   <th>Measurable</th>
                   <th>Responsible</th>
                   <th>Target</th>
-                  {weeks.map(w => <th key={w} style={{ textAlign: "center" }}>{w.split("-W")[1] ? `W${w.split("-W")[1]}` : w}</th>)}
+                  {visibleWeeks.map(w => <th key={w} style={{ textAlign: "center" }}>{w.split("-W")[1] ? `W${w.split("-W")[1]}` : w}</th>)}
                   <th>Huddle</th>
                 </tr>
               </thead>
@@ -3407,7 +3414,7 @@ function Scorecard({ company, onSave }) {
                     <td style={{ color: C.textMuted, whiteSpace: "nowrap" }}>
                       {m.operator && m.operator !== "gte" ? {gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="}[m.operator] : "≥"} {m.target}{m.unit ? ` ${m.unit}` : ""}
                     </td>
-                    {weeks.map(w => {
+                    {visibleWeeks.map(w => {
                       const val = entries[w]?.[m.id] ?? "";
                       const isCurrentWeek = w === wk;
                       const checkTarget = (val, m) => {
