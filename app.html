@@ -150,6 +150,7 @@ const makeSTYLE = (C) => `
   .tag-on{background:${C.okBg};color:${C.textMuted};border:1px solid ${C.okBorder};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
   .tag-off{background:${C.offBg};color:${C.red};border:1px solid ${C.offBorder};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
   .tag-done{background:${C.okBg};color:${C.textMuted};border:1px solid ${C.okBorder};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+  .tag-notdone{background:rgba(245,158,11,0.14);color:#f59e0b;border:1px solid rgba(245,158,11,0.4);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
   .sidebar-link{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:8px;color:${C.textMuted};font-size:14px;font-weight:500;cursor:pointer;transition:all 0.15s;text-decoration:none;border:none;background:none;width:100%;text-align:left}
   .sidebar-link:hover{background:${C.surface3};color:${C.text}}
   .sidebar-link.active{background:${C.redGlow};color:${C.red};border-left:3px solid ${C.red};padding-left:13px}
@@ -198,7 +199,7 @@ const makeSTYLE = (C) => `
     .rating-btn{width:48px!important;height:48px!important;font-size:16px!important}
     .label{font-size:11px!important}
     .chip{font-size:13px!important;padding:6px 12px!important}
-    .tag-on,.tag-off,.tag-done{font-size:12px!important;padding:4px 11px!important}
+    .tag-on,.tag-off,.tag-done,.tag-notdone{font-size:12px!important;padding:4px 11px!important}
     .badge{min-width:22px!important;height:22px!important;font-size:11px!important}
     .table th{font-size:12px!important;padding:10px 12px!important}
     .table td{font-size:14px!important;padding:12px!important}
@@ -2375,11 +2376,11 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
                       {t.notes && !noteOpen[t.id] && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:3 }} />{t.notes}</div>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                      {[["on","On Track"],["off","Off Track"],["done","Done"]].map(([s, label]) => {
+                      {[["on","On Track"],["off","Off Track"],["done","Done"],["notdone","Not Done"]].map(([s, label]) => {
                         const isActive = t.status === s;
-                        const bg = isActive ? (s === "off" ? "rgba(228,53,49,0.2)" : "rgba(140,140,148,0.2)") : C.surface2;
-                        const col = isActive ? (s === "off" ? C.red : C.green) : C.textMuted;
-                        const bor = isActive ? (s === "off" ? C.red : C.green) : C.border;
+                        const bg = isActive ? (s === "off" ? "rgba(228,53,49,0.2)" : s === "notdone" ? "rgba(245,158,11,0.2)" : "rgba(140,140,148,0.2)") : C.surface2;
+                        const col = isActive ? (s === "off" ? C.red : s === "notdone" ? "#f59e0b" : C.green) : C.textMuted;
+                        const bor = isActive ? (s === "off" ? C.red : s === "notdone" ? "#f59e0b" : C.green) : C.border;
                         return (
                           <button key={s} onClick={() => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s } : x) }))}
                             style={{ padding: "5px 12px", borderRadius: 5, fontSize: 11, fontWeight: 700, fontFamily: "'Google Sans',sans-serif", cursor: "pointer", border: `1px solid ${bor}`, background: bg, color: col }}>
@@ -3039,6 +3040,7 @@ const meetsTarget = (task) => {
   // For display we just show the criterion — green if on/done, red if off
   if (task.status === "done") return true;
   if (task.status === "off") return false;
+  if (task.status === "notdone") return false; // "not done" = not met (same as off track)
   return null; // "on track" = neutral
 };
 
@@ -3106,7 +3108,7 @@ function Tasks({ company, onSave, onAdd }) {
       {tab === "company" && (
         <div className="card">
           <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-            {[["on", C.green, "On Track"], ["off", C.red, "Off Track"], ["done", C.blue, "Done"]].map(([s, c, l]) => (
+            {[["on", C.green, "On Track"], ["off", C.red, "Off Track"], ["done", C.blue, "Done"], ["notdone", "#f59e0b", "Not Done"]].map(([s, c, l]) => (
               <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: C.textMuted }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />{visibleTasks.filter(t => t.status === s).length} {l}
               </div>
@@ -3169,6 +3171,7 @@ function Tasks({ company, onSave, onAdd }) {
                           on: { bg: "rgba(140,140,148,0.12)", color: C.green, border: "rgba(140,140,148,0.3)" },
                           off: { bg: "rgba(228,53,49,0.12)", color: C.red, border: "rgba(228,53,49,0.3)" },
                           done: { bg: "rgba(228,53,49,0.12)", color: C.blue, border: "rgba(228,53,49,0.3)" },
+                          notdone: { bg: "rgba(245,158,11,0.14)", color: "#f59e0b", border: "rgba(245,158,11,0.4)" },
                         };
                         const effectiveColor = met === true ? colors.done : met === false ? colors.off : colors[t.status] || colors.on;
                         return (
@@ -3177,6 +3180,7 @@ function Tasks({ company, onSave, onAdd }) {
                             <option value="on">On Track</option>
                             <option value="off">Off Track</option>
                             <option value="done">Done</option>
+                            <option value="notdone">Not Done</option>
                           </select>
                         );
                       })()}
@@ -3206,8 +3210,8 @@ function Tasks({ company, onSave, onAdd }) {
                 <div style={{ fontFamily: "'Google Sans',sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>{member.name}</div>
                 {allTasks.map(t => {
                   const met = meetsTarget(t);
-                  const statusColor = t.status === "off" || met === false ? C.red : t.status === "done" || met === true ? C.green : C.yellow;
-                  const statusLabel = t.status === "done" ? "Done" : t.status === "off" ? "Off Track" : "On Track";
+                  const statusColor = t.status === "notdone" ? "#f59e0b" : t.status === "off" || met === false ? C.red : t.status === "done" || met === true ? C.green : C.yellow;
+                  const statusLabel = t.status === "notdone" ? "Not Done" : t.status === "done" ? "Done" : t.status === "off" ? "Off Track" : "On Track";
                   return (
                     <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}`, gap: 12 }}>
                       <div style={{ flex: 1 }}>
@@ -4911,7 +4915,7 @@ function QuarterHistory({ company }) {
                             <tr key={i}>
                               <td>{t.title}</td>
                               <td style={{ color: C.textMuted }}>{t.who || "—"}</td>
-                              <td><span className={t.status === "done" ? "tag-done" : t.status === "on" ? "tag-on" : "tag-off"}>{t.status === "done" ? "Completed" : t.status === "on" ? "On Track" : "Off Track"}</span></td>
+                              <td><span className={t.status === "done" ? "tag-done" : t.status === "on" ? "tag-on" : t.status === "notdone" ? "tag-notdone" : "tag-off"}>{t.status === "done" ? "Completed" : t.status === "on" ? "On Track" : t.status === "notdone" ? "Not Done" : "Off Track"}</span></td>
                             </tr>
                           ))}
                         </tbody>
