@@ -3316,7 +3316,7 @@ function Scorecard({ company, onSave }) {
   // Default new measurables to the team's first/active huddle (no orphans).
   const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
   const [showAdd, setShowAdd] = useState(false);
-  const [newM, setNewM] = useState({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: defaultHuddleId });
+  const [newM, setNewM] = useState({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: defaultHuddleId, rollup: "sum", quarterlyGoal: "" });
   const [scorecardError, setScorecardError] = useState("");
   const measurables = company.scorecard?.measurables || [];
   const entries = company.scorecard?.entries || {};
@@ -3339,7 +3339,7 @@ function Scorecard({ company, onSave }) {
     if (!newM.name.trim()) return;
     const m = { id: uid(), ...newM };
     writeMeasurables([...measurables, m]);
-    setNewM({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: defaultHuddleId });
+    setNewM({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: defaultHuddleId, rollup: "sum", quarterlyGoal: "" });
     setShowAdd(false);
   };
 
@@ -3451,6 +3451,15 @@ function Scorecard({ company, onSave }) {
                     })}
                     <td>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <select value={m.rollup || "sum"} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, rollup: e.target.value } : x))}
+                          style={{ fontSize: 11, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textMuted, maxWidth: 110 }}>
+                          <option value="sum">Sum</option>
+                          <option value="avg">Average</option>
+                          <option value="latest">Latest</option>
+                        </select>
+                        <input value={m.quarterlyGoal || ""} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, quarterlyGoal: e.target.value } : x))}
+                          placeholder="Qtr goal"
+                          style={{ fontSize: 11, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textMuted, width: 80 }} />
                         <select value={m.huddleId || ""} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, huddleId: e.target.value } : x))}
                           style={{ fontSize: 11, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, color: C.textMuted, maxWidth: 130 }}>
                           <option value="">No Huddle</option>
@@ -3548,6 +3557,18 @@ function Scorecard({ company, onSave }) {
               <div style={{ fontSize: 11, color: C.textMuted, marginTop: 5 }}>
                 e.g. <strong>≥ 50000 $</strong> for revenue, <strong>≤ 1000 $</strong> for fuel costs
               </div>
+            </div>
+            <div className="field">
+              <label className="label">Quarter Roll-Up</label>
+              <select value={newM.rollup || "sum"} onChange={e => setNewM(m => ({ ...m, rollup: e.target.value }))}>
+                <option value="sum">Sum (add weeks up)</option>
+                <option value="avg">Average</option>
+                <option value="latest">Latest week</option>
+              </select>
+            </div>
+            <div className="field">
+              <label className="label">Quarterly Goal (optional)</label>
+              <input placeholder="Leave blank to auto-calculate" value={newM.quarterlyGoal || ""} onChange={e => setNewM(m => ({ ...m, quarterlyGoal: e.target.value }))} />
             </div>
             <div className="field">
               <label className="label">Who's Responsible</label>
