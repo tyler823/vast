@@ -4374,6 +4374,67 @@ function Settings({ company, onSave, memberInfo }) {
   const [quarterLabel, setQuarterLabel] = useState(company.currentQuarter || "");
   const [quarterStart, setQuarterStart] = useState(company.quarterStart || new Date().toISOString().slice(0,10));
   const [quarterEnd, setQuarterEnd] = useState(company.quarterEnd || new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10));
+  // Start New Quarter modal: archive current quarter + carry forward selected unfinished tasks
+  const [showNewQuarter, setShowNewQuarter] = useState(false);
+  const [nqLabel, setNqLabel] = useState("");
+  const [nqStart, setNqStart] = useState("");
+  const [nqEnd, setNqEnd] = useState("");
+  const [nqCarry, setNqCarry] = useState({});
+  const [nqSaving, setNqSaving] = useState(false);
+  const openNewQuarter = () => {
+    setNqLabel(company.currentQuarter || "");
+    setNqStart(new Date().toISOString().slice(0,10));
+    setNqEnd(new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10));
+    const init = {};
+    (company.quarterlyTasks || []).forEach(t => { if (t.status === "notdone") init[t.id] = true; });
+    setNqCarry(init);
+    setNqSaving(false);
+    setShowNewQuarter(true);
+  };
+  const confirmNewQuarter = () => {
+    if (nqSaving) return; // guard against double-submit (no duplicate carried tasks)
+    setNqSaving(true);
+    // Single atomic onSave: archive the outgoing quarter AND clear/carry tasks in one write.
+    onSave(latest => {
+      // Archive snapshot of the OUTGOING quarter — same structure + update-in-place
+      // logic as finishMeeting, keyed to the OLD label, captured BEFORE clearing.
+      const qh = latest.quarterHistory || [];
+      const oldLabel = latest.currentQuarter || "Unknown Quarter";
+      const existingIdx = qh.findIndex(q => q.quarter === oldLabel);
+      const snapshot = {
+        quarter: oldLabel,
+        archivedAt: now(),
+        tasks: (latest.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status })),
+        todos: (latest.todos || []).map(t => ({ title: t.title, assignee: t.assignee, done: t.done })),
+        solvedProblems: existingIdx >= 0 ? (qh[existingIdx].solvedProblems || []) : [],
+        meetingRatings: existingIdx >= 0 ? (qh[existingIdx].meetingRatings || []) : []
+      };
+      const newQH = existingIdx >= 0
+        ? qh.map((q, i) => i === existingIdx ? snapshot : q)
+        : [...qh, snapshot];
+      // Fresh copies of ONLY the checked tasks — new id/createdAt, status reset to "on", notes cleared.
+      const carried = (latest.quarterlyTasks || [])
+        .filter(t => nqCarry[t.id])
+        .map(t => ({
+          id: uid(),
+          title: t.title, who: t.who, huddleId: t.huddleId,
+          smart: t.smart, target: t.target, operator: t.operator,
+          status: "on", createdAt: now(), notes: ""
+        }));
+      return {
+        quarterHistory: newQH,
+        quarterlyTasks: carried,
+        currentQuarter: nqLabel,
+        quarterStart: nqStart,
+        quarterEnd: nqEnd
+      };
+    });
+    // Keep the Current Quarter card inputs in sync with the new quarter (local UI only).
+    setQuarterLabel(nqLabel);
+    setQuarterStart(nqStart);
+    setQuarterEnd(nqEnd);
+    setShowNewQuarter(false);
+  };
   const [yearGoal, setYearGoal] = useState(company.yearGoal || {});
   const [annualGoals, setAnnualGoals] = useState(company.annualGoals || [{ id: "goal-1", name: "Annual Goal", futureDate: "", revenue: "", profit: "" }]);
   const [newGoalName, setNewGoalName] = useState("");
@@ -4768,6 +4829,7 @@ function Settings({ company, onSave, memberInfo }) {
             })()}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button className="btn-primary" onClick={() => onSave({ currentQuarter: quarterLabel, quarterStart, quarterEnd })}>Save Quarter</button>
+              <button className="btn-secondary" onClick={openNewQuarter}>Start New Quarter</button>
               <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => {
                 const s = new Date().toISOString().slice(0,10);
                 const e2 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10);
@@ -4851,6 +4913,60 @@ function Settings({ company, onSave, memberInfo }) {
           </div>
         </div>
       </div>
+
+      {showNewQuarter && (() => {
+        const carryCandidates = (company.quarterlyTasks || []).filter(t => t.status !== "done");
+        const statusLabel = (s) => s === "notdone" ? "Not Done" : s === "off" ? "Off Track" : "On Track";
+        return (
+          <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowNewQuarter(false)}>
+            <div className="modal">
+              <h3 style={{ fontSize: 20, marginBottom: 12 }}>Start New Quarter</h3>
+              <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 20, lineHeight: 1.5 }}>
+                This archives <strong style={{ color: C.text }}>{company.currentQuarter || "the current quarter"}</strong> to Historical Quarters and starts fresh. Checked tasks below are carried into the new quarter; everything else is preserved only in the archive.
+              </div>
+              <div className="field">
+                <label className="label">New Quarter Label</label>
+                <input placeholder="e.g. Q1 2025 or Spring Sprint" value={nqLabel} onChange={e => setNqLabel(e.target.value)} autoFocus />
+              </div>
+              <div className="grid2" style={{ marginBottom: 12 }}>
+                <div className="field">
+                  <label className="label">Start Date</label>
+                  <input type="date" value={nqStart} onChange={e => setNqStart(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label className="label">End Date</label>
+                  <input type="date" value={nqEnd} onChange={e => setNqEnd(e.target.value)} />
+                </div>
+              </div>
+              <div className="field">
+                <label className="label">Carry Forward Unfinished Tasks</label>
+                {carryCandidates.length === 0 ? (
+                  <div style={{ fontSize: 13, color: C.textMuted, padding: "10px 12px", background: C.surface3, borderRadius: 6 }}>No unfinished tasks to carry forward.</div>
+                ) : (
+                  <div style={{ maxHeight: 240, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                    {carryCandidates.map(t => (
+                      <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderBottom: `1px solid ${C.border}` }}>
+                        <div className={`checkbox ${nqCarry[t.id] ? "checked" : ""}`} onClick={() => setNqCarry(c => ({ ...c, [t.id]: !c[t.id] }))}>
+                          {nqCarry[t.id] && <Icon.check />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>{t.title}</div>
+                          {t.who && <div style={{ fontSize: 12, color: C.textMuted }}>{t.who}</div>}
+                        </div>
+                        <span className={t.status === "notdone" ? "tag-notdone" : t.status === "off" ? "tag-off" : "tag-on"}>{statusLabel(t.status)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                <button className="btn-primary" style={{ flex: 1 }} disabled={nqSaving} onClick={confirmNewQuarter}>Start New Quarter</button>
+                <button className="btn-secondary" onClick={() => setShowNewQuarter(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </Layout>
   );
 }
