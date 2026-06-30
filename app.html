@@ -3317,6 +3317,7 @@ function Scorecard({ company, onSave }) {
   const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
   const [showAdd, setShowAdd] = useState(false);
   const [newM, setNewM] = useState({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: defaultHuddleId, rollup: "sum", quarterlyGoal: "" });
+  const [editingId, setEditingId] = useState(null);
   const [scorecardError, setScorecardError] = useState("");
   const measurables = company.scorecard?.measurables || [];
   const entries = company.scorecard?.entries || {};
@@ -3340,6 +3341,24 @@ function Scorecard({ company, onSave }) {
     const m = { id: uid(), ...newM };
     writeMeasurables([...measurables, m]);
     setNewM({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: defaultHuddleId, rollup: "sum", quarterlyGoal: "" });
+    setShowAdd(false);
+  };
+
+  const editMeasurable = (m) => {
+    setNewM({ name: m.name || "", target: m.target || "", unit: m.unit || "", operator: m.operator || "gte", owner: m.owner || "", huddleId: m.huddleId || defaultHuddleId, rollup: m.rollup || "sum", quarterlyGoal: m.quarterlyGoal || "" });
+    setEditingId(m.id);
+    setShowAdd(true);
+  };
+  const saveMeasurable = () => {
+    if (!newM.name.trim()) return;
+    writeMeasurables(measurables.map(x => x.id === editingId ? { ...x, ...newM } : x));
+    setNewM({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: defaultHuddleId, rollup: "sum", quarterlyGoal: "" });
+    setEditingId(null);
+    setShowAdd(false);
+  };
+  const closeMeasurableModal = () => {
+    setNewM({ name: "", target: "", unit: "", operator: "gte", owner: "", huddleId: defaultHuddleId, rollup: "sum", quarterlyGoal: "" });
+    setEditingId(null);
     setShowAdd(false);
   };
 
@@ -3369,7 +3388,7 @@ function Scorecard({ company, onSave }) {
 
   return (
     <Layout title="Scorecard" subtitle="Track your most important numbers"
-      action={<button className="btn-primary" onClick={() => setShowAdd(true)}><Icon.plus /> Add Measurable</button>}>
+      action={<button className="btn-primary" onClick={() => { setEditingId(null); setShowAdd(true); }}><Icon.plus /> Add Measurable</button>}>
 
       {scorecardError && <div style={{ color: C.red, background: "rgba(228,53,49,0.08)", border: "1px solid rgba(228,53,49,0.25)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 13 }}>{scorecardError}</div>}
 
@@ -3406,7 +3425,7 @@ function Scorecard({ company, onSave }) {
               <tbody>
                 {filtered.map(m => (
                   <tr key={m.id}>
-                    <td style={{ fontWeight: 600 }}>{m.name}{m.unit && <span style={{ color: C.textMuted, fontSize: 12, marginLeft: 4 }}>({m.unit})</span>}</td>
+                    <td style={{ fontWeight: 600 }}><button className="btn-secondary" style={{ padding: "3px 8px", fontSize: 11, marginRight: 8 }} onClick={() => editMeasurable(m)}>Edit</button>{m.name}{m.unit && <span style={{ color: C.textMuted, fontSize: 12, marginLeft: 4 }}>({m.unit})</span>}</td>
                     <td>
                       <select value={m.owner || ""} onChange={e => {
                         writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, owner: e.target.value } : x));
@@ -3525,6 +3544,9 @@ function Scorecard({ company, onSave }) {
                       );
                     })}
                   </div>
+                  <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                    <button className="btn-secondary" style={{ flex: 1 }} onClick={() => editMeasurable(m)}>Edit</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -3533,9 +3555,9 @@ function Scorecard({ company, onSave }) {
       )}
 
       {showAdd && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowAdd(false)}>
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeMeasurableModal()}>
           <div className="modal">
-            <h3 style={{ fontSize: 20, marginBottom: 20 }}>Add Measurable</h3>
+            <h3 style={{ fontSize: 20, marginBottom: 20 }}>{editingId ? "Edit Measurable" : "Add Measurable"}</h3>
             <div className="field">
               <label className="label">Measurable Name</label>
               <input placeholder="e.g. Revenue, Closed Jobs, NPS Score..." value={newM.name} onChange={e => setNewM(m => ({ ...m, name: e.target.value }))} autoFocus />
@@ -3585,8 +3607,9 @@ function Scorecard({ company, onSave }) {
               </select>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={addMeasurable}>Add</button>
-              <button className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={editingId ? saveMeasurable : addMeasurable}>{editingId ? "Save Changes" : "Add"}</button>
+              {editingId && <button className="btn-danger" onClick={() => { if (window.confirm("Delete this measurable? This cannot be undone.")) { deleteMeasurable(editingId); closeMeasurableModal(); } }}>Delete</button>}
+              <button className="btn-secondary" onClick={closeMeasurableModal}>Cancel</button>
             </div>
           </div>
         </div>
