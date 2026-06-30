@@ -156,7 +156,7 @@ const makeSTYLE = (C) => `
   .sidebar-link.active{background:${C.redGlow};color:${C.red};border-left:3px solid ${C.red};padding-left:13px}
   .divider{height:1px;background:${C.border};margin:12px 0}
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.15s ease}
-  .modal{background:${C.surface2};border:1px solid ${C.border};border-radius:16px;width:100%;max-width:580px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;box-shadow:${C.shadowLg}}
+  .modal{background:${C.surface2};border:1px solid ${C.border};border-radius:16px;width:100%;max-width:580px;max-height:90vh;display:flex;flex-direction:column;overflow-y:auto;box-sizing:border-box;box-shadow:${C.shadowLg};padding:24px}
   .field{margin-bottom:16px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
@@ -3425,7 +3425,7 @@ function Scorecard({ company, onSave }) {
               <tbody>
                 {filtered.map(m => (
                   <tr key={m.id}>
-                    <td style={{ fontWeight: 600 }}><button className="btn-secondary" style={{ padding: "3px 8px", fontSize: 11, marginRight: 8 }} onClick={() => editMeasurable(m)}>Edit</button>{m.name}{m.unit && <span style={{ color: C.textMuted, fontSize: 12, marginLeft: 4 }}>({m.unit})</span>}</td>
+                    <td style={{ fontWeight: 600 }}><div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}><button className="btn-secondary" style={{ padding: "3px 8px", fontSize: 11 }} onClick={() => editMeasurable(m)}>Edit</button><span>{m.name}{m.unit && <span style={{ color: C.textMuted, fontSize: 12, marginLeft: 4 }}>({m.unit})</span>}</span></div></td>
                     <td>
                       <select value={m.owner || ""} onChange={e => {
                         writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, owner: e.target.value } : x));
