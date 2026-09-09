@@ -5,43 +5,51 @@
   <link rel="icon" type="image/svg+xml" href="Vast%20Favicon.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VAST Platform</title>
-  <!-- Memberstack webflow package -->
-  <script data-memberstack-app="app_cmm3lt2s8006c0ss17f1u2kyk" src="https://static.memberstack.com/scripts/v2/memberstack.js" type="text/javascript"></script>
-  <!-- Firebase compat SDK (no bundler needed) -->
+  <!-- Firebase compat SDK (no bundler needed) — the CORTEX Firebase projects -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script>
-    const _fbConfig = {
-      apiKey: "AIzaSyBeQ2oixMCr3QnqwWeA_EXmaYzvEXBLe0M",
-      authDomain: "vast-b56bd.firebaseapp.com",
-      databaseURL: "https://vast-b56bd-default-rtdb.firebaseio.com",
-      projectId: "vast-b56bd",
-      storageBucket: "vast-b56bd.firebasestorage.app",
-      messagingSenderId: "977733171083",
-      appId: "1:977733171083:web:6b93f241f32d0f42a8e18e"
-    };
-    firebase.initializeApp(_fbConfig);
+    // ── Environment ──────────────────────────────────────────────────────
+    // VAST runs on the Cortex Firebase projects: VAST users ARE Cortex users
+    // (same Firebase Auth), and VAST data lives in a Realtime Database instance
+    // inside the Cortex project. Prod is selected by hostname (the Netlify site
+    // at vast-os.app; vast.jobdox.ai reserved); everything else — the Netlify
+    // `develop` branch deploy, deploy previews, localhost — talks to Cortex
+    // staging. These are the public web configs (same values Cortex ships to
+    // browsers).
+    const PROD_HOSTS = ["vast.jobdox.ai", "vast-os.app", "www.vast-os.app"];
+    const VAST_ENV = (() => {
+      const prod = PROD_HOSTS.includes(location.hostname);
+      return prod ? {
+        name: "prod",
+        cortexOrigin: "https://jobdox.ai",
+        firebaseConfig: {
+          apiKey: "AIzaSyAFwSEDPqKgAUbwbh_2KZNwLDdGCZEiq3E",
+          authDomain: "cortex-717c6.firebaseapp.com",
+          databaseURL: "https://cortex-717c6-default-rtdb.firebaseio.com",
+          projectId: "cortex-717c6",
+          storageBucket: "cortex-717c6.firebasestorage.app",
+          messagingSenderId: "496631882511"
+        }
+      } : {
+        name: "staging",
+        cortexOrigin: "https://m-dev.jobdox.ai",
+        firebaseConfig: {
+          apiKey: "AIzaSyCJfVh5I22thAb_dP07EQW8JRh4w79x798",
+          authDomain: "cortex-staging-e7d22.firebaseapp.com",
+          databaseURL: "https://cortex-staging-e7d22-default-rtdb.firebaseio.com",
+          projectId: "cortex-staging-e7d22",
+          storageBucket: "cortex-staging-e7d22.firebasestorage.app",
+          messagingSenderId: "108795323286"
+        }
+      };
+    })();
+    window.VAST_ENV = VAST_ENV;
+    firebase.initializeApp(VAST_ENV.firebaseConfig);
     window._fbDb = firebase.database();
     window._fbAuth = firebase.auth();
-    window._VAST_WORKER_URL = "https://vast-auth.tyler-1db.workers.dev";
-    console.log("[VAST] Firebase initialized");
-  </script>
-  <script>
-    // Gate: redirect to marketing page if not an active member
-    document.addEventListener("DOMContentLoaded", function() {
-      var check = setInterval(function() {
-        if (!window.$memberstackDom) return;
-        clearInterval(check);
-        window.$memberstackDom.getCurrentMember().then(function(res) {
-          if (!res || !res.data) {
-            window.location.href = "/index.html";
-          }
-        }).catch(function() {
-          window.location.href = "/index.html";
-        });
-      }, 100);
-    });
+    console.log("[VAST] Firebase initialized (" + VAST_ENV.name + " → " + VAST_ENV.firebaseConfig.projectId + ")");
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -275,59 +283,105 @@ const weeksInRange = (startDate, endDate) => {
   return keys;
 };
 
-// ─── Storage Helpers (Firebase + Memberstack) ────────────────────────
+// ─── Storage Helpers (Firebase / Cortex identity) ─────────────────────
 
-// Wait for Memberstack SDK AND confirmed authenticated session
-function waitForMemberstack(timeout = 10000) {
-  return new Promise((resolve, reject) => {
-    const start = Date.now();
-    const check = setInterval(async () => {
-      if (Date.now() - start > timeout) { clearInterval(check); reject(new Error("Memberstack session timeout")); return; }
-      const ms = window.$memberstackDom;
-      if (!ms) return;
-      try {
-        const res = await ms.getCurrentMember();
-        if (res && res.data) { clearInterval(check); resolve(ms); }
-      } catch (e) { /* Memberstack polling — retries automatically on next interval */ }
-    }, 150);
+// Cortex is the identity provider. Every ID token carries custom claims stamped
+// by Cortex's sync-user-claims: { companyId, permissionLevel, email, supportUser }.
+async function getClaims(force = false) {
+  const u = window._fbAuth.currentUser;
+  if (!u) return null;
+  const res = await u.getIdTokenResult(force);
+  return (res && res.claims) || {};
+}
+
+// Ask Cortex to (re)stamp claims for this user (empty body = their default
+// company), then force a token refresh so the new claims are on the token.
+async function syncClaims() {
+  const u = window._fbAuth.currentUser;
+  if (!u) throw new Error("Not signed in");
+  const idToken = await u.getIdToken();
+  const res = await fetch(`${VAST_ENV.cortexOrigin}/.netlify/functions/sync-user-claims`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${idToken}` },
   });
+  if (res.status === 404) throw new Error("Your Cortex account isn't linked to a company yet. Sign in to Cortex first, then return to VAST.");
+  if (!res.ok) throw new Error(`Couldn't sync your Cortex account (${res.status}). Please try again.`);
+  await u.getIdToken(true);
+  return getClaims();
 }
 
-// Get current member with full custom field data
-async function getCurrentMember() {
-  const ms = await waitForMemberstack();
-  const res = await ms.getCurrentMember();
-  return res?.data || null;
+// Guarantee a companyId claim. forceSync only on a fresh email/password login —
+// a hand-off or persisted session already carries the company the user last
+// entered in Cortex, and re-syncing would reset it to their DEFAULT company.
+async function ensureCompanyClaim({ forceSync = false } = {}) {
+  let claims = forceSync ? await syncClaims() : await getClaims(true);
+  if (!claims || !claims.companyId) claims = await syncClaims();
+  if (!claims || !claims.companyId) throw new Error("Your account isn't attached to a company yet. Open Cortex first, then return to VAST.");
+  return claims;
 }
 
-// Sign into Firebase using a custom token minted by the Cloudflare Worker
-async function signInToFirebase(memberId) {
-  // Skip if already signed in as this user
-  const current = window._fbAuth.currentUser;
-  if (current && current.uid === memberId) {
-    console.log("[VAST] Already signed into Firebase.");
-    return;
+// Session bootstrap from Cortex: company name, staff roster (= VAST team), who
+// "me" is, and the add-on entitlement. `cid` is only honored for support users.
+async function loadVastSession(cid) {
+  const u = window._fbAuth.currentUser;
+  if (!u) throw new Error("Not signed in");
+  const idToken = await u.getIdToken();
+  const res = await fetch(`${VAST_ENV.cortexOrigin}/.netlify/functions/vast-session`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${idToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(cid ? { companyId: cid } : {}),
+  });
+  if (res.status === 401) throw Object.assign(new Error("Your session expired. Please sign in again."), { code: "unauthenticated" });
+  let json = {};
+  try { json = await res.json(); } catch (e) { /* non-JSON error body */ }
+  if (res.status === 403) throw Object.assign(new Error(json.message || "Your Cortex account isn't on this company's staff list."), { code: "not_a_member" });
+  if (!res.ok) throw new Error(json.message || `Couldn't load your VAST session (${res.status}). Try again in a moment.`);
+  return json;   // { companyId, companyName, me, members, entitlement, cortexAccountUrl }
+}
+
+// Read and strip the Cortex hand-off fragment (#vt=<custom token>&cid=<companyId>).
+// Stripped BEFORE sign-in so a reload never replays a spent token.
+function consumeHandoffToken() {
+  const hash = location.hash || "";
+  if (!hash.startsWith("#")) return null;
+  const params = new URLSearchParams(hash.slice(1));
+  const vt = params.get("vt");
+  if (!vt) return null;
+  history.replaceState(null, "", location.pathname + location.search);
+  return { vt, cid: params.get("cid") || null };
+}
+
+// Resolves to { user, cid } — user null → login screen. A hand-off token wins
+// over a persisted session (it may be for a different company).
+async function signInFromHandoffOrSession() {
+  const handoff = consumeHandoffToken();
+  if (handoff) {
+    clearLocalAppData();   // never carry another company's cache across
+    try {
+      await window._fbAuth.signInWithCustomToken(handoff.vt);
+    } catch (e) {
+      console.warn("[VAST] Hand-off sign-in failed:", e);
+      throw Object.assign(new Error("This VAST link has expired. Please sign in below."), { code: "handoff-expired" });
+    }
+    return { user: window._fbAuth.currentUser, cid: handoff.cid };
   }
-  try {
-    const res = await fetch(window._VAST_WORKER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ memberId })
-    });
-    const data = await res.json();
-    if (!data.firebaseToken) throw new Error(data.error || "No token returned");
-    await window._fbAuth.signInWithCustomToken(data.firebaseToken);
-    console.log("[VAST] Signed into Firebase as", memberId);
-  } catch(e) {
-    console.warn("[VAST] Firebase sign-in failed, falling back to anonymous:", e.message);
-    await window._fbAuth.signInAnonymously();
-  }
+  const user = await new Promise(resolve => {
+    const off = window._fbAuth.onAuthStateChanged(u => { off(); resolve(u); });
+  });
+  return { user, cid: null };
 }
 
-// Generate a short random invite / company code
-function genCode(len = 6) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+function cortexAccountUrl(session) {
+  return (session && session.cortexAccountUrl) || `${VAST_ENV.cortexOrigin}/app/account/vast`;
+}
+
+function friendlyAuthError(e) {
+  const code = (e && e.code) || "";
+  if (["auth/invalid-credential", "auth/user-not-found", "auth/wrong-password", "auth/invalid-email", "auth/invalid-login-credentials"].includes(code)) return "Email or password is incorrect.";
+  if (code === "auth/too-many-requests") return "Too many attempts — try again shortly or reset your password.";
+  if (code === "auth/network-request-failed") return "Network error. Check your connection and try again.";
+  if (code === "auth/user-disabled") return "This account has been disabled. Contact your Cortex admin.";
+  return (e && e.message) || "Sign-in failed. Please try again.";
 }
 
 // Sync status indicator
@@ -345,7 +399,23 @@ function setSyncStatus(s) {
 }
 
 // ── Firebase helpers ───────────────────────────────────────────────────────
+// All VAST data lives under vast/companies/{cortexCompanyId} in the Cortex
+// project's Realtime Database. The RTDB rules grant that subtree only to
+// members of the company whose VAST entitlement is active.
+const VAST_DB_ROOT = "vast/companies";
+const dataPath = (cid) => `${VAST_DB_ROOT}/${cid}/data`;
+const livePath = (cid, hid) => `${VAST_DB_ROOT}/${cid}/liveSessions${hid ? "/" + hid : ""}`;
 function fbRef(path) { return window._fbDb.ref(path); }
+
+// Never fail silently: surface a write error in the sync indicator, and on a
+// permission denial (entitlement lapsed / company switched) tell the app to
+// re-bootstrap instead of retrying forever.
+const isPermissionDenied = (e) => /permission[_ ]denied/i.test(String((e && (e.code || e.message)) || ""));
+function reportWriteError(e, label) {
+  console.error(`[VAST] ${label || "Write"} failed:`, e);
+  setSyncStatus("error");
+  if (isPermissionDenied(e)) window.dispatchEvent(new CustomEvent("vast:permission-denied"));
+}
 
 async function fbGet(path) {
   const snap = await fbRef(path).once("value");
@@ -365,24 +435,7 @@ async function fbAddItem(collectionPath, item) {
   await fbRef(`${collectionPath}/${item.id}`).set(_sanitize(item));
 }
 
-// ── Company load/save via Firebase ────────────────────────────────────────
-async function loadCompanyFromFirebase(companyCode) {
-  try {
-    const data = await fbGet(`companies/${companyCode}/data`);
-    if (data) {
-      try { if (_currentCompanyCode) localStorage.setItem(`vast:cloud-cache:${_currentCompanyCode}`, JSON.stringify(data)); } catch (e) { /* localStorage quota exceeded or unavailable — non-critical cache */ }
-      console.log("[VAST] Loaded from Firebase.");
-      return data;
-    }
-  } catch(e) { console.warn("[VAST] Firebase load failed:", e); }
-  // Fallback to local cache
-  try {
-    const cacheKey = _currentCompanyCode ? `vast:cloud-cache:${_currentCompanyCode}` : "vast:cloud-cache";
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) { console.log("[VAST] Loaded from local cache fallback."); return JSON.parse(cached); }
-  } catch (e) { /* localStorage read or JSON parse failed — non-critical fallback path */ }
-  return null;
-}
+// ── Company save via Firebase ─────────────────────────────────────────────
 
 let _saveTimer = null;
 let _pendingUpdates = {};   // accumulated top-level keys to merge into companies/{code}/data
@@ -415,16 +468,23 @@ async function flushSave() {
   _pendingUpdates = {}; // any new edits during await accumulate in a fresh object
 
   try {
-    await fbUpdate(`companies/${_currentCompanyCode}/data`, updates);
+    await fbUpdate(dataPath(_currentCompanyCode), updates);
     console.log("[VAST] Saved to Firebase.");
     setSyncStatus("saved");
     setTimeout(() => setSyncStatus("idle"), 3000);
   } catch(e) {
     console.error("[VAST] Firebase save failed:", e);
     setSyncStatus("error");
-    // Re-queue failed keys; newer pending writes win on conflict
-    _pendingUpdates = { ...updates, ..._pendingUpdates };
-    setTimeout(() => flushSave(), 5000);
+    if (isPermissionDenied(e)) {
+      // Entitlement lapsed or the company changed — retrying can't help. Drop
+      // the queue and let the app re-bootstrap (not-entitled screen / reload).
+      _pendingUpdates = {};
+      window.dispatchEvent(new CustomEvent("vast:permission-denied"));
+    } else {
+      // Re-queue failed keys; newer pending writes win on conflict
+      _pendingUpdates = { ...updates, ..._pendingUpdates };
+      setTimeout(() => flushSave(), 5000);
+    }
   } finally {
     _saving = false;
     if (Object.keys(_pendingUpdates).length) {
@@ -438,7 +498,7 @@ window.addEventListener("beforeunload", () => {
   if (_saveTimer) clearTimeout(_saveTimer);
   if (Object.keys(_pendingUpdates).length && _currentCompanyCode) {
     // Best-effort merge on page unload — cannot reliably show UI errors here
-    try { fbRef(`companies/${_currentCompanyCode}/data`).update(_sanitize(_pendingUpdates)); } catch (e) { console.error("[VAST] beforeunload save failed:", e); }
+    try { fbRef(`${VAST_DB_ROOT}/${_currentCompanyCode}/data`).update(_sanitize(_pendingUpdates)); } catch (e) { console.error("[VAST] beforeunload save failed:", e); }
   }
 });
 
@@ -467,15 +527,14 @@ async function logoutAndClear() {
   // user's last edits are not silently dropped.
   try {
     if (Object.keys(_pendingUpdates).length && _currentCompanyCode) {
-      await fbUpdate(`companies/${_currentCompanyCode}/data`, _pendingUpdates);
+      await fbUpdate(dataPath(_currentCompanyCode), _pendingUpdates);
     }
   } catch (e) { console.warn("[VAST] Final flush before logout failed:", e); }
   clearLocalAppData();
   try {
     if (window._fbAuth && window._fbAuth.currentUser) await window._fbAuth.signOut();
   } catch (e) { console.warn("[VAST] Firebase signOut failed:", e); }
-  try { await window.$memberstackDom?.logout(); } catch (e) { console.warn("[VAST] Memberstack logout failed:", e); }
-  window.location.href = "/index.html";
+  // No redirect — VASTApp's auth watcher shows the login screen.
 }
 
 // ── Live session helpers ──────────────────────────────────────────────────
@@ -485,7 +544,7 @@ async function startLiveSession(companyCode, huddleId, hostMemberId, hostName) {
     console.error("[VAST] Cannot start live session without companyCode, huddleId, and hostMemberId");
     return;
   }
-  await fbSet(`companies/${companyCode}/liveSessions/${huddleId}`, {
+  await fbSet(`${VAST_DB_ROOT}/${companyCode}/liveSessions/${huddleId}`, {
     active: true, activeIdx: 0, hostMemberId, hostName: hostName || "Host",
     startedAt: Date.now()
   });
@@ -497,7 +556,7 @@ async function updateLiveSession(companyCode, huddleId, patchOrActiveIdx) {
   const patch = (patchOrActiveIdx && typeof patchOrActiveIdx === "object")
     ? patchOrActiveIdx
     : { activeIdx: patchOrActiveIdx };
-  await fbUpdate(`companies/${companyCode}/liveSessions/${huddleId}`, patch);
+  await fbUpdate(`${VAST_DB_ROOT}/${companyCode}/liveSessions/${huddleId}`, patch);
 }
 
 async function endLiveSession(companyCode, huddleId) {
@@ -507,48 +566,76 @@ async function endLiveSession(companyCode, huddleId) {
   // is left behind that could confuse the sidebar.
   const code = companyCode || _currentCompanyCode;
   if (!code || !huddleId) return;
-  await fbSet(`companies/${code}/liveSessions/${huddleId}`, { active: false, endedAt: Date.now() });
+  await fbSet(`${VAST_DB_ROOT}/${code}/liveSessions/${huddleId}`, { active: false, endedAt: Date.now() });
 }
 
-// ── Invite code helpers ───────────────────────────────────────────────────
-async function createInvite(companyCode, memberName, memberEmail, memberRole, memberId) {
-  const code = genCode(8);
-  await fbSet(`invites/${code}`, { companyCode, name: memberName, email: memberEmail, role: memberRole || "member", memberId: memberId || null, used: false, createdAt: Date.now() });
-  return code;
+// ── Team roster = Cortex staff ────────────────────────────────────────────
+// vast-session returns the company's staff as [{ id, name, email, role }].
+// VAST keeps its own members[] (other records reference members by NAME —
+// todos / measurables / quarterlyTasks — and by ID — huddles / liveSessions),
+// so we reconcile rather than replace: upsert by id, keep VAST-only extras,
+// mark people no longer on the roster inactive (never delete), cascade renames.
+function cascadeRename(company, oldName, newName) {
+  if (!oldName || !newName || oldName === newName) return {};
+  const rename = (name) => name === oldName ? newName : name;
+  return {
+    quarterlyTasks: toArray(company.quarterlyTasks).map(t => ({ ...t, who: rename(t.who) })),
+    todos: toArray(company.todos).map(t => ({
+      ...t,
+      assignee: t.assignee === oldName ? newName : t.assignee,
+      assignees: (t.assignees || []).map(a => rename(a)),
+    })),
+    scorecard: {
+      ...(company.scorecard || {}),
+      measurables: toArray(company.scorecard && company.scorecard.measurables).map(m => ({ ...m, owner: rename(m.owner) })),
+    },
+  };
 }
 
-async function redeemInvite(code) {
-  const invite = await fbGet(`invites/${code.toUpperCase().trim()}`);
-  if (!invite) throw new Error("Invite code not found. Check with your team owner.");
-  // Allow re-use if code was already used — the first redemption may have failed
-  // to save the Memberstack custom fields. We just won't mark it used again.
-  return { ...invite, alreadyUsed: invite.used === true };
+function reconcileMembers(company, roster) {
+  const existing = toArray(company.members).filter(m => m && m.id);
+  const byId = new Map(existing.map(m => [m.id, m]));
+  const list = Array.isArray(roster) ? roster.filter(r => r && r.id) : [];
+  const rosterIds = new Set(list.map(r => r.id));
+  const renames = [];
+  const next = list.map(r => {
+    const prev = byId.get(r.id);
+    if (!prev) return { id: r.id, name: r.name || r.email || "Member", email: r.email || "", role: r.role || "member" };
+    if (prev.name && r.name && prev.name !== r.name) renames.push([prev.name, r.name]);
+    const { inviteCode, inactive, ...keep } = prev;   // drop legacy invite fields; reactivate if back on the roster
+    return { ...keep, name: r.name || prev.name, email: r.email || prev.email || "", role: r.role || prev.role || "member" };
+  });
+  existing.forEach(m => { if (!rosterIds.has(m.id)) next.push(m.inactive ? m : { ...m, inactive: true }); });
+
+  let updates = {};
+  if (JSON.stringify(next) !== JSON.stringify(existing)) updates.members = next;
+  let working = { ...company, ...updates };
+  for (const [o, n] of renames) {
+    const cas = cascadeRename(working, o, n);
+    updates = { ...updates, ...cas };
+    working = { ...working, ...cas };
+  }
+  return updates;   // {} when nothing changed → no write
 }
 
-async function markInviteUsed(code) {
-  await fbUpdate(`invites/${code.toUpperCase().trim()}`, { used: true, usedAt: Date.now() });
-}
+// Members still on the Cortex roster — use for pickers / attendance. Use
+// toArray(company.members) for id→name lookups so history keeps its names.
+const activeMembers = (company) => toArray(company && company.members).filter(m => m && !m.inactive);
 
-// ── One-time migration: Memberstack JSON → Firebase ───────────────────────
-async function migrateToFirebase(companyCode) {
-  try {
-    const ms = await waitForMemberstack();
-    const res = await ms.getMemberJSON();
-    const cloud = res?.data?.vastData;
-    if (cloud && typeof cloud === "object" && (cloud.name || cloud.members || cloud.huddles)) {
-      console.log("[VAST] Migrating Memberstack data to Firebase...");
-      await fbSet(`companies/${companyCode}/data`, cloud);
-      // Clear from Memberstack JSON to avoid confusion
-      await ms.updateMemberJSON({ json: { vastData: null } });
-      console.log("[VAST] Migration to Firebase complete.");
-      return cloud;
-    }
-  } catch(e) { console.warn("[VAST] Migration check failed:", e); }
-  return null;
+// Centered card used by the login / not-entitled / error screens. Top-level
+// (not defined inside VASTApp) so React keeps the same component identity
+// across renders — otherwise the login inputs would remount on every keystroke.
+function AuthCard({ theme, children }) {
+  return (
+    <><GlobalStyles theme={theme} />
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 40, maxWidth: 440, width: "100%", textAlign: "center" }}>
+        <VASTLogo size="lg" />
+        {children}
+      </div>
+    </div></>
+  );
 }
-
-// One-time migration: move old localStorage data to cloud (kept for compat)
-async function migrateLocalStorageToCloud() { return null; }
 
 // ─── Default Company Data ─────────────────────────────────────────────
 // Top-level so ALL components (including WeeklyHuddle) can call it
@@ -691,7 +778,7 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
   const [liveSessions, setLiveSessions] = React.useState({});
   React.useEffect(() => {
     if (!companyCode) return;
-    const ref = window._fbDb.ref(`companies/${companyCode}/liveSessions`);
+    const ref = window._fbDb.ref(`${VAST_DB_ROOT}/${companyCode}/liveSessions`);
     ref.on("value", snap => setLiveSessions(snap.exists() ? snap.val() : {}),
       err => console.warn("[VAST] liveSessions listener cancelled:", err && err.message));
     return () => ref.off();
@@ -872,13 +959,13 @@ function Layout({ children, title, subtitle, action }) {
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────
-function Dashboard({ company, onSave, setView, memberInfo, companyCode }) {
+function Dashboard({ company, onSave, setView, me, companyCode }) {
   const q = company.currentQuarter || "This Quarter";
   const tasks = company.quarterlyTasks || [];
   const [liveSessions, setLiveSessions] = React.useState({});
   React.useEffect(() => {
     if (!companyCode) return;
-    const ref = window._fbDb.ref(`companies/${companyCode}/liveSessions`);
+    const ref = window._fbDb.ref(`${VAST_DB_ROOT}/${companyCode}/liveSessions`);
     ref.on("value", snap => setLiveSessions(snap.exists() ? snap.val() : {}),
       err => console.warn("[VAST] liveSessions listener cancelled:", err && err.message));
     return () => ref.off();
@@ -1043,7 +1130,7 @@ function Dashboard({ company, onSave, setView, memberInfo, companyCode }) {
           </div>
         </div>
       </div>
-      <MyMeasurables company={company} onSave={onSave} memberInfo={memberInfo} />
+      <MyMeasurables company={company} onSave={onSave} me={me} />
     </Layout>
   );
 }
@@ -1081,20 +1168,21 @@ function ScorecardCell({ value, onCommit, placeholder, style }) {
 }
 
 // ─── MY MEASURABLES WIDGET ────────────────────────────────────────────
-function MyMeasurables({ company, onSave, memberInfo }) {
+function MyMeasurables({ company, onSave, me }) {
   const mobile = useMobile();
   const curWk = weekKey();
-  const members = company.members || [];
+  const members = toArray(company.members);
   const measurables = company.scorecard?.measurables || [];
   const entries = company.scorecard?.entries || {};
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
 
-  // Find who the logged-in user is — try memberId first, then email match, then show all owned
-  const myMemberId = memberInfo?.customFields?.memberId;
-  const myEmail = memberInfo?.auth?.email || memberInfo?.email;
+  // Who the logged-in user is: `me` comes from vast-session (Cortex staff id);
+  // the email match is only a defensive last resort.
+  const myMemberId = me?.id || null;
+  const myEmail = me?.email || null;
   let myMember = members.find(m => m.id === myMemberId);
   if (!myMember && myEmail) myMember = members.find(m => m.email?.toLowerCase() === myEmail.toLowerCase());
-  const myName = myMember?.name;
+  const myName = myMember?.name || me?.name;
 
   // Filter measurables owned by this user
   // If we can't identify the user, show nothing rather than everything
@@ -1141,9 +1229,9 @@ function MyMeasurables({ company, onSave, memberInfo }) {
   const setEntry = (measId, wk, val) => {
     if (_currentCompanyCode) {
       setSyncStatus("saving");
-      fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${wk}`, { [measId]: val })
+      fbUpdate(`${dataPath(_currentCompanyCode)}/scorecard/entries/${wk}`, { [measId]: val })
         .then(() => setSyncStatus("saved"))
-        .catch(e => { console.error("[VAST] Scorecard write failed:", e); setSyncStatus("error"); });
+        .catch(e => reportWriteError(e, "Scorecard write"));
     }
   };
 
@@ -1462,7 +1550,7 @@ function Confetti({ message, onDone }) {
   );
 }
 
-function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo, companyCode }) {
+function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, companyCode }) {
   // Build agenda using per-huddle custom durations if set
   const customMins = ((company.huddles || []).find(h => h.id === huddleId) || {}).agendaMins || {};
   const agenda = AGENDA.map(a => ({ ...a, minutes: customMins[a.id] ?? a.minutes }));
@@ -1512,20 +1600,14 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
   const [isViewer, setIsViewer] = useState(false);   // true = following host
   const [liveSession, setLiveSession] = useState(null); // { active, activeIdx, hostName }
   const liveRef = useRef(null);
-  // Resolve logged-in user's VAST member record — try memberId field first, then email
-  const _rawMemberId = memberInfo?.customFields?.memberId;
-  const _myEmail = memberInfo?.auth?.email || memberInfo?.email;
-  const _myVastMember = _rawMemberId
-    ? (company.members || []).find(m => m.id === _rawMemberId)
-    : _myEmail
-      ? (company.members || []).find(m => m.email?.toLowerCase() === _myEmail.toLowerCase())
-      : null;
-  const myMemberId = _myVastMember?.id || _rawMemberId || memberInfo?.id || null;
+  // Logged-in user's member id = Cortex staff id from vast-session (members[]
+  // is reconciled from the same roster, so it always has a matching row).
+  const myMemberId = me?.id || null;
 
   // Subscribe to live session for this huddle
   useEffect(() => {
     if (!companyCode || !huddleId) return;
-    const ref = window._fbDb.ref(`companies/${companyCode}/liveSessions/${huddleId}`);
+    const ref = window._fbDb.ref(`${VAST_DB_ROOT}/${companyCode}/liveSessions/${huddleId}`);
     ref.on("value", snap => {
       const session = snap.exists() ? snap.val() : null;
       setLiveSession(session);
@@ -1566,7 +1648,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
     }
   }, [started]);
   // Only show members assigned to this huddle (or all if huddle has no member list yet)
-  const allMembers = company.members || [];
+  const allMembers = activeMembers(company);
   const huddleObj = (company.huddles || []).find(h => h.id === huddleId) || {};
   const huddleMemberIds = huddleObj.memberIds;
   const members = huddleMemberIds && huddleMemberIds.length > 0
@@ -1791,7 +1873,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
     if (ratingEntries.length > 1) {
       lines.push("INDIVIDUAL RATINGS");
       ratingEntries.forEach(([mid, score]) => {
-        const m = (company.members || []).find(x => x.id === mid);
+        const m = toArray(company.members).find(x => x.id === mid);
         lines.push(`  ${m ? m.name : "Member"}: ${score}/10`);
       });
       lines.push(`  Average: ${avgRating}/10`);
@@ -1816,7 +1898,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
     let freshData = null;
     if (_currentCompanyCode) {
       try {
-        const fresh = await fbGet(`companies/${_currentCompanyCode}/data`);
+        const fresh = await fbGet(`${VAST_DB_ROOT}/${_currentCompanyCode}/data`);
         if (fresh && typeof fresh === "object") {
           if (fresh.code !== _currentCompanyCode) fresh.code = _currentCompanyCode;
           applyMigrations(fresh);
@@ -1869,7 +1951,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
     const newMeetings = [...toArray(freshData?.meetings || company.meetings), mtg];
     if (_currentCompanyCode) {
       // FIX 3: Atomic multi-path update to avoid dual-write race condition
-      await fbUpdate(`companies/${_currentCompanyCode}/data`, {
+      await fbUpdate(`${VAST_DB_ROOT}/${_currentCompanyCode}/data`, {
         meetings: newMeetings,
         huddles: updatedHuddles,
         quarterHistory: newQH,
@@ -1918,7 +2000,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
               <h3 style={{ fontSize: 16, marginBottom: 12 }}>Individual Ratings</h3>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                 {Object.entries(memberRatings).map(([mid, score]) => {
-                  const m = (company.members || []).find(x => x.id === mid);
+                  const m = toArray(company.members).find(x => x.id === mid);
                   return (
                     <div key={mid} style={{ display: "flex", flexDirection: "column", alignItems: "center", background: C.surface2, borderRadius: 8, padding: "10px 16px", minWidth: 80 }}>
                       <div style={{ fontSize: 24, fontWeight: 800, color: score >= 8 ? C.green : score >= 6 ? C.yellow : C.red, fontFamily: "'Google Sans',sans-serif", fontFeatureSettings: '"tnum" 1, "lnum" 1' }}>{score}</div>
@@ -1941,7 +2023,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
           {(() => {
             const huddleObj = (company.huddles || []).find(h => h.id === huddleId);
             const huddleMemberIds = huddleObj?.memberIds || [];
-            const allMembers = company.members || [];
+            const allMembers = activeMembers(company);
             const recipientPool = huddleMemberIds.length > 0
               ? allMembers.filter(m => huddleMemberIds.includes(m.id))
               : allMembers;
@@ -2054,7 +2136,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
               return;
             }
             if (companyCode && myMemberId) {
-              const hostName = (company.members || []).find(m => m.id === myMemberId)?.name || "Host";
+              const hostName = toArray(company.members).find(m => m.id === myMemberId)?.name || me?.name || "Host";
               try {
                 await startLiveSession(companyCode, huddleId, myMemberId, hostName);
                 setStarted(true);
@@ -2255,7 +2337,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, memberInfo
               // Write directly to the specific entry path — prevents full-object overwrites
               // from clobbering other team members' independently entered data
               if (_currentCompanyCode) {
-                fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${wk}`, { [measId]: val });
+                fbUpdate(`${dataPath(_currentCompanyCode)}/scorecard/entries/${wk}`, { [measId]: val }).catch(e => reportWriteError(e, "Scorecard write"));
               }
             };
 
@@ -3127,10 +3209,10 @@ function Tasks({ company, onSave, onAdd }) {
                         <input value={editFields.title} onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))} style={{ width: "100%", minWidth: 180 }} autoFocus />
                       </td>
                       <td>
-                        {(company.members||[]).length > 0 ? (
+                        {activeMembers(company).length > 0 ? (
                           <select value={editFields.who} onChange={e => setEditFields(f => ({ ...f, who: e.target.value }))} style={{ width: "100%" }}>
                             <option value="">Unassigned</option>
-                            {(company.members||[]).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                            {activeMembers(company).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                           </select>
                         ) : (
                           <input value={editFields.who} onChange={e => setEditFields(f => ({ ...f, who: e.target.value }))} style={{ width: "100%" }} />
@@ -3201,7 +3283,7 @@ function Tasks({ company, onSave, onAdd }) {
 
       {tab === "individual" && (
         <div>
-          {(company.members || []).map(member => {
+          {activeMembers(company).map(member => {
             const legacyTasks = (company.individualTasks || {})[member.id] || [];
             const assignedTasks = filtered((company.quarterlyTasks || []).filter(t => t.who === member.name));
             const allTasks = [...assignedTasks, ...legacyTasks.filter(lt => !assignedTasks.find(at => at.id === lt.id))];
@@ -3238,7 +3320,7 @@ function Tasks({ company, onSave, onAdd }) {
               </div>
             );
           })}
-          {!(company.members || []).length && <div className="card"><div className="empty-state">Add team members in Settings to assign individual tasks.</div></div>}
+          {!activeMembers(company).length && <div className="card"><div className="empty-state">Add staff in Cortex to assign individual tasks.</div></div>}
         </div>
       )}
 
@@ -3252,10 +3334,10 @@ function Tasks({ company, onSave, onAdd }) {
             </div>
             <div className="field">
               <label className="label">Assigned To</label>
-              {(company.members || []).length > 0 ? (
+              {activeMembers(company).length > 0 ? (
                 <select value={form.who} onChange={e => setForm(f => ({ ...f, who: e.target.value }))}>
                   <option value="">Unassigned</option>
-                  {(company.members || []).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                  {activeMembers(company).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                   <option value="__custom">Other...</option>
                 </select>
               ) : (
@@ -3322,7 +3404,7 @@ function Scorecard({ company, onSave }) {
   const measurables = company.scorecard?.measurables || [];
   const entries = company.scorecard?.entries || {};
   const wk = weekKey();
-  const members = company.members || [];
+  const members = activeMembers(company);
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const isMobile = useMobile();
   const [huddleFilter, setHuddleFilter] = useState("all");
@@ -3332,8 +3414,8 @@ function Scorecard({ company, onSave }) {
   // entries written by other users (data/scorecard/entries/...) are not clobbered.
   const writeMeasurables = (next) => {
     if (!_currentCompanyCode) return;
-    fbUpdate(`companies/${_currentCompanyCode}/data/scorecard`, { measurables: next })
-      .catch(e => { console.error("[VAST] Measurables save failed:", e); setScorecardError("Failed to save measurable. Please try again."); });
+    fbUpdate(`${dataPath(_currentCompanyCode)}/scorecard`, { measurables: next })
+      .catch(e => { reportWriteError(e, "Measurables save"); setScorecardError("Failed to save measurable. Please try again."); });
   };
 
   const addMeasurable = () => {
@@ -3365,8 +3447,8 @@ function Scorecard({ company, onSave }) {
   const setEntry = (measId, val, targetWk) => {
     const weekToWrite = targetWk || wk;
     if (_currentCompanyCode) {
-      fbUpdate(`companies/${_currentCompanyCode}/data/scorecard/entries/${weekToWrite}`, { [measId]: val })
-        .catch(e => { console.error("[VAST] Scorecard save failed:", e); setScorecardError("Failed to save scorecard entry. Please try again."); });
+      fbUpdate(`${dataPath(_currentCompanyCode)}/scorecard/entries/${weekToWrite}`, { [measId]: val })
+        .catch(e => { reportWriteError(e, "Scorecard save"); setScorecardError("Failed to save scorecard entry. Please try again."); });
     }
   };
 
@@ -3944,10 +4026,10 @@ function Todos({ company, onSave, onAdd }) {
               {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
             </select>
           </div>
-          {(company.members || []).length > 0 && (
+          {activeMembers(company).length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 10 }}>
               <span style={{ fontSize: 12, color: C.textMuted, marginRight: 2 }}>Assign to:</span>
-              {(company.members || []).map(m => {
+              {activeMembers(company).map(m => {
                 const sel = (editFields.assignees || []).includes(m.name);
                 return (
                   <button key={m.id}
@@ -3961,11 +4043,11 @@ function Todos({ company, onSave, onAdd }) {
                 );
               })}
               <button onClick={() => {
-                const allNames = (company.members || []).map(m => m.name);
+                const allNames = activeMembers(company).map(m => m.name);
                 const allSel = allNames.every(n => (editFields.assignees || []).includes(n));
                 setEditFields(f => ({ ...f, assignees: allSel ? [] : allNames }));
               }} style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Google Sans',sans-serif", background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
-                {(company.members || []).every(m => (editFields.assignees || []).includes(m.name)) ? "✓ Everyone" : "Everyone"}
+                {activeMembers(company).every(m => (editFields.assignees || []).includes(m.name)) ? "✓ Everyone" : "Everyone"}
               </button>
             </div>
           )}
@@ -4000,7 +4082,7 @@ function Todos({ company, onSave, onAdd }) {
       <div style={{ maxWidth: 700 }}>
         <div className="card" style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: 18, marginBottom: 16 }}>Add To-Do</h3>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: (company.members||[]).length ? 10 : 0 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: activeMembers(company).length ? 10 : 0 }}>
             <input placeholder="What needs to happen?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: isMobile ? "1 1 100%" : 2, minWidth: isMobile ? 0 : 200 }} />
             <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} style={{ flex: isMobile ? "1 1 calc(50% - 5px)" : 1, minWidth: isMobile ? 0 : 130 }} />
             <select value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ flex: isMobile ? "1 1 calc(50% - 5px)" : 1, minWidth: isMobile ? 0 : 140 }}>
@@ -4009,10 +4091,10 @@ function Todos({ company, onSave, onAdd }) {
             </select>
             <button className="btn-primary" style={{ padding: "10px 20px", width: isMobile ? "100%" : undefined }} onClick={add}>Add</button>
           </div>
-          {(company.members || []).length > 0 && (
+          {activeMembers(company).length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
               <span style={{ fontSize: 12, color: C.textMuted, marginRight: 2 }}>Assign to:</span>
-              {(company.members || []).map(m => {
+              {activeMembers(company).map(m => {
                 const sel = (form.assignees || []).includes(m.name);
                 return (
                   <button key={m.id} onClick={() => setForm(f => ({ ...f, assignees: sel ? f.assignees.filter(a => a !== m.name) : [...(f.assignees||[]), m.name] }))}
@@ -4025,11 +4107,11 @@ function Todos({ company, onSave, onAdd }) {
                 );
               })}
               <button onClick={() => {
-                const allNames = (company.members||[]).map(m => m.name);
+                const allNames = activeMembers(company).map(m => m.name);
                 const allSel = allNames.every(n => (form.assignees||[]).includes(n));
                 setForm(f => ({ ...f, assignees: allSel ? [] : allNames }));
               }} style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Google Sans',sans-serif", background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
-                {(company.members||[]).every(m => (form.assignees||[]).includes(m.name)) ? "✓ Everyone" : "Everyone"}
+                {activeMembers(company).every(m => (form.assignees||[]).includes(m.name)) ? "✓ Everyone" : "Everyone"}
               </button>
             </div>
           )}
@@ -4165,10 +4247,10 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
               </div>
               <div className="field" style={{ margin: 0 }}>
                 <label className="label">Person</label>
-                {(company.members||[]).length > 0 ? (
+                {activeMembers(company).length > 0 ? (
                   <select value={l.name} onChange={e => setLeader(l.id, "name", e.target.value)}>
                     <option value="">— Select —</option>
-                    {(company.members||[]).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                    {activeMembers(company).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                     <option value="__custom">Other...</option>
                   </select>
                 ) : (
@@ -4213,10 +4295,10 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
               <div style={{ display: "flex", gap: 8 }}>
                 <input value={dept.headTitle || ""} onChange={e => setDept(dept.id, "headTitle", e.target.value)}
                   placeholder="Title (e.g. Director)" style={{ flex: 1, fontSize: 12, padding: "6px 8px" }} />
-                {(company.members||[]).length > 0 ? (
+                {activeMembers(company).length > 0 ? (
                   <select value={dept.headName || ""} onChange={e => setDept(dept.id, "headName", e.target.value)} style={{ flex: 1, fontSize: 12, padding: "6px 8px" }}>
                     <option value="">— Select —</option>
-                    {(company.members||[]).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                    {activeMembers(company).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                   </select>
                 ) : (
                   <input value={dept.headName || ""} onChange={e => setDept(dept.id, "headName", e.target.value)}
@@ -4233,10 +4315,10 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
               <div key={s.id} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
                 <input value={s.title} onChange={e => setStaff(dept.id, s.id, "title", e.target.value)}
                   placeholder="Role" style={{ flex: 1, fontSize: 12, padding: "6px 8px" }} />
-                {(company.members||[]).length > 0 ? (
+                {activeMembers(company).length > 0 ? (
                   <select value={s.name} onChange={e => setStaff(dept.id, s.id, "name", e.target.value)} style={{ flex: 1, fontSize: 12, padding: "6px 8px" }}>
                     <option value="">— Name —</option>
-                    {(company.members||[]).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                    {activeMembers(company).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                   </select>
                 ) : (
                   <input value={s.name} onChange={e => setStaff(dept.id, s.id, "name", e.target.value)}
@@ -4300,7 +4382,7 @@ function MeetingHistory({ company }) {
   const [copied, setCopied] = React.useState(null);
   const [huddleFilter, setHuddleFilter] = React.useState("all");
   const huddles = company.huddles || [];
-  const allMembers = company.members || [];
+  const allMembers = activeMembers(company);
 
   const meetings = huddleFilter === "all" ? allMeetings : allMeetings.filter(m => m.huddleId === huddleFilter);
 
@@ -4407,14 +4489,7 @@ function MeetingHistory({ company }) {
 }
 
 // ─── SETTINGS ────────────────────────────────────────────────────────
-function Settings({ company, onSave, memberInfo }) {
-  // Owner/admin gate for team-management tools (same role source used elsewhere).
-  const myRole = memberInfo?.customFields?.role;
-  const r = (myRole || "").toLowerCase();
-  const canManageTeam = r === "owner" || r === "admin";
-  const [newMember, setNewMember] = useState({ name: "", email: "", role: "member" });
-  const [syncingTeam, setSyncingTeam] = useState(false);
-  const [syncResult, setSyncResult] = useState("");
+function Settings({ company, onSave, session }) {
   const [quarterLabel, setQuarterLabel] = useState(company.currentQuarter || "");
   const [quarterStart, setQuarterStart] = useState(company.quarterStart || new Date().toISOString().slice(0,10));
   const [quarterEnd, setQuarterEnd] = useState(company.quarterEnd || new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10));
@@ -4524,159 +4599,8 @@ function Settings({ company, onSave, memberInfo }) {
   const renameOrgChart = (id, name) => onSave({ orgCharts: orgCharts.map(o => o.id === id ? { ...o, name } : o) });
   const deleteOrgChart = (id) => { if (orgCharts.length <= 1) return; onSave({ orgCharts: orgCharts.filter(o => o.id !== id) }); };
 
-  const [pendingInvites, setPendingInvites] = React.useState({}); // { memberId: code }
-  const [generatingInvite, setGeneratingInvite] = React.useState(null);
-  const [copiedInvite, setCopiedInvite] = React.useState(null);
-  const [addingMember, setAddingMember] = React.useState(false);
-  const [deletingMemberId, setDeletingMemberId] = React.useState(null);
-  const [settingsError, setSettingsError] = React.useState("");
-
-  const addMember = async () => {
-    if (!newMember.name.trim() || addingMember) return;
-    // Email is now REQUIRED: it's the key we use to auto-link a teammate to
-    // this company (via the invite + email auto-match on their first login).
-    // Without it they could never reliably receive their companyCode.
-    const email = newMember.email.trim();
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      setSettingsError("A valid email is required to invite a teammate.");
-      return;
-    }
-    const activeCode = _currentCompanyCode || company.code;
-    if (!activeCode) {
-      setSettingsError("Your team isn't fully set up yet — please reload and try again.");
-      return;
-    }
-    setAddingMember(true);
-    setSettingsError("");
-    try {
-      const m = { id: uid(), ...newMember, email, inviteCode: null };
-      // ALWAYS create the invite (no longer conditional). Create it first so we
-      // can store its code on the member record in a single save.
-      setGeneratingInvite(m.id);
-      let code = null;
-      try {
-        code = await createInvite(activeCode, newMember.name, email, newMember.role, m.id);
-      } catch(e) {
-        console.error("[VAST] Invite creation failed:", e);
-        setSettingsError("Couldn't generate an invite code. Please try again.");
-        setGeneratingInvite(null);
-        setAddingMember(false);
-        return;
-      }
-      const newMemberRecord = { ...m, inviteCode: code };
-      onSave({ members: [...(company.members || []), newMemberRecord] });
-      setPendingInvites(p => ({ ...p, [m.id]: code }));
-      setNewMember({ name: "", email: "", role: "member" });
-      setGeneratingInvite(null);
-    } catch (e) {
-      console.error("[VAST] Failed to add member:", e);
-      setSettingsError("Something went wrong. Please try again.");
-    } finally { setAddingMember(false); }
-  };
-
-  const generateInviteForMember = async (m) => {
-    const activeCode = _currentCompanyCode || company.code;
-    if (!activeCode) return;
-    setGeneratingInvite(m.id);
-    try {
-      const code = await createInvite(activeCode, m.name, m.email, m.role, m.id);
-      const updatedMembers = (company.members || []).map(x => x.id === m.id ? { ...x, inviteCode: code } : x);
-      onSave({ members: updatedMembers });
-      setPendingInvites(p => ({ ...p, [m.id]: code }));
-    } catch(e) { console.warn("Invite creation failed:", e); }
-    setGeneratingInvite(null);
-  };
-
-  // Owner-only one-click: ensure every team member with an email has an invite
-  // in the "invites" node so the email auto-match (PART A) links them to this
-  // company automatically the next time they log in. Purely client-side, using
-  // the owner's own authenticated session — no Admin API, no secret key.
-  const syncTeamAccess = async () => {
-    if (syncingTeam) return;
-    const activeCode = _currentCompanyCode || company.code;
-    if (!activeCode) { setSyncResult("Your team isn't fully set up yet — please reload and try again."); return; }
-    setSyncingTeam(true);
-    setSyncResult("");
-    try {
-      // Authoritative read of the member list (owner can read under auth != null).
-      const membersRaw = await fbGet(`companies/${activeCode}/data/members`);
-      const members = Array.isArray(membersRaw)
-        ? membersRaw
-        : (membersRaw ? Object.values(membersRaw) : (company.members || []));
-      // Index existing UNUSED invites by companyCode|email to avoid duplicates.
-      const existingInvites = (await fbGet("invites")) || {};
-      const haveUnused = new Set();
-      Object.values(existingInvites).forEach(inv => {
-        if (inv && inv.email && inv.companyCode && inv.used !== true) {
-          haveUnused.add(`${inv.companyCode}|${String(inv.email).toLowerCase()}`);
-        }
-      });
-      let linked = 0, already = 0, noEmail = 0;
-      for (const m of members) {
-        if (!m) continue;
-        const email = (m.email || "").trim();
-        if (!email) { noEmail++; continue; }
-        const key = `${activeCode}|${email.toLowerCase()}`;
-        if (haveUnused.has(key)) { already++; continue; }
-        // createInvite writes { companyCode, name, email, role, memberId, used:false, createdAt }
-        await createInvite(activeCode, m.name, email, m.role || "member", m.id);
-        haveUnused.add(key);
-        linked++;
-      }
-      const parts = [`Linked ${linked} teammate${linked === 1 ? "" : "s"} — they'll be set automatically the next time they log in.`];
-      if (already) parts.push(`${already} already linked.`);
-      if (noEmail) parts.push(`${noEmail} skipped (no email on file).`);
-      setSyncResult(parts.join(" "));
-    } catch (e) {
-      console.error("[VAST] Sync team access failed:", e);
-      setSyncResult("Sync failed — please try again.");
-    } finally { setSyncingTeam(false); }
-  };
-
-  const copyInviteCode = (id, code) => {
-    // Clipboard is non-critical UI feedback — safe to warn-only
-    navigator.clipboard.writeText(code).catch(e => console.warn("[VAST] Clipboard copy failed:", e));
-    setCopiedInvite(id);
-    setTimeout(() => setCopiedInvite(null), 2500);
-  };
-  const delMember = (id) => {
-    if (deletingMemberId) return;
-    setDeletingMemberId(id);
-    const m = (company.members || []).find(x => x.id === id);
-    if (!m) { setDeletingMemberId(null); return; }
-    try {
-      onSave({
-        members: (company.members || []).filter(x => x.id !== id),
-        huddles: (company.huddles || []).map(h => ({ ...h, memberIds: (h.memberIds || []).filter(mid => mid !== id) })),
-        todos: (company.todos || []).map(t => ({ ...t, assignees: (t.assignees || []).filter(a => a !== m.name) })),
-        scorecard: { ...company.scorecard, measurables: (company.scorecard?.measurables || []).map(ms => ms.owner === m.name ? { ...ms, owner: "" } : ms) },
-      });
-    } catch (e) {
-      console.error("[VAST] Failed to delete member:", e);
-      setSettingsError("Something went wrong. Please try again.");
-    } finally { setDeletingMemberId(null); }
-  };
-
-  const renameMember = (id, newName) => {
-    const oldName = (company.members || []).find(m => m.id === id)?.name;
-    if (!oldName || oldName === newName) return;
-    const rename = (name) => name === oldName ? newName : name;
-    // Cascade rename across all data that references member name
-    const updates = {
-      members: toArray(company.members).map(m => m.id === id ? { ...m, name: newName } : m),
-      quarterlyTasks: (company.quarterlyTasks || []).map(t => ({ ...t, who: rename(t.who) })),
-      todos: (company.todos || []).map(t => ({
-        ...t,
-        assignee: t.assignee === oldName ? newName : t.assignee,
-        assignees: (t.assignees || []).map(a => rename(a)),
-      })),
-      scorecard: {
-        ...company.scorecard,
-        measurables: (company.scorecard?.measurables || []).map(m => ({ ...m, owner: rename(m.owner) })),
-      },
-    };
-    onSave(updates);
-  };
+  // Team members are read-only here — the roster syncs from Cortex staff on
+  // every load (see reconcileMembers). Invites / add / delete / rename are gone.
 
   return (
     <Layout title="Settings" subtitle={company.name}>
@@ -4698,7 +4622,7 @@ function Settings({ company, onSave, memberInfo }) {
                 const next = hMemberIds.includes(mid) ? hMemberIds.filter(id => id !== mid) : [...hMemberIds, mid];
                 onSave({ huddles: huddles.map(x => x.id === h.id ? { ...x, memberIds: next } : x) });
               };
-              const allMembers = company.members || [];
+              const allMembers = activeMembers(company);
               return (
                 <div key={h.id} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: allMembers.length ? 10 : 0 }}>
@@ -4706,7 +4630,7 @@ function Settings({ company, onSave, memberInfo }) {
                     {huddles.length > 1 && <button className="btn-danger" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => deleteHuddle(h.id)}><Icon.trash /></button>}
                   </div>
                   {allMembers.length === 0 && (
-                    <div style={{ fontSize: 11, color: C.textDim, fontStyle: "italic" }}>Add team members in the Team Members section below.</div>
+                    <div style={{ fontSize: 11, color: C.textDim, fontStyle: "italic" }}>Add staff in Cortex — they appear here the next time VAST loads.</div>
                   )}
                   {allMembers.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -4765,77 +4689,24 @@ function Settings({ company, onSave, memberInfo }) {
           </div>
 
           <div className="card" style={{ marginBottom: 20 }}>
-            <h3 style={{ fontSize: 18, marginBottom: 16 }}>Team Members</h3>
-            {(company.members || []).map(m => {
-              const inviteCode = m.inviteCode || pendingInvites[m.id];
-              return (
-                <div key={m.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <input
-                        defaultValue={m.name}
-                        onBlur={e => renameMember(m.id, e.target.value.trim())}
-                        onKeyDown={e => e.key === "Enter" && e.target.blur()}
-                        style={{ fontSize: 14, fontWeight: 600, color: C.text, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, padding: "2px 0", outline: "none", width: "100%", fontFamily: "'Google Sans',sans-serif" }}
-                      />
-                      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{m.email}{m.email && m.role ? " · " : ""}{m.role}</div>
-                    </div>
-                    {!inviteCode && (
-                      <button onClick={() => generateInviteForMember(m)} disabled={generatingInvite === m.id}
-                        style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily:"'Google Sans',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap", flexShrink: 0 }}>
-                        {generatingInvite === m.id ? "..." : "Invite"}
-                      </button>
-                    )}
-                    <button className="btn-danger" style={{ padding: "6px 10px", flexShrink: 0 }} onClick={() => delMember(m.id)} disabled={deletingMemberId === m.id}>{deletingMemberId === m.id ? "…" : <Icon.trash />}</button>
-                  </div>
-                  {inviteCode && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, padding: "8px 10px", background: "rgba(228,53,49,0.08)", borderRadius: 6, border: "1px solid rgba(228,53,49,0.2)" }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 10, color: "#e43531", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Invite Code</div>
-                        <div style={{ fontFamily: "'Google Sans',sans-serif", fontSize: 18, fontWeight: 800, letterSpacing: 3, color: C.text }}>{inviteCode}</div>
-                      </div>
-                      <button onClick={() => copyInviteCode(m.id, inviteCode)}
-                        style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid rgba(228,53,49,0.4)", background: copiedInvite === m.id ? "rgba(140,140,148,0.15)" : "rgba(228,53,49,0.12)", color: copiedInvite === m.id ? "#8b8b92" : "#e43531", fontFamily:"'Google Sans',sans-serif", fontWeight:700, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                        {copiedInvite === m.id ? "✓ Copied!" : "Copy"}
-                      </button>
-                    </div>
-                  )}
+            <h3 style={{ fontSize: 18, marginBottom: 4 }}>Team Members</h3>
+            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 16 }}>Your VAST team is your Cortex staff list. Names, emails and roles sync from Cortex each time VAST loads.</div>
+            {toArray(company.members).map(m => (
+              <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: `1px solid ${C.border}`, opacity: m.inactive ? 0.55 : 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{m.email}{m.email && m.role ? " · " : ""}{m.role}</div>
                 </div>
-              );
-            })}
-            {(company.members||[]).length > 0 && (
-              <div style={{ fontSize: 11, color: C.textDim, marginTop: 8, fontStyle: "italic" }}>Click a name to edit it. Changes cascade to all tasks and to-dos.</div>
+                {m.inactive && <span className="tag-off" style={{ flexShrink: 0 }}>Inactive</span>}
+              </div>
+            ))}
+            {!toArray(company.members).length && (
+              <div style={{ fontSize: 12, color: C.textDim, fontStyle: "italic" }}>No staff found. Add staff in Cortex and reload VAST.</div>
             )}
-            <div style={{ marginTop: 16 }}>
-              <h4 style={{ fontSize: 15, marginBottom: 10 }}>Add Team Member</h4>
-              <div className="field">
-                <input placeholder="Full name" value={newMember.name} onChange={e => setNewMember(m => ({ ...m, name: e.target.value }))} />
-              </div>
-              <div className="grid2">
-                <input placeholder="Email (required)" type="email" value={newMember.email} onChange={e => setNewMember(m => ({ ...m, email: e.target.value }))} />
-                <select value={newMember.role} onChange={e => setNewMember(m => ({ ...m, role: e.target.value }))}>
-                  <option value="owner">Owner</option>
-                  <option value="admin">Admin</option>
-                  <option value="member">Member</option>
-                </select>
-              </div>
-              {settingsError && <div style={{ color: C.red, fontSize: 12, marginTop: 6 }}>{settingsError}</div>}
-              <button className="btn-primary" style={{ marginTop: 10, width: "100%" }} onClick={addMember} disabled={addingMember || !newMember.name.trim() || !newMember.email.trim()}>{addingMember ? "Adding…" : "Add Member"}</button>
+            <div style={{ fontSize: 11, color: C.textDim, marginTop: 12, fontStyle: "italic" }}>
+              Team members and roles are managed in Cortex → Settings → Staff.{" "}
+              <a href={cortexAccountUrl(session)} target="_blank" rel="noopener" style={{ color: C.blue }}>Open Cortex</a>
             </div>
-
-            {/* ── Owner/admin: one-click team access sync ── */}
-            {canManageTeam && (
-              <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
-                <h4 style={{ fontSize: 15, marginBottom: 4 }}>Sync team access</h4>
-                <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
-                  Link every teammate who has an email on file so they're added to this team automatically the next time they log in — no invite codes to share.
-                </div>
-                <button className="btn-primary" style={{ width: "100%" }} onClick={syncTeamAccess} disabled={syncingTeam}>
-                  {syncingTeam ? "Syncing…" : "Sync team access"}
-                </button>
-                {syncResult && <div style={{ color: C.green, fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>{syncResult}</div>}
-              </div>
-            )}
           </div>
         </div>
 
@@ -5179,357 +5050,209 @@ function VASTApp() {
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
-    localStorage.setItem("vast-theme", next);
+    localStorage.setItem("vast-theme", next);   // personal preference — stays on this device
     setTheme(next);
-    // Persist to Memberstack so it follows the user across devices
-    try {
-      const ms = window.$memberstackDom;
-      // Non-critical: theme sync to Memberstack is a convenience, not essential.
-      // Read-merge-write so we never drop existing custom fields (company-code, role, memberId).
-      if (ms) ms.getCurrentMember()
-        .then(res => ms.updateMember({ customFields: { ...(res?.data?.customFields || {}), theme: next } }))
-        .catch(e => console.warn("[VAST] Theme sync to Memberstack failed:", e));
-    } catch (e) { console.warn("[VAST] Theme toggle error:", e); }
   };
 
-  const [memberInfo, setMemberInfo] = useState(null); // { id, email, customFields: { "company-code", role } }
+  const [session, setSession] = useState(null);          // vast-session payload: { companyId, companyName, me, members, entitlement, cortexAccountUrl }
+  const me = session ? session.me : null;
+  // Holds the Cortex companyId (name kept from the invite-code era — it is the
+  // RTDB key under vast/companies/ and the value of company.code).
   const [currentCompanyCode, setCurrentCompanyCode] = useState(null);
-  const [appState, setAppState] = useState("loading"); // "loading" | "invite" | "ready"
-  const [inviteMode, setInviteMode] = useState("choose"); // "choose" | "join" | "create"
-  const [inviteError, setInviteError] = useState("");
-  // Surfaced when a live read is denied/cancelled so we never silently leave
+  const [appState, setAppState] = useState("loading");    // "loading" | "login" | "not-entitled" | "error" | "ready"
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const handoffCidRef = useRef(null);                     // support users: the company chosen in Cortex
+  // Surfaced when the live read is denied/cancelled so we never silently leave
   // stale cache on screen pretending to be live data.
   const [loadError, setLoadError] = useState(null);
-  // Friendly notice shown on the invite screen when we can't link this member
-  // to any team (empty companyCode + no matching invite).
-  const [linkNotice, setLinkNotice] = useState("");
-  const [inviteInput, setInviteInput] = useState("");
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [newCompanyName, setNewCompanyName] = useState("");
   const fbListenerRef = useRef(null);
   const companyRef = useRef(null);      // always holds latest company data
 
   function attachFirebaseListener(companyCode) {
     if (fbListenerRef.current) fbListenerRef.current.off();
-    const ref = window._fbDb.ref(`companies/${companyCode}/data`);
+    const ref = window._fbDb.ref(dataPath(companyCode));
     ref.on("value", snap => {
       if (!snap.exists()) return;
       const raw = snap.val();
-      // Firestore is the source of truth, but if the user has un-flushed local
+      // Firebase is the source of truth, but if the user has un-flushed local
       // edits, overlay them so their in-flight changes don't flicker away.
       // Once flushSave completes, _pendingUpdates is empty and remote wins.
       const pending = (typeof window._pendingUpdates === "function") ? window._pendingUpdates() : null;
       const merged = pending && Object.keys(pending).length ? { ...raw, ...pending } : raw;
       const val = applyMigrations(merged);
       if (val.code !== companyCode) val.code = companyCode;
-      const rawIssuesArr = Array.isArray(raw.issues) ? raw.issues : (raw.issues ? Object.values(raw.issues) : []);
-      const valIssuesArr = Array.isArray(val.issues) ? val.issues : [];
-      const rawHeadlinesArr = Array.isArray(raw.headlines) ? raw.headlines : (raw.headlines ? Object.values(raw.headlines) : []);
-      const valHeadlinesArr = Array.isArray(val.headlines) ? val.headlines : [];
-      // eslint-disable-next-line no-console
-      console.debug("[VAST/issues] Firestore snapshot received", {
-        rawTotal: rawIssuesArr.length,
-        rawOpen: rawIssuesArr.filter(i => i && i.status !== "resolved").length,
-        valTotal: valIssuesArr.length,
-        valOpen: valIssuesArr.filter(i => i.status !== "resolved").length,
-        pendingHasIssues: !!(pending && Object.prototype.hasOwnProperty.call(pending, "issues")),
-        rawStatuses: rawIssuesArr.map(i => i && { id: i.id, status: i.status, huddleId: i.huddleId })
-      });
-      // eslint-disable-next-line no-console
-      console.debug("[VAST/headlines] Firestore snapshot received", {
-        rawTotal: rawHeadlinesArr.length,
-        rawActive: rawHeadlinesArr.filter(h => h && !h.reviewed).length,
-        valTotal: valHeadlinesArr.length,
-        valActive: valHeadlinesArr.filter(h => !h.reviewed).length,
-        pendingHasHeadlines: !!(pending && Object.prototype.hasOwnProperty.call(pending, "headlines")),
-        rawFlags: rawHeadlinesArr.map(h => h && { id: h.id, reviewed: !!h.reviewed, huddleId: h.huddleId })
-      });
       companyRef.current = val;
       setCompanyState(val);
       setLoadError(null); // a successful live read clears any prior error
     }, err => {
-      // Read was cancelled (e.g. permission denied / token no longer valid).
-      // Surface it instead of silently leaving stale cache on screen.
+      // The listener is cancelled on PERMISSION_DENIED (entitlement lapsed or
+      // the company changed) — surface it and re-bootstrap rather than sit on
+      // stale data.
       console.error("[VAST] Live data listener cancelled:", err && err.message);
+      setSyncStatus("error");
       setLoadError(err && err.message ? err.message : "We lost the live connection to your team's data.");
+      if (isPermissionDenied(err)) window.dispatchEvent(new CustomEvent("vast:permission-denied"));
     });
     fbListenerRef.current = ref;
   }
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const member = await getCurrentMember();
-        if (!member) { setAppState("loading"); return; }
-        setMemberInfo(member);
+  // ── Bootstrap ─────────────────────────────────────────────────────────
+  // 1. sign in (Cortex hand-off token, or a persisted session, or the login form)
+  // 2. make sure the ID token carries a companyId claim
+  // 3. vast-session → company name, roster, me, entitlement
+  // 4. entitled → seed/load vast/companies/{cid}/data, reconcile members, listen
+  const appStateRef = useRef("loading");
+  const setState = (s) => { appStateRef.current = s; setAppState(s); };
+  const bootstrapping = useRef(false);
 
-        // Apply saved theme preference from Memberstack
-        const savedTheme = member.customFields?.theme;
-        if (savedTheme === "light" || savedTheme === "dark") {
-          localStorage.setItem("vast-theme", savedTheme);
-          setTheme(savedTheme);
-          document.documentElement.classList.toggle("vast-theme-light", savedTheme === "light");
-          document.documentElement.style.background = savedTheme === "light" ? "#f2f2f4" : "#0a0a0b";
-          document.body.style.background = savedTheme === "light" ? "#f2f2f4" : "#0a0a0b";
-        }
-
-        // Sign into Firebase with a verified identity token
-        const memberId = member.customFields?.memberId || member.id;
-        await signInToFirebase(memberId);
-
-        const companyCode = member.customFields?.["company-code"];
-        const role = member.customFields?.role;
-
-        // ── No company code yet → try to recover existing data first ──
-        if (!companyCode) {
-          const ms = await waitForMemberstack();
-
-          // Retry getMemberJSON up to 4 times with increasing delays
-          let legacyData = null;
-          for (let attempt = 1; attempt <= 4; attempt++) {
-            try {
-              const res = await ms.getMemberJSON();
-              const d = res?.data?.vastData;
-              if (d && (d.name || d.members || d.huddles)) { legacyData = d; break; }
-            } catch(e) { console.warn(`[VAST] getMemberJSON attempt ${attempt} failed:`, e); }
-            if (attempt < 4) await new Promise(r => setTimeout(r, attempt * 800));
-          }
-
-          if (legacyData) {
-            // Existing owner — migrate to Firebase
-            const code = legacyData.code || genCode(8);
-            legacyData.code = code;
-            _currentCompanyCode = code; setCurrentCompanyCode(code);
-            const existing = await fbGet(`companies/${code}/data`);
-            if (!existing) await fbSet(`companies/${code}/data`, legacyData);
-            await ms.updateMember({ customFields: { ...(member.customFields || {}), "company-code": code, role: "owner" } });
-            await ms.updateMemberJSON({ json: { vastData: null } });
-            const raw = applyMigrations(await fbGet(`companies/${code}/data`));
-            companyRef.current = raw; setCompanyState(raw);
-            attachFirebaseListener(code);
-            setAppState("ready");
-            return;
-          }
-
-          // NOTE: We deliberately do NOT recover from the local "vast:cloud-cache"
-          // here. When companyCode is empty we don't actually know which company
-          // this member belongs to, so pushing a stale cache back to Firebase
-          // (the old behaviour) could overwrite live data and render stale data
-          // as if it were current. Cache is treated as read-only display only,
-          // and only for a KNOWN companyCode (see the existing-member path below).
-
-          // Try to find a matching invite by email and link the member to it.
-          try {
-            const memberRes = await ms.getCurrentMember();
-            const email = memberRes?.data?.auth?.email?.toLowerCase();
-            if (email) {
-              const allInvites = await fbGet("invites");
-              if (allInvites) {
-                const match = Object.entries(allInvites).find(([, inv]) =>
-                  inv.email?.toLowerCase() === email && inv.companyCode
-                );
-                if (match) {
-                  const [, invite] = match;
-                  const fields = { ...(member.customFields || {}), "company-code": invite.companyCode, role: invite.role || "member" };
-                  if (invite.memberId) fields.memberId = invite.memberId;
-                  // Write the fields, then RE-READ to confirm they persisted.
-                  // ms.updateMember can resolve without the change sticking, so
-                  // we verify and retry once before trusting it.
-                  let confirmed = false;
-                  for (let attempt = 1; attempt <= 2 && !confirmed; attempt++) {
-                    try {
-                      await ms.updateMember({ customFields: fields });
-                    } catch (e) {
-                      console.warn(`[VAST] updateMember (email match) attempt ${attempt} threw:`, e);
-                    }
-                    try {
-                      const check = await ms.getCurrentMember();
-                      confirmed = check?.data?.customFields?.["company-code"] === invite.companyCode;
-                    } catch (e) { /* verification read failed — retry */ }
-                    if (!confirmed && attempt < 2) await new Promise(r => setTimeout(r, 1000));
-                  }
-                  if (!confirmed) {
-                    console.warn("[VAST] companyCode did not persist after email match; will still load this session.");
-                  }
-                  _currentCompanyCode = invite.companyCode; setCurrentCompanyCode(invite.companyCode);
-                  const raw = applyMigrations(await fbGet(`companies/${invite.companyCode}/data`));
-                  companyRef.current = raw; setCompanyState(raw);
-                  attachFirebaseListener(invite.companyCode);
-                  setAppState("ready");
-                  console.log("[VAST] Auto-recovered via email match.");
-                  return;
-                }
-              }
-            }
-          } catch(e) { console.warn("[VAST] Email recovery failed:", e); }
-
-          // Sign in anonymously so invite redemption can read Firebase
-          try {
-            if (!window._fbAuth.currentUser) {
-              await window._fbAuth.signInAnonymously();
-              console.log("[VAST] Signed in anonymously for invite redemption.");
-            }
-          } catch(e) { console.warn("[VAST] Anonymous sign-in failed:", e); }
-
-          // We could not link this member to any team. Show a clear, friendly
-          // screen asking them to enter an invite code — never stale cache.
-          setLinkNotice("We couldn't link your account to a team yet — enter your invite code below, or contact your team owner.");
-          setAppState("invite");
-          return;
-        }
-
-        // ── Existing member: load company from Firebase ──
-        _currentCompanyCode = companyCode; setCurrentCompanyCode(companyCode);
-
-        let raw = await fbGet(`companies/${companyCode}/data`);
-        if (!raw) {
-          // Check for Memberstack migration
-          raw = await migrateToFirebase(companyCode);
-        }
-        if (!raw) {
-          // /data is missing for this companyCode. Brand-new company creation
-          // already seeds /data in handleCreateCompany, so reaching this point
-          // means either (a) a transient read/auth error or (b) data was wiped
-          // somewhere. We do NOT overwrite with defaultCompany here — that
-          // would clobber any real data that becomes readable a moment later.
-          // Try local cache for this specific code first; if that also fails,
-          // attach the listener and let it deliver data when it becomes
-          // available, rather than seeding blanks on top.
-          try {
-            const cachedSelf = localStorage.getItem(`vast:cloud-cache:${companyCode}`);
-            if (cachedSelf) {
-              const parsed = JSON.parse(cachedSelf);
-              if (parsed && (parsed.name || parsed.members || parsed.huddles)) {
-                console.warn("[VAST] Firebase /data missing — using local cache for", companyCode);
-                raw = parsed;
-              }
-            }
-          } catch (e) { console.warn("[VAST] Local cache read failed:", e); }
-        }
-        if (!raw) {
-          // Still nothing. Render whatever the listener delivers (could be
-          // empty until data appears or a network/auth issue clears).
-          console.warn("[VAST] No company data available yet for", companyCode);
-          attachFirebaseListener(companyCode);
-          setAppState("ready");
-          return;
-        }
-        raw = applyMigrations(raw);
-        // Backfill memberId: if logged-in member doesn't have one yet, match by email
-        const msForBackfill = await waitForMemberstack();
-        const currentMemberData = await msForBackfill.getCurrentMember();
-        const currentFields = currentMemberData?.data?.customFields || {};
-        if (!currentFields.memberId && currentMemberData?.data?.auth?.email) {
-          const email = currentMemberData.data.auth.email.toLowerCase();
-          const matched = (raw.members || []).find(m => m.email && m.email.toLowerCase() === email);
-          if (matched) {
-            await msForBackfill.updateMember({ customFields: { ...currentFields, memberId: matched.id } });
-            console.log("[VAST] Backfilled memberId:", matched.id);
-          }
-        }
-        companyRef.current = raw; setCompanyState(raw);
-        attachFirebaseListener(companyCode);
-        setAppState("ready");
-      } catch(e) {
-        console.error("[VAST] Init error:", e);
-        // Try local cache as last resort
-        try {
-          const cached = localStorage.getItem("vast:cloud-cache");
-          if (cached) { setCompanyState(applyMigrations(JSON.parse(cached))); setAppState("ready"); return; }
-        } catch (e) { /* localStorage read or parse failed — non-critical last-resort fallback */ }
-        setAppState("ready");
-        // Don't use "myco" fallback — just show loading until real data arrives
-        console.warn("[VAST] Could not load company data.");
+  async function bootstrap(user, { forceClaimSync = false, cid = null } = {}) {
+    if (bootstrapping.current) return;
+    bootstrapping.current = true;
+    try {
+      setState("loading");
+      const claims = await ensureCompanyClaim({ forceSync: forceClaimSync });
+      const sess = await loadVastSession(cid || handoffCidRef.current);
+      if (sess.companyId !== claims.companyId && !claims.supportUser) {
+        // Token is stale vs. what Cortex says — refresh once, then reload if still off.
+        await user.getIdToken(true);
+        const again = await getClaims();
+        if (!again || again.companyId !== sess.companyId) { guardedReload("company-mismatch"); return; }
       }
+      setSession(sess);
+      if (!sess.entitlement || !sess.entitlement.active) {
+        if (fbListenerRef.current) { fbListenerRef.current.off(); fbListenerRef.current = null; }
+        _currentCompanyCode = null; setCurrentCompanyCode(null);
+        setState("not-entitled");
+        return;
+      }
+
+      const companyId = sess.companyId;
+      _currentCompanyCode = companyId; setCurrentCompanyCode(companyId);
+
+      // Seed atomically (RTDB transaction) so two first-time users can't clobber
+      // each other. The Cortex company name is the starting VAST company name.
+      const seedRef = fbRef(dataPath(companyId));
+      const tx = await seedRef.transaction(cur => cur === null ? _sanitize(defaultCompany(sess.companyName || "My Company", companyId)) : undefined);
+      let raw = (tx && tx.snapshot && tx.snapshot.exists()) ? tx.snapshot.val() : await fbGet(dataPath(companyId));
+      if (!raw) throw new Error("Couldn't load your company's VAST data. Please try again.");
+      raw = applyMigrations(raw);
+
+      // Team = Cortex staff. Write only when something actually changed.
+      const upd = reconcileMembers(raw, sess.members);
+      if (Object.keys(upd).length) {
+        Object.assign(raw, upd);
+        await fbUpdate(dataPath(companyId), upd);
+      }
+
+      companyRef.current = raw; setCompanyState(raw);
+      try { localStorage.setItem(`vast:cloud-cache:${companyId}`, JSON.stringify(raw)); } catch (e) { /* non-critical */ }
+      attachFirebaseListener(companyId);
+      setState("ready");
+    } finally {
+      bootstrapping.current = false;
+    }
+  }
+
+  function teardownToLogin(msg) {
+    if (fbListenerRef.current) { fbListenerRef.current.off(); fbListenerRef.current = null; }
+    clearLocalAppData();
+    companyRef.current = null; setCompanyState(null);
+    setSession(null); setCurrentCompanyCode(null);
+    handoffCidRef.current = null;
+    setAuthError(msg || "");
+    setState("login");
+  }
+
+  // One reload max per 30 s so a mismatch can never loop.
+  function guardedReload(reason) {
+    const last = Number(sessionStorage.getItem("vast:reload-at")) || 0;
+    if (Date.now() - last < 30000) {
+      setAuthError("VAST couldn't match your Cortex company. Re-open VAST from Cortex.");
+      setState("error");
+      return;
+    }
+    try { sessionStorage.setItem("vast:reload-at", String(Date.now())); } catch (e) { /* ignore */ }
+    console.warn("[VAST] Reloading:", reason);
+    location.reload();
+  }
+
+  function onBootError(e) {
+    console.error("[VAST] bootstrap:", e);
+    const code = (e && e.code) || "";
+    if (code === "unauthenticated" || code === "handoff-expired") {
+      window._fbAuth.signOut().catch(() => {});
+      teardownToLogin(e.message);
+      return;
+    }
+    setAuthError((e && e.message) || "Something went wrong loading VAST.");
+    setState("error");
+  }
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { user, cid } = await signInFromHandoffOrSession();
+        if (!alive) return;
+        handoffCidRef.current = cid || null;
+        if (!user) { setState("login"); return; }
+        await bootstrap(user, { cid });
+      } catch (e) { if (alive) onBootError(e); }
+    })();
+
+    // Signed out (here or elsewhere) → back to the login screen.
+    const offAuth = window._fbAuth.onAuthStateChanged(u => {
+      if (!u && appStateRef.current !== "login" && appStateRef.current !== "loading") teardownToLogin();
+    });
+    // A write or the listener hit PERMISSION_DENIED: entitlement lapsed or the
+    // company changed. Re-run bootstrap — vast-session is the truth.
+    const onDenied = () => {
+      const u = window._fbAuth.currentUser;
+      if (u && appStateRef.current === "ready") bootstrap(u).catch(onBootError);
     };
-    init();
-    return () => { if (fbListenerRef.current) fbListenerRef.current.off(); };
+    window.addEventListener("vast:permission-denied", onDenied);
+    // Stale-company detection while the tab is open: claims only change when
+    // Cortex re-stamps them, so a company switch shows up on the next refresh.
+    const onVisible = async () => {
+      if (document.visibilityState !== "visible" || !_currentCompanyCode) return;
+      try {
+        const c = await getClaims(true);
+        if (c && c.companyId && !c.supportUser && c.companyId !== _currentCompanyCode) guardedReload("switched-company");
+      } catch (e) { /* offline — ignore */ }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      alive = false;
+      offAuth();
+      window.removeEventListener("vast:permission-denied", onDenied);
+      document.removeEventListener("visibilitychange", onVisible);
+      if (fbListenerRef.current) fbListenerRef.current.off();
+    };
   }, []);
 
-  const handleCreateCompany = async () => {
-    if (!newCompanyName.trim()) return;
-    setInviteLoading(true);
-    setInviteError("");
+  async function handleLogin(email, password) {
+    setAuthLoading(true); setAuthError("");
     try {
-      const code = genCode(8);
-      const ms = await waitForMemberstack();
-      // Save role + company-code to Memberstack custom fields.
-      // Read-merge-write so existing fields (e.g. theme, memberId) are preserved.
-      const currentCreateFields = (await ms.getCurrentMember())?.data?.customFields || {};
-      await ms.updateMember({ customFields: { ...currentCreateFields, "company-code": code, role: "owner" } });
-      // Create fresh company record in Firebase
-      const fresh = defaultCompany(newCompanyName.trim(), code);
-      await fbSet(`companies/${code}/data`, fresh);
-      _currentCompanyCode = code; setCurrentCompanyCode(code);
-      const raw = applyMigrations(fresh);
-      companyRef.current = raw; setCompanyState(raw);
-      attachFirebaseListener(code);
-      setAppState("ready");
-    } catch(e) {
-      setInviteError(e.message || "Something went wrong. Please try again.");
-    }
-    setInviteLoading(false);
-  };
+      clearLocalAppData();
+      const cred = await window._fbAuth.signInWithEmailAndPassword(email.trim(), password);
+      handoffCidRef.current = null;
+      await bootstrap(cred.user, { forceClaimSync: true });   // sync claims → refresh → read companyId
+    } catch (e) {
+      if (String((e && e.code) || "").startsWith("auth/")) { setAuthError(friendlyAuthError(e)); setState("login"); }
+      else onBootError(e);
+    } finally { setAuthLoading(false); }
+  }
 
-  const handleRedeemInvite = async () => {
-    if (!inviteInput.trim()) return;
-    setInviteLoading(true);
-    setInviteError("");
+  const retryBootstrap = async () => {
+    setAuthError("");
     try {
-      // Ensure we have at least anonymous Firebase auth before reading invite
-      if (!window._fbAuth.currentUser) {
-        await window._fbAuth.signInAnonymously();
-      }
-      const invite = await redeemInvite(inviteInput);
-      const ms = await waitForMemberstack();
-
-      // Read current custom fields up front so the write below merges (never drops) them.
-      const currentRedeemFields = (await ms.getCurrentMember())?.data?.customFields || {};
-
-      // Build custom fields to save
-      const fields = { ...currentRedeemFields, "company-code": invite.companyCode, role: invite.role || "member" };
-
-      // If invite has a memberId, use it. Otherwise try to match by email.
-      if (invite.memberId) {
-        fields.memberId = invite.memberId;
-      } else {
-        // Try matching logged-in email against company member records
-        const memberData = await ms.getCurrentMember();
-        const email = memberData?.data?.auth?.email?.toLowerCase();
-        if (email) {
-          const companyData = await fbGet(`companies/${invite.companyCode}/data`);
-          const matched = (companyData?.members || []).find(m => m.email?.toLowerCase() === email);
-          if (matched) fields.memberId = matched.id;
-        }
-      }
-
-      // Save to Memberstack — retry once if it fails
-      try {
-        await ms.updateMember({ customFields: fields });
-      } catch(e) {
-        console.warn("[VAST] First Memberstack save failed, retrying...", e);
-        await new Promise(r => setTimeout(r, 1000));
-        await ms.updateMember({ customFields: fields });
-      }
-
-      // Only mark as used if it wasn't already (recovery path)
-      if (!invite.alreadyUsed) {
-        await markInviteUsed(inviteInput.toUpperCase().trim());
-      }
-
-      // Upgrade from anonymous to real identity now that we have a memberId
-      const finalMemberId = fields.memberId || inviteInput;
-      await signInToFirebase(finalMemberId);
-
-      _currentCompanyCode = invite.companyCode; setCurrentCompanyCode(invite.companyCode);
-      const raw = applyMigrations(await fbGet(`companies/${invite.companyCode}/data`));
-      companyRef.current = raw; setCompanyState(raw);
-      attachFirebaseListener(invite.companyCode);
-      setAppState("ready");
-    } catch(e) {
-      setInviteError(e.message || "Invalid code. Please check with your team owner.");
-    }
-    setInviteLoading(false);
+      const u = window._fbAuth.currentUser;
+      if (!u) { setState("login"); return; }
+      await bootstrap(u);
+    } catch (e) { onBootError(e); }
   };
 
   const handleSave = useCallback((updatesOrFn) => {
@@ -5592,88 +5315,58 @@ function VASTApp() {
     } catch (e) { /* non-critical */ }
     if (_currentCompanyCode) {
       setSyncStatus("saving");
-      fbAddItem(`companies/${_currentCompanyCode}/data/${key}`, item)
+      fbAddItem(`${dataPath(_currentCompanyCode)}/${key}`, item)
         .then(() => setSyncStatus("saved"))
-        .catch(e => { console.error(`[VAST] Atomic add to ${key} failed:`, e); setSyncStatus("error"); });
+        .catch(e => reportWriteError(e, `Atomic add to ${key}`));
     }
   }, []);
 
-  // ── Invite entry screen ──
-  if (appState === "invite") return (
-    <><GlobalStyles theme={theme} />
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 40, maxWidth: 440, width: "100%", textAlign: "center" }}>
-        <VASTLogo size="lg" />
+  // ── Auth / gate screens ──
+  const fieldStyle = { width: "100%", padding: "14px 16px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: 16, fontFamily: "'Google Sans',sans-serif", fontWeight: 500, outline: "none", marginBottom: 12, textAlign: "left" };
+  const linkStyle = { background: "none", border: "none", color: C.textMuted, fontSize: 13, cursor: "pointer", fontFamily: "'Google Sans',sans-serif", textDecoration: "none" };
+  const secondaryStyle = { width: "100%", padding: 14, fontSize: 15, borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontFamily: "'Google Sans',sans-serif", fontWeight: 700, cursor: "pointer", marginBottom: 12 };
 
-        {/* ── Account-not-linked notice (empty companyCode + no matching invite) ── */}
-        {linkNotice && (
-          <div style={{ marginTop: 20, marginBottom: 4, padding: "12px 14px", borderRadius: 8, background: C.redGlow, border: `1px solid ${C.red}`, color: C.text, fontSize: 13, lineHeight: 1.5 }}>
-            {linkNotice}
-          </div>
-        )}
-
-        {/* ── Mode: choose ── */}
-        {inviteMode === "choose" && (<>
-          <div style={{ marginTop: 24, marginBottom: 8, fontFamily: "'Google Sans',sans-serif", fontSize: 26, fontWeight: 800 }}>Welcome to VAST</div>
-          <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 32 }}>Are you starting a new team or joining an existing one?</div>
-          <button className="btn-primary" style={{ width: "100%", padding: 16, fontSize: 15, marginBottom: 12 }}
-            onClick={() => { setInviteMode("create"); setInviteError(""); }}>
-            Start a New Team
-          </button>
-          <button onClick={() => { setInviteMode("join"); setInviteError(""); }}
-            style={{ width: "100%", padding: 16, fontSize: 15, borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontFamily: "'Google Sans',sans-serif", fontWeight: 700, cursor: "pointer" }}>
-            Join an Existing Team
-          </button>
-        </>)}
-
-        {/* ── Mode: create (new owner) ── */}
-        {inviteMode === "create" && (<>
-          <div style={{ marginTop: 24, marginBottom: 8, fontFamily: "'Google Sans',sans-serif", fontSize: 26, fontWeight: 800 }}>Start Your Team</div>
-          <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 28 }}>Enter your company name to get started. You can change this later.</div>
-          <input
-            value={newCompanyName}
-            onChange={e => setNewCompanyName(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleCreateCompany()}
-            placeholder="Your Company Name"
-            autoFocus
-            style={{ width: "100%", padding: "14px 16px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: 18, fontFamily: "'Google Sans',sans-serif", fontWeight: 600, textAlign: "center", outline: "none", marginBottom: 12 }}
-          />
-          {inviteError && <div style={{ color: "#e43531", fontSize: 13, marginBottom: 12 }}>{inviteError}</div>}
-          <button className="btn-primary" style={{ width: "100%", padding: 14, fontSize: 15, marginBottom: 12 }}
-            onClick={handleCreateCompany} disabled={inviteLoading || !newCompanyName.trim()}>
-            {inviteLoading ? "Setting up..." : "Create Team →"}
-          </button>
-          <button onClick={() => { setInviteMode("choose"); setInviteError(""); }}
-            style={{ background: "none", border: "none", color: C.textMuted, fontSize: 13, cursor: "pointer", fontFamily: "'Google Sans',sans-serif" }}>
-            ← Back
-          </button>
-        </>)}
-
-        {/* ── Mode: join (existing member) ── */}
-        {inviteMode === "join" && (<>
-          <div style={{ marginTop: 24, marginBottom: 8, fontFamily: "'Google Sans',sans-serif", fontSize: 26, fontWeight: 800 }}>Join Your Team</div>
-          <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 28 }}>Enter the invite code your team owner sent you.</div>
-          <input
-            value={inviteInput}
-            onChange={e => setInviteInput(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === "Enter" && handleRedeemInvite()}
-            placeholder="e.g. AB3XY7KM"
-            autoFocus
-            style={{ width: "100%", padding: "14px 16px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: 22, fontFamily: "'Google Sans',sans-serif", fontWeight: 700, letterSpacing: 4, textAlign: "center", outline: "none", marginBottom: 12 }}
-          />
-          {inviteError && <div style={{ color: "#e43531", fontSize: 13, marginBottom: 12 }}>{inviteError}</div>}
-          <button className="btn-primary" style={{ width: "100%", padding: 14, fontSize: 15, marginBottom: 12 }}
-            onClick={handleRedeemInvite} disabled={inviteLoading || !inviteInput.trim()}>
-            {inviteLoading ? "Joining..." : "Join Team →"}
-          </button>
-          <button onClick={() => { setInviteMode("choose"); setInviteError(""); }}
-            style={{ background: "none", border: "none", color: C.textMuted, fontSize: 13, cursor: "pointer", fontFamily: "'Google Sans',sans-serif" }}>
-            ← Back
-          </button>
-        </>)}
-
+  if (appState === "login") return (
+    <AuthCard theme={theme}>
+      <div style={{ marginTop: 24, marginBottom: 8, fontFamily: "'Google Sans',sans-serif", fontSize: 26, fontWeight: 800 }}>Sign in to VAST</div>
+      <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 28 }}>Use your Cortex email and password.</div>
+      <form onSubmit={e => { e.preventDefault(); if (!authLoading) handleLogin(loginEmail, loginPassword); }}>
+        <input type="email" autoComplete="username" placeholder="Email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} autoFocus style={fieldStyle} />
+        <input type="password" autoComplete="current-password" placeholder="Password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} style={fieldStyle} />
+        {authError && <div style={{ color: "#e43531", fontSize: 13, marginBottom: 12 }}>{authError}</div>}
+        <button type="submit" className="btn-primary" style={{ width: "100%", padding: 14, fontSize: 15, marginBottom: 16, justifyContent: "center" }} disabled={authLoading || !loginEmail.trim() || !loginPassword}>
+          {authLoading ? "Signing in..." : "Sign in →"}
+        </button>
+      </form>
+      <div style={{ display: "flex", justifyContent: "center", gap: 18, flexWrap: "wrap" }}>
+        <a href={`${VAST_ENV.cortexOrigin}/reset-password`} style={linkStyle}>Forgot password?</a>
+        <a href={cortexAccountUrl(null)} style={linkStyle}>New to VAST? Start in Cortex Account</a>
       </div>
-    </div></>
+      {VAST_ENV.name !== "prod" && <div style={{ marginTop: 18, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: C.textDim }}>staging · {VAST_ENV.firebaseConfig.projectId}</div>}
+    </AuthCard>
+  );
+
+  if (appState === "not-entitled") return (
+    <AuthCard theme={theme}>
+      <div style={{ marginTop: 24, marginBottom: 8, fontFamily: "'Google Sans',sans-serif", fontSize: 24, fontWeight: 800 }}>VAST isn't active for {(session && session.companyName) || "your company"}</div>
+      <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 12 }}>An admin can start a free trial or subscribe from the Vast tab in Cortex Account.</div>
+      {session && session.entitlement && session.entitlement.status === "trialing" && session.entitlement.trialEnd && (
+        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12 }}>Trial ended {new Date(session.entitlement.trialEnd).toLocaleDateString()}</div>
+      )}
+      <div style={{ fontSize: 12, color: C.textDim, marginBottom: 24 }}>Switched companies in Cortex? Re-open VAST from Cortex.</div>
+      <a href={cortexAccountUrl(session)} className="btn-primary" style={{ display: "flex", justifyContent: "center", width: "100%", padding: 14, fontSize: 15, marginBottom: 12, textDecoration: "none", boxSizing: "border-box" }}>Open Cortex Account</a>
+      <button onClick={retryBootstrap} style={secondaryStyle}>I've subscribed — check again</button>
+      <button onClick={() => logoutAndClear()} style={linkStyle}>Sign out</button>
+    </AuthCard>
+  );
+
+  if (appState === "error") return (
+    <AuthCard theme={theme}>
+      <div style={{ marginTop: 24, marginBottom: 8, fontFamily: "'Google Sans',sans-serif", fontSize: 24, fontWeight: 800 }}>Couldn't load VAST</div>
+      <div style={{ color: "#e43531", fontSize: 13, marginBottom: 24 }}>{authError || "Something went wrong."}</div>
+      <button className="btn-primary" style={{ width: "100%", padding: 14, fontSize: 15, marginBottom: 12, justifyContent: "center" }} onClick={retryBootstrap}>Try again</button>
+      <button onClick={() => logoutAndClear()} style={linkStyle}>Sign out</button>
+    </AuthCard>
   );
 
   if (appState === "loading" || !company) return (
@@ -5686,7 +5379,7 @@ function VASTApp() {
     </div></>
   );
 
-  const viewProps = { company, onSave: handleSave, onAdd: handleAdd };
+  const viewProps = { company, onSave: handleSave, onAdd: handleAdd, session, me };
 
   return (
     <SidebarCollapsedContext.Provider value={sidebarCollapsed}>
@@ -5699,7 +5392,7 @@ function VASTApp() {
       )}
       <MobileMenuContext.Provider value={() => setMobileOpen(true)}>
       <Sidebar view={view} setView={v => { setView(v); setMobileOpen(false); }} company={company} theme={theme} toggleTheme={toggleTheme} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} companyCode={currentCompanyCode} />
-      {view === "dashboard" && <Dashboard {...viewProps} setView={setView} memberInfo={memberInfo} companyCode={currentCompanyCode} />}
+      {view === "dashboard" && <Dashboard {...viewProps} setView={setView} companyCode={currentCompanyCode} />}
       {view.startsWith("navigator:") && (() => {
         const nid = view.slice(10);
         const nObj = (company.navigators || []).find(n => n.id === nid) || { id: nid, name: "Navigator" };
@@ -5708,7 +5401,7 @@ function VASTApp() {
       {view.startsWith("huddle:") && (() => {
         const hid = view.slice(7);
         const hObj = (company.huddles || []).find(h => h.id === hid) || { id: hid, name: "Weekly Huddle" };
-        return <WeeklyHuddle {...viewProps} huddleId={hid} huddleName={hObj.name} memberInfo={memberInfo} companyCode={currentCompanyCode} />;
+        return <WeeklyHuddle {...viewProps} huddleId={hid} huddleName={hObj.name} companyCode={currentCompanyCode} />;
       })()}
       {view === "tasks" && <Tasks {...viewProps} />}
       {view === "scorecard" && <Scorecard {...viewProps} />}
@@ -5722,7 +5415,7 @@ function VASTApp() {
       })()}
       {view === "history" && <MeetingHistory {...viewProps} />}
       {view === "quarterhistory" && <QuarterHistory {...viewProps} />}
-      {view === "settings" && <Settings {...viewProps} memberInfo={memberInfo} />}
+      {view === "settings" && <Settings {...viewProps} />}
       </MobileMenuContext.Provider>
     </div>
     </SidebarCollapsedContext.Provider>
@@ -5746,5 +5439,3 @@ root.render(React.createElement(VASTApp));
   </script>
 </body>
 </html>
-
-
