@@ -339,6 +339,20 @@ async function loadVastSession(cid) {
   return json;   // { companyId, companyName, me, members, entitlement, cortexAccountUrl }
 }
 
+// The company a hand-off link named, remembered for this TAB only.
+//
+// The fragment is stripped before sign-in (so a reload can't replay a spent
+// token), which would otherwise lose the company on the very next reload. That
+// matters for JobDox staff: their Cortex claim says "support", so with no cid
+// the server resolves their OWN company — a reload would silently move them out
+// of the customer's data they were looking at. sessionStorage is exactly the
+// right lifetime: a support visit lasts the tab, and a fresh visit to
+// vast-os.app is your own team again.
+const HANDOFF_CID_KEY = "vast:handoff-cid";
+const rememberHandoffCid = (cid) => { try { cid ? sessionStorage.setItem(HANDOFF_CID_KEY, cid) : sessionStorage.removeItem(HANDOFF_CID_KEY); } catch (e) { /* private mode */ } };
+const recallHandoffCid = () => { try { return sessionStorage.getItem(HANDOFF_CID_KEY) || null; } catch (e) { return null; } };
+const forgetHandoffCid = () => { try { sessionStorage.removeItem(HANDOFF_CID_KEY); } catch (e) { /* private mode */ } };
+
 // Read and strip the Cortex hand-off fragment (#vt=<custom token>&cid=<companyId>).
 // Stripped BEFORE sign-in so a reload never replays a spent token.
 function consumeHandoffToken() {
@@ -348,7 +362,9 @@ function consumeHandoffToken() {
   const vt = params.get("vt");
   if (!vt) return null;
   history.replaceState(null, "", location.pathname + location.search);
-  return { vt, cid: params.get("cid") || null };
+  const cid = params.get("cid") || null;
+  rememberHandoffCid(cid);
+  return { vt, cid };
 }
 
 // Resolves to { user, cid } — user null → login screen. A hand-off token wins
@@ -361,6 +377,13 @@ async function signInFromHandoffOrSession() {
       await window._fbAuth.signInWithCustomToken(handoff.vt);
     } catch (e) {
       console.warn("[VAST] Hand-off sign-in failed:", e);
+      // A blocked referrer is NOT an expired token, and signing in below would
+      // fail identically — the browser API key's website restrictions (Google
+      // Cloud → Credentials, a DIFFERENT list from Firebase Auth's authorized
+      // domains) has to include this host. Say so instead of blaming the link.
+      if (String(e && e.code).includes("requests-from-referer") || /referer/i.test(String(e && e.message))) {
+        throw Object.assign(new Error(`This VAST site isn't authorized to sign in yet (${location.host} is blocked by the Cortex Firebase API key). Ask JobDox support to allow this domain.`), { code: "referer-blocked" });
+      }
       throw Object.assign(new Error("This VAST link has expired. Please sign in below."), { code: "handoff-expired" });
     }
     return { user: window._fbAuth.currentUser, cid: handoff.cid };
@@ -368,7 +391,11 @@ async function signInFromHandoffOrSession() {
   const user = await new Promise(resolve => {
     const off = window._fbAuth.onAuthStateChanged(u => { off(); resolve(u); });
   });
-  return { user, cid: null };
+  // No fragment: a reload or a later navigation in the same tab. Re-use the
+  // company the hand-off named so we stay where the user was. Absent that, the
+  // server picks — their own company for JobDox staff, their claim for everyone
+  // else. `cid` is only honored for support users server-side either way.
+  return { user, cid: recallHandoffCid() };
 }
 
 function cortexAccountUrl(session) {
@@ -381,6 +408,11 @@ function friendlyAuthError(e) {
   if (code === "auth/too-many-requests") return "Too many attempts — try again shortly or reset your password.";
   if (code === "auth/network-request-failed") return "Network error. Check your connection and try again.";
   if (code === "auth/user-disabled") return "This account has been disabled. Contact your Cortex admin.";
+  // Not a credential problem: the browser API key's website restrictions don't
+  // list this host, so no sign-in from here can succeed. See the hand-off catch.
+  if (code.includes("requests-from-referer") || /referer/i.test(String(e && e.message))) {
+    return `This VAST site isn't authorized to sign in yet (${location.host} is blocked by the Cortex Firebase API key). Ask JobDox support to allow this domain — retrying won't help.`;
+  }
   return (e && e.message) || "Sign-in failed. Please try again.";
 }
 
@@ -531,6 +563,7 @@ async function logoutAndClear() {
     }
   } catch (e) { console.warn("[VAST] Final flush before logout failed:", e); }
   clearLocalAppData();
+  forgetHandoffCid();   // next sign-in starts from this user's own company
   try {
     if (window._fbAuth && window._fbAuth.currentUser) await window._fbAuth.signOut();
   } catch (e) { console.warn("[VAST] Firebase signOut failed:", e); }
@@ -5388,6 +5421,20 @@ function VASTApp() {
       {loadError && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 10000, background: C.red, color: "#fff", padding: "10px 16px", fontSize: 13, fontWeight: 600, textAlign: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.3)" }}>
           Connection problem — showing the last data we loaded. Recent changes may not be saved. Please reload or sign in again.
+        </div>
+      )}
+      {/* Viewing someone else's VAST. `me.support` is set only when the signed-in
+          user has NO staff record in this company — i.e. JobDox support looking
+          at a customer. In your own company you have a staff record, so this
+          never shows. Worth shouting about: every edit made here lands in the
+          customer's data, and the two look identical otherwise. */}
+      {session && session.me && session.me.support && (
+        <div style={{ position: "fixed", top: loadError ? 38 : 0, left: 0, right: 0, zIndex: 9999, background: "#e89c18", color: "#1a1200", padding: "8px 16px", fontSize: 13, fontWeight: 700, textAlign: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
+          <span>Viewing {session.companyName || "this company"} as JobDox support — changes are saved to their VAST, not yours.</span>
+          <button
+            onClick={() => { forgetHandoffCid(); location.reload(); }}
+            style={{ background: "rgba(0,0,0,.18)", color: "inherit", border: "1px solid rgba(0,0,0,.25)", borderRadius: 6, padding: "3px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+          >Switch to my team</button>
         </div>
       )}
       <MobileMenuContext.Provider value={() => setMobileOpen(true)}>
