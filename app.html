@@ -294,20 +294,45 @@ async function getClaims(force = false) {
   return (res && res.claims) || {};
 }
 
-// Ask Cortex to (re)stamp claims for this user (empty body = their default
+// Ask Cortex to (re)stamp claims for this user (no companyId = their default
 // company), then force a token refresh so the new claims are on the token.
-async function syncClaims() {
+//
+// Passing a companyId is how the company selector switches: the RTDB rules
+// compare auth.token.companyId to the path, so moving between companies means
+// the CLAIM has to change, not just which id we send to vast-session. Cortex
+// validates the request against the user's memberships and refuses one they
+// don't belong to. (Support users are stamped "support" regardless — they pass
+// the rules via supportUser instead, and pass the cid to vast-session.)
+async function syncClaims(companyId) {
   const u = window._fbAuth.currentUser;
   if (!u) throw new Error("Not signed in");
   const idToken = await u.getIdToken();
   const res = await fetch(`${VAST_ENV.cortexOrigin}/.netlify/functions/sync-user-claims`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${idToken}` },
+    headers: { Authorization: `Bearer ${idToken}`, ...(companyId ? { "Content-Type": "application/json" } : {}) },
+    ...(companyId ? { body: JSON.stringify({ companyId }) } : {}),
   });
   if (res.status === 404) throw new Error("Your Cortex account isn't linked to a company yet. Sign in to Cortex first, then return to VAST.");
+  if (res.status === 403) throw new Error("You're not a member of that company, or it's locked.");
   if (!res.ok) throw new Error(`Couldn't sync your Cortex account (${res.status}). Please try again.`);
   await u.getIdToken(true);
   return getClaims();
+}
+
+// Move this VAST session to another company the user belongs to.
+// Claim first (the RTDB rules read it), then remember the choice for this tab,
+// then a hard reload so bootstrap re-runs cleanly against the new company —
+// far safer than surgically swapping the listener, cache and company code.
+async function switchCompany(companyId, { isSupport = false } = {}) {
+  if (!companyId) return;
+  try {
+    if (Object.keys(_pendingUpdates).length && _currentCompanyCode) {
+      await fbUpdate(dataPath(_currentCompanyCode), _pendingUpdates);   // don't lose in-flight edits
+    }
+  } catch (e) { console.warn("[VAST] flush before company switch failed:", e); }
+  if (!isSupport) await syncClaims(companyId);
+  rememberHandoffCid(companyId);
+  location.reload();
 }
 
 // Guarantee a companyId claim. forceSync only on a fresh email/password login —
@@ -800,7 +825,7 @@ function useMobile() {
 }
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────
-function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMobileOpen, collapsed, setCollapsed, companyCode }) {
+function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMobileOpen, collapsed, setCollapsed, companyCode, session }) {
   const openIssues = toArray(company.issues).filter(i => i.status !== "resolved").length;
   const pendingTodos = toArray(company.todos).filter(t => !t.done).length;
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
@@ -892,6 +917,29 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
         {theme === "dark" ? <Icon.sun /> : <Icon.moon />}
         {!(collapsed && !isMobile) && <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>}
       </button>
+      {/* Company selector — only when this login actually belongs to more than
+          one company (vast-session sends `companies` only in that case). One
+          account, several VAST partitions: pick which one you're working in.
+          Hidden when the rail is collapsed; there's nowhere to read it. */}
+      {!(collapsed && !isMobile) && session && Array.isArray(session.companies) && session.companies.length > 1 && (
+        <div style={{ padding: "6px 10px 8px" }}>
+          <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".05em", opacity: .55, marginBottom: 4 }}>Company</div>
+          <select
+            value={session.companyId}
+            onChange={e => {
+              const next = e.target.value;
+              if (next && next !== session.companyId) {
+                switchCompany(next, { isSupport: !!(session.me && session.me.support) });
+              }
+            }}
+            style={{ width: "100%", fontSize: 12, padding: "5px 6px", borderRadius: 6, background: "transparent", color: "inherit", border: "1px solid rgba(128,128,128,.35)", cursor: "pointer" }}
+          >
+            {session.companies.map(c => (
+              <option key={c.companyId} value={c.companyId}>{c.companyName || c.companyId}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <button
         className="sidebar-link"
         onClick={() => logoutAndClear()}
@@ -5195,6 +5243,7 @@ function VASTApp() {
     companyRef.current = null; setCompanyState(null);
     setSession(null); setCurrentCompanyCode(null);
     handoffCidRef.current = null;
+    forgetHandoffCid();
     setAuthError(msg || "");
     setState("login");
   }
@@ -5271,7 +5320,11 @@ function VASTApp() {
     try {
       clearLocalAppData();
       const cred = await window._fbAuth.signInWithEmailAndPassword(email.trim(), password);
+      // A deliberate sign-in starts from THIS user's own company — drop any
+      // company remembered from an earlier hand-off in this tab, or the next
+      // reload would quietly put them back in it.
       handoffCidRef.current = null;
+      forgetHandoffCid();
       await bootstrap(cred.user, { forceClaimSync: true });   // sync claims → refresh → read companyId
     } catch (e) {
       if (String((e && e.code) || "").startsWith("auth/")) { setAuthError(friendlyAuthError(e)); setState("login"); }
@@ -5438,7 +5491,7 @@ function VASTApp() {
         </div>
       )}
       <MobileMenuContext.Provider value={() => setMobileOpen(true)}>
-      <Sidebar view={view} setView={v => { setView(v); setMobileOpen(false); }} company={company} theme={theme} toggleTheme={toggleTheme} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} companyCode={currentCompanyCode} />
+      <Sidebar view={view} setView={v => { setView(v); setMobileOpen(false); }} company={company} theme={theme} toggleTheme={toggleTheme} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} companyCode={currentCompanyCode} session={session} />
       {view === "dashboard" && <Dashboard {...viewProps} setView={setView} companyCode={currentCompanyCode} />}
       {view.startsWith("navigator:") && (() => {
         const nid = view.slice(10);
