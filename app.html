@@ -400,6 +400,26 @@ const now = () => new Date().toISOString();
 const dateStr = (d = new Date()) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 // Normalize todo assignees — supports both old string and new array format
 const getAssignees = (t) => t.assignees ? t.assignees : (t.assignee ? [t.assignee] : []);
+// Quarter labels like "Q3 2026" → calendar dates. Returns null for custom labels.
+const parseQuarterLabel = (label) => {
+  const m = /^\s*Q([1-4])\s+(\d{4})\s*$/i.exec(String(label || ""));
+  return m ? { q: Number(m[1]), year: Number(m[2]) } : null;
+};
+const quarterDatesFromLabel = (label) => {
+  const p = parseQuarterLabel(label);
+  if (!p) return null;
+  const pad = (n) => String(n).padStart(2, "0");
+  const startMonth = (p.q - 1) * 3 + 1;
+  const endMonth = startMonth + 2;
+  const lastDay = new Date(p.year, endMonth, 0).getDate();
+  return { quarterStart: `${p.year}-${pad(startMonth)}-01`, quarterEnd: `${p.year}-${pad(endMonth)}-${pad(lastDay)}` };
+};
+// "Q3 2026" → "Q4 2026"; "Q4 2026" → "Q1 2027". Custom labels → the quarter after today's.
+const nextQuarterLabel = (label) => {
+  const p = parseQuarterLabel(label) || { q: Math.ceil((new Date().getMonth() + 1) / 3), year: new Date().getFullYear() };
+  return p.q === 4 ? `Q1 ${p.year + 1}` : `Q${p.q + 1} ${p.year}`;
+};
+const sameQuarterLabel = (a, b) => String(a || "").trim().replace(/\s+/g, " ").toLowerCase() === String(b || "").trim().replace(/\s+/g, " ").toLowerCase();
 const weekKey = () => weekKeyFromDate(new Date());
 const weekKeyFromDate = (d) => {
   // ISO 8601 week: week containing Thursday, year of that Thursday
@@ -2071,7 +2091,9 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
       completedTodos: (latestData.todos || []).filter(t => t.done).slice(-20),
       todos: (latestData.todos || []).filter(t => !t.done).slice(-5),
       solvedProblems: solvedThisSession,
-      recapText: builtRecap
+      recapText: builtRecap,
+      // Names of members marked present (same list the recap's ATTENDEES line uses)
+      attendees: members.filter(m => attendance[m.id] !== false).map(m => m.name)
     };
     // Archive quarter snapshot (once per quarter, keyed by currentQuarter)
     const qh = latestData.quarterHistory || [];
@@ -2079,16 +2101,17 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
     const existingIdx = qh.findIndex(q => q.quarter === qLabel);
     const snapshot = {
       quarter: qLabel,
+      ...(quarterDatesFromLabel(qLabel) || {}),
       archivedAt: now(),
-      tasks: (latestData.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status })),
-      todos: (latestData.todos || []).map(t => ({ title: t.title, assignee: t.assignee, done: t.done })),
+      tasks: (latestData.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status, statusHistory: t.statusHistory })),
+      todos: (latestData.todos || []).map(t => ({ title: t.title, assignee: getAssignees(t).join(", "), assignees: getAssignees(t), done: t.done })),
       solvedProblems: [
         ...(existingIdx >= 0 ? (qh[existingIdx].solvedProblems || []) : []),
         ...solvedThisSession
       ],
       meetingRatings: [
         ...(existingIdx >= 0 ? (qh[existingIdx].meetingRatings || []) : []),
-        { date: now(), rating }
+        { date: now(), rating: avgRating }
       ]
     };
     const newQH = existingIdx >= 0
@@ -2618,7 +2641,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                         const col = isActive ? C.text : C.textMuted;
                         const bor = isActive ? C.selBorder : C.border;
                         return (
-                          <button key={s} onClick={() => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s } : x) }))}
+                          <button key={s} onClick={() => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s, ...(x.status !== s ? { statusHistory: [...toArray(x.statusHistory), { status: s, at: now() }] } : {}) } : x) }))}
                             style={{ padding: "4px 8px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, fontFamily: C.fontUI, cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${bor}`, background: bg, color: col, display: "inline-flex", alignItems: "center", gap: 6 }}>
                             <span aria-hidden="true" className="dot" style={{ background: dotCol, opacity: isActive ? 1 : 0.6 }} />{label}
                           </button>
@@ -2860,7 +2883,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                 const out = { problemQueue: (latest.problemQueue || []).filter(p => p.id !== item.id) };
                 if (item.source === "issue") {
                   const updatedIssues = (latest.issues || []).map(i =>
-                    i.id === item.id ? { ...i, status: "resolved" } : i
+                    i.id === item.id ? { ...i, status: "resolved", resolvedAt: now() } : i
                   );
                   out.issues = updatedIssues;
                   const matched = updatedIssues.find(i => i.id === item.id);
@@ -3294,12 +3317,12 @@ function Tasks({ company, onSave, onAdd }) {
 
   const addTask = () => {
     if (!form.title.trim()) return;
-    const newTask = { id: uid(), ...form, createdAt: now() };
+    const newTask = { id: uid(), ...form, createdAt: now(), statusHistory: [{ status: form.status, at: now() }] };
     onAdd("quarterlyTasks", newTask);
     setForm({ title: "", who: "", smart: false, status: "on", huddleId: defaultHuddleId, target: "", operator: "" });
     setShowAdd(false);
   };
-  const updateStatus = (id, status) => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks || []).map(t => t.id === id ? { ...t, status } : t) }));
+  const updateStatus = (id, status) => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks || []).map(t => t.id === id ? { ...t, status, ...(t.status !== status ? { statusHistory: [...toArray(t.statusHistory), { status, at: now() }] } : {}) } : t) }));
   const deleteTask = (id) => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks || []).filter(t => t.id !== id) }));
 
   const startEdit = (t) => {
@@ -3995,7 +4018,7 @@ function Issues({ company, onSave, onAdd }) {
     setSavingId(id);
     try {
       onSave(latest => {
-        const updated = (latest.issues || []).map(i => i.id === id ? { ...i, status: "resolved" } : i);
+        const updated = (latest.issues || []).map(i => i.id === id ? { ...i, status: "resolved", resolvedAt: now() } : i);
         const target = updated.find(i => i.id === id);
         console.debug("[VAST/issues] Issues panel resolve()", { id, matchFound: !!target, matchedStatus: target?.status, totalAfter: updated.length, openAfter: updated.filter(i => i.status !== "resolved").length });
         return { issues: updated };
@@ -4134,7 +4157,8 @@ function Todos({ company, onSave, onAdd }) {
     onAdd("todos", newTodo);
     setForm({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: form.huddleId });
   };
-  const toggle = (id) => onSave(latest => ({ todos: (latest.todos || []).map(t => t.id === id ? { ...t, done: !t.done } : t) }));
+  // Ticking saves completedAt; un-ticking clears it (null removes the field in Firebase).
+  const toggle = (id) => onSave(latest => ({ todos: (latest.todos || []).map(t => t.id === id ? { ...t, done: !t.done, completedAt: !t.done ? now() : null } : t) }));
   const del = (id) => onSave(latest => ({ todos: (latest.todos || []).filter(t => t.id !== id) }));
 
   const startEdit = (t) => {
@@ -4657,7 +4681,7 @@ function Settings({ company, onSave, session }) {
   const [nqCarry, setNqCarry] = useState({});
   const [nqSaving, setNqSaving] = useState(false);
   const openNewQuarter = () => {
-    setNqLabel(company.currentQuarter || "");
+    setNqLabel(nextQuarterLabel(company.currentQuarter));
     setNqStart(new Date().toISOString().slice(0,10));
     setNqEnd(new Date(Date.now() + 90 * 86400000).toISOString().slice(0,10));
     const init = {};
@@ -4666,8 +4690,15 @@ function Settings({ company, onSave, session }) {
     setNqSaving(false);
     setShowNewQuarter(true);
   };
+  // A new quarter name must not match an archived quarter (or the one being
+  // archived now) — otherwise the next archive would overwrite that entry.
+  const nqDuplicate = !!nqLabel.trim() && (
+    (company.quarterHistory || []).some(q => sameQuarterLabel(q.quarter, nqLabel)) ||
+    sameQuarterLabel(company.currentQuarter, nqLabel)
+  );
   const confirmNewQuarter = () => {
     if (nqSaving) return; // guard against double-submit (no duplicate carried tasks)
+    if (nqDuplicate) return;
     setNqSaving(true);
     // Single atomic onSave: archive the outgoing quarter AND clear/carry tasks in one write.
     onSave(latest => {
@@ -4678,9 +4709,10 @@ function Settings({ company, onSave, session }) {
       const existingIdx = qh.findIndex(q => q.quarter === oldLabel);
       const snapshot = {
         quarter: oldLabel,
+        ...(quarterDatesFromLabel(oldLabel) || {}),
         archivedAt: now(),
-        tasks: (latest.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status })),
-        todos: (latest.todos || []).map(t => ({ title: t.title, assignee: t.assignee, done: t.done })),
+        tasks: (latest.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status, statusHistory: t.statusHistory })),
+        todos: (latest.todos || []).map(t => ({ title: t.title, assignee: getAssignees(t).join(", "), assignees: getAssignees(t), done: t.done })),
         solvedProblems: existingIdx >= 0 ? (qh[existingIdx].solvedProblems || []) : [],
         meetingRatings: existingIdx >= 0 ? (qh[existingIdx].meetingRatings || []) : []
       };
@@ -4694,7 +4726,9 @@ function Settings({ company, onSave, session }) {
           id: uid(),
           title: t.title, who: t.who, huddleId: t.huddleId,
           smart: t.smart, target: t.target, operator: t.operator,
-          status: "on", createdAt: now(), notes: ""
+          status: "on", createdAt: now(), notes: "",
+          statusHistory: [{ status: "on", at: now() }],
+          carriedFrom: { id: t.id, quarter: oldLabel }
         }));
       return {
         quarterHistory: newQH,
@@ -4998,6 +5032,11 @@ function Settings({ company, onSave, session }) {
               <div className="field">
                 <label className="label">New Quarter Label</label>
                 <input placeholder="e.g. Q1 2025 or Spring Sprint" value={nqLabel} onChange={e => setNqLabel(e.target.value)} autoFocus />
+                {nqDuplicate && (
+                  <div role="alert" style={{ marginTop: 8, fontSize: C.fs.sm, color: C.red, background: C.redTint1, border: `1px solid ${C.redTint3}`, borderRadius: C.radius.control, padding: "8px 12px" }}>
+                    “{nqLabel.trim()}” is already used — by a quarter in Historical Quarters or by the quarter you're closing now. Choose a different name so that quarter's archive isn't overwritten.
+                  </div>
+                )}
               </div>
               <div className="grid2" style={{ marginBottom: 12 }}>
                 <div className="field">
@@ -5031,7 +5070,7 @@ function Settings({ company, onSave, session }) {
                 )}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button className="btn-primary" style={{ flex: 1 }} disabled={nqSaving} onClick={confirmNewQuarter}>Start New Quarter</button>
+                <button className="btn-primary" style={{ flex: 1 }} disabled={nqSaving || nqDuplicate} onClick={confirmNewQuarter}>Start New Quarter</button>
                 <button className="btn-secondary" onClick={() => setShowNewQuarter(false)}>Cancel</button>
               </div>
             </div>
