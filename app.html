@@ -436,6 +436,34 @@ const makeSTYLE = (C) => `
   .md-back{display:none}
   .strip{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline;font-size:${C.fs.sm}px;color:${C.textMuted};padding:8px 12px}
   .strip b{font-family:${C.fontMono};font-variant-numeric:tabular-nums;color:${C.text};font-weight:600;font-size:${C.fs.md}px;margin-right:4px}
+  .addbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 12px}
+  .addbar select,.addbar input[type=date]{flex-shrink:0}
+  .addbar .addbar-main{flex:1 1 260px;min-width:200px;width:auto}
+  .lrow{display:flex;align-items:center;gap:12px;min-height:40px;padding:4px 12px;border-bottom:1px solid ${C.border};font-size:${C.fs.base}px;color:${C.text}}
+  .lrow:last-child{border-bottom:none}
+  .lrow:hover{background:${C.tableHover}}
+  .lrow .grow{flex:1;min-width:0;overflow-wrap:anywhere}
+  .lmeta{color:${C.textMuted};font-size:${C.fs.xs}px;white-space:nowrap;flex-shrink:0}
+  .lhuddle{width:140px;overflow:hidden;text-overflow:ellipsis}
+  .lowner{width:160px;overflow:hidden;text-overflow:ellipsis}
+  .ldate{width:96px;text-align:right}
+  .ldate.wide{width:156px}
+  .lact{display:flex;gap:4px;align-items:center;flex-shrink:0}
+  .lbtn{min-height:28px!important;padding:3px 10px!important;font-size:${C.fs.xs}px!important}
+  .lempty{padding:16px 12px;color:${C.textMuted};font-size:${C.fs.sm}px}
+  .chip.lchip{flex-shrink:0}
+  @media(max-width:768px){
+    .addbar > *{flex:1 1 calc(50% - 4px)}
+    .addbar .addbar-main,.addbar .btn-primary,.addbar .addbar-people{flex-basis:100%}
+    .addbar select,.addbar input[type=date]{width:auto!important}
+    .lrow{flex-wrap:wrap;gap:6px 8px;padding:8px 12px}
+    .lrow .grow{flex-basis:100%;order:-1;font-weight:500}
+    .lrow.keep-order .grow{order:0;flex-basis:calc(100% - 40px)}
+    .lhuddle,.lowner{width:auto}
+    .ldate,.ldate.wide{width:auto;text-align:left}
+    .lact{margin-left:auto}
+    .lbtn{min-height:44px!important}
+  }
   @media(max-width:768px){
     .md{grid-template-columns:minmax(0,1fr)}
     .md-list{position:static;max-height:none}
@@ -3993,72 +4021,60 @@ function Headlines({ company, onSave, onAdd }) {
   const reviewed = applyHuddleFilter(headlines.filter(h => h.reviewed));
   console.debug("[VAST/headlines] Panel filter", { total: headlines.length, active: active.length, reviewed: reviewed.length, allFlags: headlines.map(h => ({ id: h.id, text: h.text, reviewed: !!h.reviewed, huddleId: h.huddleId })) });
 
+  const huddleNameOf = (id) => huddles.find(x => x.id === id)?.name || "";
   const HeadlineRow = ({ h, isReviewed }) => (
-    <div key={h.id} style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "flex-start", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}`, gap: 8, opacity: isReviewed ? 0.6 : 1 }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ marginBottom: 4 }}>
-          <span className="chip" style={{ marginRight: 8, fontSize: C.fs.xs, background: C.surface3, borderColor: C.border, color: C.textMuted }}>{h.type}</span>
-          {h.huddleId && <span className="chip" style={{ marginRight: 8, fontSize: C.fs.xs }}>{huddles.find(x => x.id === h.huddleId)?.name || ""}</span>}
-          {isReviewed && <span className="tag-done">Reviewed</span>}
-        </div>
-        <span style={{ fontSize: C.fs.base, textDecoration: isReviewed ? "line-through" : "none" }}>{h.text}</span>
-        <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4 }}><span className="num">{dateStr(new Date(h.date))}</span>{isReviewed && h.reviewedAt ? ` · Reviewed ${dateStr(new Date(h.reviewedAt))}` : ""}</div>
-      </div>
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+    <div className="lrow" style={{ opacity: isReviewed ? 0.75 : 1 }}>
+      <span className="chip lchip" style={{ minWidth: 80, justifyContent: "center" }}>{h.type}</span>
+      <span className="lmeta lhuddle" title={huddleNameOf(h.huddleId)}>{huddleNameOf(h.huddleId) || "—"}</span>
+      <span className="grow" style={{ textDecoration: isReviewed ? "line-through" : "none" }}>{h.text}</span>
+      {isReviewed && <span className="lmeta">{h.reviewedAt ? <>Reviewed <span className="num">{dateStr(new Date(h.reviewedAt))}</span></> : "Reviewed"}</span>}
+      <span className="lmeta num ldate">{dateStr(new Date(h.date))}</span>
+      <span className="lact">
         {!isReviewed && (
-          <button className="btn-ghost" style={{ fontSize: C.fs.xs, color: C.green, border: `1px solid ${C.greenBorder}`, padding: "4px 8px", borderRadius: C.radius.control }} onClick={() => markReviewed(h.id)}>✓ Reviewed</button>
+          <button className="btn-secondary lbtn" onClick={() => markReviewed(h.id)}><Icon.check /> Reviewed</button>
         )}
         {isReviewed && (
-          <button className="btn-ghost" style={{ fontSize: C.fs.xs, padding: "4px 8px", borderRadius: C.radius.control }} onClick={() => unmarkReviewed(h.id)}>Reopen</button>
+          <button className="btn-secondary lbtn" onClick={() => unmarkReviewed(h.id)}>Reopen</button>
         )}
-        <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(h.id)}><Icon.trash /></button>
-      </div>
+        <button className="icon-btn danger" title="Delete" aria-label={`Delete headline: ${h.text}`} onClick={() => del(h.id)}><Icon.trash /></button>
+      </span>
     </div>
   );
 
   return (
     <Layout title="Headlines" subtitle="Customer & Employee news from the week">
       <div>
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Add Headline</h3>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} style={{ width: isMobile ? "calc(50% - 5px)" : 140 }}>
-              <option>Customer</option><option>Employee</option>
-            </select>
-            <select value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ width: isMobile ? "calc(50% - 5px)" : 150 }}>
-              <option value="">No Huddle</option>
-              {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-            </select>
-            <input placeholder="What happened this week?" value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: isMobile ? "1 1 100%" : 1 }} />
-            <button className="btn-primary" style={{ padding: "8px 20px", width: isMobile ? "100%" : undefined }} onClick={add}>Add</button>
-          </div>
-        </div>
-
-        <div className="toolbar" style={{ justifyContent: "space-between" }}>
-          <span style={{ fontSize: C.fs.base, color: C.textMuted }}>{active.length} active · {reviewed.length} reviewed</span>
-          <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
-            style={{ fontSize: C.fs.sm }}>
-            <option value="all">All Huddles</option>
+        <div className="panel addbar" style={{ marginBottom: 12 }}>
+          <select aria-label="Headline type" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} style={{ width: 130 }}>
+            <option>Customer</option><option>Employee</option>
+          </select>
+          <select aria-label="Huddle" value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ width: 170 }}>
+            <option value="">No Huddle</option>
             {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
           </select>
+          <input className="addbar-main" aria-label="New headline" placeholder="Add a headline — what happened this week?" value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} />
+          <button className="btn-primary" onClick={add}><Icon.plus /> Add</button>
         </div>
 
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: C.fs.md, marginBottom: 12 }}>Active ({active.length})</h3>
-          {active.length === 0 && <div style={{ fontSize: C.fs.sm, color: C.textMuted, padding: "8px 0" }}>No active headlines. All caught up!</div>}
-          {[...active].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={false} />)}
-        </div>
-
-        {reviewed.length > 0 && (
-          <div className="card">
-            <button className="btn-ghost" style={{ width: "100%", textAlign: "left", padding: "4px 0", marginBottom: showReviewed ? 12 : 0 }}
-              onClick={() => setShowReviewed(s => !s)}>
-              <span style={{ fontSize: C.fs.md, fontWeight: 600 }}>Reviewed ({reviewed.length})</span>
-              <span style={{ marginLeft: 8, color: C.textMuted }}>{showReviewed ? "▲ Hide" : "▼ Show"}</span>
-            </button>
-            {showReviewed && [...reviewed].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={true} />)}
+        <div className="panel">
+          <div className="panel-h" style={{ paddingTop: 0, paddingBottom: 0 }}>
+            <div className="tabs" role="tablist" style={{ borderBottom: "none" }}>
+              <button role="tab" aria-selected={!showReviewed} className={`tab ${!showReviewed ? "active" : ""}`} onClick={() => setShowReviewed(false)}>Active<span className="cnt">{active.length}</span></button>
+              <button role="tab" aria-selected={showReviewed} className={`tab ${showReviewed ? "active" : ""}`} onClick={() => setShowReviewed(true)}>Reviewed<span className="cnt">{reviewed.length}</span></button>
+            </div>
+            <select aria-label="Filter by huddle" value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
+              style={{ fontSize: C.fs.sm, width: "auto", minWidth: 160 }}>
+              <option value="all">All Huddles</option>
+              {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
           </div>
-        )}
+          {!showReviewed && (active.length === 0
+            ? <div className="lempty">No active headlines. All caught up!</div>
+            : [...active].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={false} />))}
+          {showReviewed && (reviewed.length === 0
+            ? <div className="lempty">No reviewed headlines yet.</div>
+            : [...reviewed].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={true} />))}
+        </div>
       </div>
     </Layout>
   );
@@ -4124,6 +4140,8 @@ function Issues({ company, onSave, onAdd }) {
   console.debug("[VAST/issues] Issues panel filter", { total: issues.length, open: allOpen.length, resolved: allResolved.length, allStatuses: issues.map(i => ({ id: i.id, title: i.title, status: i.status, huddleId: i.huddleId })) });
   const open = (huddleFilter === "all" ? allOpen : allOpen.filter(i => i.huddleId === huddleFilter)).sort((a, b) => a.priority - b.priority);
   const resolved = huddleFilter === "all" ? allResolved : allResolved.filter(i => i.huddleId === huddleFilter);
+  const [issueTab, setIssueTab] = useState("open");
+  const huddleNameOf = (id) => huddles.find(x => x.id === id)?.name || "";
 
   return (
     <Layout title="Issues" subtitle="Identify, Discuss & Solve"
@@ -4131,52 +4149,39 @@ function Issues({ company, onSave, onAdd }) {
 
       <div>
         {issueError && <div style={{ color: C.red, background: C.redTint1, border: `1px solid ${C.redTint3}`, borderRadius: C.radius.control, padding: "8px 12px", marginBottom: 12, fontSize: C.fs.sm }}>{issueError}</div>}
-        <div className="toolbar" style={{ justifyContent: "flex-end" }}>
-          <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
-            style={{ fontSize: C.fs.sm }}>
-            <option value="all">All Huddles</option>
-            {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-          </select>
+        <div className="panel">
+          <div className="panel-h" style={{ paddingTop: 0, paddingBottom: 0 }}>
+            <div className="tabs" role="tablist" style={{ borderBottom: "none" }}>
+              <button role="tab" aria-selected={issueTab === "open"} className={`tab ${issueTab === "open" ? "active" : ""}`} onClick={() => setIssueTab("open")}>Open<span className="cnt">{open.length}</span></button>
+              <button role="tab" aria-selected={issueTab === "resolved"} className={`tab ${issueTab === "resolved" ? "active" : ""}`} onClick={() => setIssueTab("resolved")}>Resolved<span className="cnt">{resolved.length}</span></button>
+            </div>
+            <select aria-label="Filter by huddle" value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
+              style={{ fontSize: C.fs.sm, width: "auto", minWidth: 160 }}>
+              <option value="all">All Huddles</option>
+              {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
+          </div>
+          {issueTab === "open" && (open.length === 0 ? <div className="lempty">No open issues.</div> : open.map(iss => (
+            <div key={iss.id} className="lrow">
+              <span className="chip lchip" title={`Priority ${iss.priority}`} style={{ fontWeight: 600, color: iss.priority == 1 ? C.text : C.textMuted, minWidth: 36, justifyContent: "center" }}>P{iss.priority}</span>
+              <span className="lmeta lhuddle" title={huddleNameOf(iss.huddleId)}>{huddleNameOf(iss.huddleId) || "—"}</span>
+              <span className="grow"><span style={{ fontWeight: 600 }}>{iss.title}</span>{iss.notes && <span style={{ color: C.textMuted, fontSize: C.fs.sm }}> — {iss.notes}</span>}</span>
+              <span className="lmeta num ldate">{dateStr(new Date(iss.createdAt))}</span>
+              <span className="lact">
+                <button className="btn-secondary lbtn" onClick={() => resolve(iss.id)} disabled={savingId === iss.id}>{savingId === iss.id ? "Saving…" : <><Icon.check /> Resolve</>}</button>
+                <button className="icon-btn danger" title="Delete" aria-label={`Delete issue: ${iss.title}`} onClick={() => del(iss.id)} disabled={savingId === iss.id}><Icon.trash /></button>
+              </span>
+            </div>
+          )))}
+          {issueTab === "resolved" && (resolved.length === 0 ? <div className="lempty">No resolved issues yet.</div> : [...resolved].reverse().map(iss => (
+            <div key={iss.id} className="lrow" style={{ opacity: 0.75 }}>
+              <span className="chip lchip" style={{ minWidth: 36, justifyContent: "center" }}>P{iss.priority}</span>
+              <span className="lmeta lhuddle" title={huddleNameOf(iss.huddleId)}>{huddleNameOf(iss.huddleId) || "—"}</span>
+              <span className="grow" style={{ textDecoration: "line-through", color: C.textMuted }}>{iss.title}</span>
+              <span className="lmeta num ldate">{iss.createdAt ? dateStr(new Date(iss.createdAt)) : "—"}</span>
+            </div>
+          )))}
         </div>
-        {open.length === 0 && <div className="card" style={{ marginBottom: 16 }}><div className="empty-state"><div style={{ fontSize: C.fs.base }}>No open issues. </div></div></div>}
-
-        {open.length > 0 && (
-          <div className="card" style={{ marginBottom: 20 }}>
-            <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Open Issues ({open.length})</h3>
-            {open.map(iss => (
-              <div key={iss.id} style={{ padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "flex-start", justifyContent: "space-between", gap: isMobile ? 8 : 0 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: C.fs.xs, fontWeight: 600, color: iss.priority == 1 ? C.text : C.textMuted, background: C.surface3, border: `1px solid ${C.border}`, padding: "4px 8px", borderRadius: C.radius.control }}>
-                        PRIORITY {iss.priority}
-                      </span>
-                      {iss.huddleId && <span className="chip" style={{ fontSize: C.fs.xs }}>{huddles.find(x => x.id === iss.huddleId)?.name || ""}</span>}
-                      <span style={{ fontSize: C.fs.base, fontWeight: 600 }}>{iss.title}</span>
-                    </div>
-                    {iss.notes && <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>{iss.notes}</div>}
-                    <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4 }}><span className="num">{dateStr(new Date(iss.createdAt))}</span></div>
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    <button className="btn-ghost" style={{ fontSize: C.fs.xs, color: C.green, borderColor: C.greenBorder }} onClick={() => resolve(iss.id)} disabled={savingId === iss.id}>{savingId === iss.id ? "Saving…" : "✓ Resolve"}</button>
-                    <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(iss.id)} disabled={savingId === iss.id}><Icon.trash /></button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {resolved.length > 0 && (
-          <div className="card">
-            <h3 style={{ fontSize: C.fs.md, marginBottom: 12, color: C.textMuted }}>Resolved ({resolved.length})</h3>
-            {resolved.slice(-5).reverse().map(iss => (
-              <div key={iss.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}`, opacity: 0.6 }}>
-                <span style={{ fontSize: C.fs.sm, textDecoration: "line-through", color: C.textMuted }}>{iss.title}</span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {showAdd && (
@@ -4253,6 +4258,7 @@ function Todos({ company, onSave, onAdd }) {
   const allDone = todos.filter(t => t.done);
   const pending = huddleFilter === "all" ? allPending : allPending.filter(t => t.huddleId === huddleFilter);
   const done = huddleFilter === "all" ? allDone : allDone.filter(t => t.huddleId === huddleFilter);
+  const [todoTab, setTodoTab] = useState("open");
 
   const TodoRow = ({ t }) => {
     const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
@@ -4261,7 +4267,7 @@ function Todos({ company, onSave, onAdd }) {
 
     if (isEditing) {
       return (
-        <div style={{ padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ padding: "12px", borderBottom: `1px solid ${C.border}`, background: C.selBg }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
             <input
               value={editFields.title}
@@ -4296,7 +4302,7 @@ function Todos({ company, onSave, onAdd }) {
                       background: sel ? C.selBg : C.surface2,
                       color: sel ? C.text : C.textMuted,
                       border: `1px solid ${sel ? C.selBorder : C.border}` }}>
-                    {sel ? "✓ " : ""}{m.name}
+                    {sel && <Icon.check />}{m.name}
                   </button>
                 );
               })}
@@ -4305,7 +4311,7 @@ function Todos({ company, onSave, onAdd }) {
                 const allSel = allNames.every(n => (editFields.assignees || []).includes(n));
                 setEditFields(f => ({ ...f, assignees: allSel ? [] : allNames }));
               }} style={{ padding: "4px 12px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI, background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
-                {activeMembers(company).every(m => (editFields.assignees || []).includes(m.name)) ? "✓ Everyone" : "Everyone"}
+                {activeMembers(company).every(m => (editFields.assignees || []).includes(m.name)) && <Icon.check />}Everyone
               </button>
             </div>
           )}
@@ -4318,19 +4324,16 @@ function Todos({ company, onSave, onAdd }) {
     }
 
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-        <div className={`checkbox ${t.done ? "checked" : ""}`} onClick={() => toggle(t.id)}>{t.done && <Icon.check />}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: C.fs.base, fontWeight: 500 }}>{t.title}</div>
-          <div style={{ fontSize: C.fs.xs, color: isOverdue ? C.red : C.textMuted, marginTop: 4 }}>
-            {getAssignees(t).length > 0 && <span>{getAssignees(t).join(", ")}</span>}
-            {getAssignees(t).length > 0 && (t.dueDate || huddleName) && <span> · </span>}
-            {t.dueDate && <span style={{ fontWeight: isOverdue ? 600 : 400 }}>{isOverdue ? "Overdue — " : "Due "}<span className="num">{dateStr(new Date(t.dueDate))}</span></span>}
-            {huddleName && <span style={{ color: C.textDim }}> · {huddleName}</span>}
-          </div>
-        </div>
-        <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim, fontSize: C.fs.xs }} onClick={() => startEdit(t)}>✏</button>
-        <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(t.id)}><Icon.trash /></button>
+      <div className="lrow keep-order">
+        <div className={`checkbox ${t.done ? "checked" : ""}`} role="checkbox" aria-checked={!!t.done} aria-label={`Mark done: ${t.title}`} onClick={() => toggle(t.id)}>{t.done && <Icon.check />}</div>
+        <span className="grow" style={{ fontWeight: 500 }}>{t.title}</span>
+        <span className="lmeta lowner" title={getAssignees(t).join(", ")}>{getAssignees(t).join(", ") || "—"}</span>
+        <span className="lmeta num ldate wide" style={{ color: isOverdue ? C.red : undefined, fontWeight: isOverdue ? 600 : 400 }}>{t.dueDate ? <>{isOverdue ? "Overdue " : ""}{dateStr(new Date(t.dueDate))}</> : "—"}</span>
+        <span className="lmeta lhuddle" title={huddleName || ""}>{huddleName || "—"}</span>
+        <span className="lact">
+          <button className="icon-btn" title="Edit" aria-label={`Edit to-do: ${t.title}`} onClick={() => startEdit(t)}><Icon.edit /></button>
+          <button className="icon-btn danger" title="Delete" aria-label={`Delete to-do: ${t.title}`} onClick={() => del(t.id)}><Icon.trash /></button>
+        </span>
       </div>
     );
   };
@@ -4338,29 +4341,25 @@ function Todos({ company, onSave, onAdd }) {
   return (
     <Layout title="To-Dos" subtitle="Weekly action items">
       <div>
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Add To-Do</h3>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: activeMembers(company).length ? 8 : 0 }}>
-            <input placeholder="What needs to happen?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: isMobile ? "1 1 100%" : 2, minWidth: isMobile ? 0 : 200 }} />
-            <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} style={{ flex: isMobile ? "1 1 calc(50% - 5px)" : 1, minWidth: isMobile ? 0 : 130 }} />
-            <select value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ flex: isMobile ? "1 1 calc(50% - 5px)" : 1, minWidth: isMobile ? 0 : 140 }}>
-              <option value="">No Huddle</option>
-              {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-            </select>
-            <button className="btn-primary" style={{ padding: "8px 20px", width: isMobile ? "100%" : undefined }} onClick={add}>Add</button>
-          </div>
+        <div className="panel addbar" style={{ marginBottom: 12 }}>
+          <input className="addbar-main" aria-label="New to-do" placeholder="Add a to-do — what needs to happen?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} />
+          <input type="date" aria-label="Due date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} style={{ width: 150 }} />
+          <select aria-label="Huddle" value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ width: 170 }}>
+            <option value="">No Huddle</option>
+            {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
           {activeMembers(company).length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-              <span style={{ fontSize: C.fs.xs, color: C.textMuted, marginRight: 4 }}>Assign to:</span>
+            <div className="addbar-people" style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: C.fs.xs, color: C.textMuted }}>Assign to:</span>
               {activeMembers(company).map(m => {
                 const sel = (form.assignees || []).includes(m.name);
                 return (
                   <button key={m.id} onClick={() => setForm(f => ({ ...f, assignees: sel ? f.assignees.filter(a => a !== m.name) : [...(f.assignees||[]), m.name] }))}
-                    style={{ padding: "4px 12px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI, transition: "all 0.15s",
+                    style={{ padding: "4px 10px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI, transition: "all 0.15s",
                       background: sel ? C.selBg : C.surface2,
                       color: sel ? C.text : C.textMuted,
                       border: `1px solid ${sel ? C.selBorder : C.border}` }}>
-                    {sel ? "✓ " : ""}{m.name}
+                    {sel && <Icon.check />}{m.name}
                   </button>
                 );
               })}
@@ -4368,39 +4367,41 @@ function Todos({ company, onSave, onAdd }) {
                 const allNames = activeMembers(company).map(m => m.name);
                 const allSel = allNames.every(n => (form.assignees||[]).includes(n));
                 setForm(f => ({ ...f, assignees: allSel ? [] : allNames }));
-              }} style={{ padding: "4px 12px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI, background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
-                {activeMembers(company).every(m => (form.assignees||[]).includes(m.name)) ? "✓ Everyone" : "Everyone"}
+              }} style={{ padding: "4px 10px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI, background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
+                {activeMembers(company).every(m => (form.assignees||[]).includes(m.name)) && <Icon.check />}Everyone
               </button>
             </div>
           )}
+          <button className="btn-primary" onClick={add}><Icon.plus /> Add</button>
         </div>
 
-        <div className="toolbar" style={{ justifyContent: "flex-end" }}>
-          <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
-            style={{ fontSize: C.fs.sm }}>
-            <option value="all">All Huddles</option>
-            {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-          </select>
-        </div>
-
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: C.fs.md, marginBottom: 12 }}>Pending ({pending.length})</h3>
-          {pending.length === 0 && <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No pending to-dos{huddleFilter !== "all" ? " for this huddle" : ""}.</div>}
-          {pending.map(t => <TodoRow key={t.id} t={t} />)}
-        </div>
-
-        {done.length > 0 && (
-          <div className="card">
-            <h3 style={{ fontSize: C.fs.md, marginBottom: 12, color: C.textMuted }}>Completed ({done.length})</h3>
-            {done.slice(-8).reverse().map(t => (
-              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${C.border}`, opacity: 0.6 }}>
-                <div className="checkbox checked"><Icon.check /></div>
-                <div style={{ flex: 1, textDecoration: "line-through", fontSize: C.fs.base, color: C.textMuted }}>{t.title}</div>
-                <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(t.id)}><Icon.trash /></button>
-              </div>
-            ))}
+        <div className="panel">
+          <div className="panel-h" style={{ paddingTop: 0, paddingBottom: 0 }}>
+            <div className="tabs" role="tablist" style={{ borderBottom: "none" }}>
+              <button role="tab" aria-selected={todoTab === "open"} className={`tab ${todoTab === "open" ? "active" : ""}`} onClick={() => setTodoTab("open")}>Open<span className="cnt">{pending.length}</span></button>
+              <button role="tab" aria-selected={todoTab === "done"} className={`tab ${todoTab === "done" ? "active" : ""}`} onClick={() => setTodoTab("done")}>Done<span className="cnt">{done.length}</span></button>
+            </div>
+            <select aria-label="Filter by huddle" value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
+              style={{ fontSize: C.fs.sm, width: "auto", minWidth: 160 }}>
+              <option value="all">All Huddles</option>
+              {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
           </div>
-        )}
+          {todoTab === "open" && (pending.length === 0
+            ? <div className="lempty">No open to-dos{huddleFilter !== "all" ? " for this huddle" : ""}.</div>
+            : pending.map(t => <TodoRow key={t.id} t={t} />))}
+          {todoTab === "done" && (done.length === 0 ? <div className="lempty">No completed to-dos yet.</div> : [...done].reverse().map(t => (
+            <div key={t.id} className="lrow keep-order" style={{ opacity: 0.75 }}>
+              <div className="checkbox checked" aria-label="Done"><Icon.check /></div>
+              <span className="grow" style={{ textDecoration: "line-through", color: C.textMuted }}>{t.title}</span>
+              <span className="lmeta lowner">{getAssignees(t).join(", ") || "—"}</span>
+              <span className="lmeta lhuddle">{huddles.find(h => h.id === t.huddleId)?.name || "—"}</span>
+              <span className="lact">
+                <button className="icon-btn danger" title="Delete" aria-label={`Delete to-do: ${t.title}`} onClick={() => del(t.id)}><Icon.trash /></button>
+              </span>
+            </div>
+          )))}
+        </div>
       </div>
     </Layout>
   );
