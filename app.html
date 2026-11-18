@@ -56,7 +56,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg, #0a0a0b); color: var(--t1, #f4f5f6); font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; font-feature-settings: 'tnum' 1, 'lnum' 1; }
+    body { background: var(--bg, #0a0a0b); color: var(--t1, #f4f5f6); font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
     ::-webkit-scrollbar{width:10px;height:10px;background:#EEF0F3} ::-webkit-scrollbar-thumb{background:#B8BEC8;border-radius:6px;border:2px solid #EEF0F3}
     #root { min-height: 100vh; }
     #vast-loading {
@@ -117,12 +117,12 @@ const BASE_TOKENS = {
   // Spacing scale (px) — padding, margins and gaps come only from this list
   space: { xxs: 4, xs: 6, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 },
   // Corner radius (px)
-  // 6px for cards, buttons, inputs and inline elements; 10px for pop-ups;
+  // 4px for cards, buttons, inputs, chips and tables; 8px for pop-ups;
   // full circle only for dots and avatars.
-  radius: { control: 6, card: 6, pill: 6, modal: 10, round: "50%" },
+  radius: { control: 4, card: 4, pill: 4, modal: 8, round: "50%" },
   // Heights (px): buttons/inputs on desktop, table rows, and the minimum tap
   // height on phones (kept from the mobile work).
-  h: { control: 34, row: 38, phone: 44 },
+  h: { control: 32, row: 38, phone: 44 },
   // Left menu ("rail"): dark in BOTH themes. All text colors checked ≥4.5:1
   // on bg, hover and active backgrounds (section labels sit on bg only).
   rail: {
@@ -164,7 +164,13 @@ const DARK_THEME = {
   neutral: "#9a9aa2",
   purple: "#a78bfa",
   // selected (neutral) state + keyboard focus
-  selBg: "rgba(255,255,255,0.08)", selBorder: "#f4f5f6",
+  // selection + navigation are BLUE (red is only the main action / problems)
+  selBg: "#1A2742", selBorder: "#7aa2ff", link: "#7aa2ff",
+  // Jira-style "subtle" buttons, Windows-style inputs, table hover
+  btnBg: "#2C2C33", btnHover: "#36363E", btnPressed: "#41414A", btnText: "#f4f5f6",
+  dangerHoverBg: "#2A1E20",
+  inputBg: "#121214", inputBorder: "rgba(255,255,255,0.22)", inputBottom: "rgba(255,255,255,0.45)",
+  tableHover: "#1F1F24",
   focus: "#7aa2ff",
   scrollTrack: "#17171a", scrollThumb: "#3f3f47", scrollThumbHover: "#62626c",
   syncSaving: "#9a9aa2", syncSaved: "#9a9aa2",
@@ -205,7 +211,12 @@ const LIGHT_THEME = {
   blue: "#1D4ED8", blueTint: "rgba(29,78,216,0.06)", blueBorder: "rgba(29,78,216,0.35)",
   neutral: "#5B6475",
   purple: "#6D28D9",
-  selBg: "rgba(20,23,31,0.06)", selBorder: "#14171F",
+  // selection + navigation are BLUE (#E9F0FF was adjusted to #F0F4FF so muted text passes 4.5:1)
+  selBg: "#F0F4FF", selBorder: "#1D4ED8", link: "#1D4ED8",
+  btnBg: "#EBEDF0", btnHover: "#DCDFE4", btnPressed: "#CDD1D8", btnText: "#14171F",
+  dangerHoverBg: "#FBEEEE",
+  inputBg: "#FFFFFF", inputBorder: "#C6CBD4", inputBottom: "#8D95A3",
+  tableHover: "#F4F5F7",
   focus: "#1D4ED8",
   scrollTrack: "#EEF0F3", scrollThumb: "#B8BEC8", scrollThumbHover: "#8D95A3",
   syncSaving: "#667085", syncSaved: "#667085",
@@ -241,7 +252,7 @@ const makeSTYLE = (C) => `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
   :root{--bg:${C.bg};--s1:${C.surface};--s2:${C.surface2};--s3:${C.surface3};--s4:${C.surface3};--acc:${C.accent};--acc-lo:${C.redGlow};--acc-glo:${C.offBorder};--t1:${C.text};--t2:${C.textMuted};--t3:${C.textDim};--green:${C.green};--amber:${C.amber};--red:${C.red};--purple:${C.textMuted};--br:${C.border};--br-hi:${C.okBorder};--ui:${C.fontUI};--mono:${C.fontMono};${tokensToCssVars(C)}}
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:${C.bg};color:${C.text};font-family:${C.fontUI};font-size:${C.fs.base}px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;font-feature-settings:'tnum' 1,'lnum' 1}
+  body{background:${C.bg};color:${C.text};font-family:${C.fontUI};font-size:${C.fs.base}px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
   html,body,#root{overflow-x:clip}
   /* Visible scrollbars wherever content can overflow (both themes) */
   ::-webkit-scrollbar{width:10px;height:10px;background:${C.scrollTrack}}
@@ -254,24 +265,29 @@ const makeSTYLE = (C) => `
   :focus{outline:none}
   :focus-visible{outline:2px solid ${C.focus};outline-offset:2px}
   a:focus-visible,button:focus-visible,[role="button"]:focus-visible,[tabindex]:focus-visible,summary:focus-visible{outline:2px solid ${C.focus};outline-offset:2px}
-  input,textarea,select{background:${C.surface3};border:1px solid ${C.border};color:${C.text};font-family:${C.fontUI};border-radius:${C.radius.control}px;padding:6px 12px;line-height:20px;width:100%;font-size:${C.fs.base}px;outline:none;transition:border-color 0.12s,box-shadow 0.12s;font-feature-settings:'tnum' 1,'lnum' 1}
-  input:focus,textarea:focus,select:focus{border-color:${C.focus}}
+  input,textarea,select{background:${C.inputBg};border:1px solid ${C.inputBorder};border-bottom-color:${C.inputBottom};color:${C.text};font-family:${C.fontUI};border-radius:${C.radius.control}px;padding:5px 10px;line-height:20px;width:100%;font-size:${C.fs.base}px;outline:none;transition:border-color 0.12s,box-shadow 0.12s}
+  input:focus,textarea:focus,select:focus{border-color:${C.inputBorder};border-bottom-color:${C.focus};box-shadow:inset 0 -1px 0 ${C.focus}}
   input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid ${C.focus};outline-offset:2px}
   input::placeholder{color:${C.textDim}}
   input:not([type=checkbox]):not([type=radio]),select{min-height:${C.h.control}px}
   textarea{resize:vertical;min-height:80px}
   select option{background:${C.surface2};color:${C.text}}
   button{cursor:pointer;font-family:${C.fontUI};font-weight:500;border:none;border-radius:${C.radius.control}px;padding:6px 12px;font-size:${C.fs.sm}px;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;white-space:nowrap}
-  button:disabled{opacity:0.45;cursor:not-allowed}
+  button:disabled{opacity:0.5;cursor:not-allowed}
   .btn-primary,.btn-secondary,.btn-ghost,.btn-danger{min-height:${C.h.control}px;justify-content:center}
-  .btn-primary{background:${C.primary};color:${C.onAccent};padding:6px 12px;font-size:${C.fs.sm}px;box-shadow:none}
+  .btn-primary{background:${C.primary};color:${C.onAccent};border:1px solid transparent;padding:6px 12px;font-size:${C.fs.sm}px;font-weight:500;box-shadow:none}
+  .btn-primary:active:not(:disabled){background:${C.primaryHover}}
   .btn-primary:hover:not(:disabled){background:${C.primaryHover}}
-  .btn-secondary{background:${C.surface3};border:1px solid ${C.border};color:${C.text};padding:6px 12px;font-size:${C.fs.sm}px}
-  .btn-secondary:hover:not(:disabled){border-color:${C.okBorder};background:${C.okBg}}
-  .btn-ghost{background:transparent;border:1px solid ${C.border};color:${C.textMuted};padding:6px 12px;font-size:${C.fs.sm}px}
-  .btn-ghost:hover:not(:disabled){background:${C.surface3};color:${C.text}}
-  .btn-danger{background:${C.surface2};border:1px solid ${C.border};color:${C.red};padding:6px 12px;font-size:${C.fs.sm}px}
-  .btn-danger:hover:not(:disabled){background:${C.redTint1};border-color:${C.redTint3}}
+  .btn-secondary{background:${C.btnBg};border:1px solid transparent;color:${C.btnText};padding:6px 12px;font-size:${C.fs.sm}px}
+  .btn-secondary:hover:not(:disabled){background:${C.btnHover}}
+  .btn-secondary:active:not(:disabled){background:${C.btnPressed}}
+  .btn-ghost{background:transparent;border:1px solid transparent;color:${C.text};padding:6px 12px;font-size:${C.fs.sm}px}
+  .btn-ghost:hover:not(:disabled){background:${C.btnBg}}
+  .btn-ghost:active:not(:disabled){background:${C.btnPressed}}
+  .btn-link{color:${C.link}!important}
+  .btn-link:hover:not(:disabled){text-decoration:underline}
+  .btn-danger{background:${C.btnBg};border:1px solid transparent;color:${C.textMuted};padding:6px 12px;font-size:${C.fs.sm}px}
+  .btn-danger:hover:not(:disabled){background:${C.dangerHoverBg};color:${C.red}}
   .card{background:${C.surface2};border:1px solid ${C.border};border-radius:${C.radius.card}px;padding:16px;box-shadow:none}
   .label{font-family:${C.fontUI};font-size:${C.fs.xs}px;font-weight:600;color:${C.textMuted};margin-bottom:8px;display:block}
   h1,h2,h3,h4{font-family:${C.fontUI};font-weight:600}
@@ -304,11 +320,11 @@ const makeSTYLE = (C) => `
   .progress-bar{height:6px;background:${C.surface3};border-radius:3px;overflow:hidden}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
   .progress-fill{height:100%;background:${C.green};border-radius:3px;transition:width 0.5s}
-  .rating-btn{width:44px;height:44px;border-radius:${C.radius.control}px;border:1px solid ${C.border};background:${C.surface3};color:${C.textMuted};font-size:${C.fs.md}px;font-weight:600;cursor:pointer;transition:all 0.15s;font-family:${C.fontMono};font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center}
-  .rating-btn:hover{border-color:${C.borderStrong};color:${C.text}}
-  .rating-btn.sel{background:${C.text};border-color:${C.text};color:${C.surface2}}
+  .rating-btn{width:44px;height:44px;border-radius:${C.radius.control}px;border:1px solid transparent;background:${C.btnBg};color:${C.textMuted};font-size:${C.fs.md}px;font-weight:600;cursor:pointer;transition:all 0.15s;font-family:${C.fontMono};font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center}
+  .rating-btn:hover{background:${C.btnHover};color:${C.text}}
+  .rating-btn.sel{background:${C.selBg};border-color:${C.selBorder};color:${C.link};box-shadow:inset 0 0 0 1px ${C.selBorder}}
   .huddle-item{padding:12px 16px;border-radius:${C.radius.card}px;border:1px solid ${C.border};background:${C.surface};margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all 0.2s}
-  .huddle-item.active{border-color:${C.selBorder};background:${C.selBg}}
+  .huddle-item.active{border-color:${C.selBorder};background:${C.selBg};box-shadow:inset 3px 0 0 ${C.selBorder}}
   .huddle-item.done{opacity:0.5}
   .timer-display{font-family:${C.fontMono};font-variant-numeric:tabular-nums;font-size:${C.fs.display}px;font-weight:600;color:${C.text}}
   .badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;background:${C.surface3};color:${C.text};border:1px solid ${C.border};border-radius:${C.radius.control}px;font-size:${C.fs.xs}px;font-weight:600;padding:0 6px;font-family:${C.fontMono};font-variant-numeric:tabular-nums}
@@ -361,10 +377,15 @@ const makeSTYLE = (C) => `
   .row-between{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .chip{display:inline-flex;align-items:center;gap:6px;background:${C.surface3};border:1px solid ${C.border};border-radius:${C.radius.pill}px;padding:4px 12px;font-size:${C.fs.xs}px;color:${C.textMuted}}
   .table{width:100%;border-collapse:collapse}
-  .table th{text-align:left;height:${C.h.row}px;padding:6px 12px;font-size:${C.fs.xs}px;font-weight:500;color:${C.textMuted};border-bottom:1px solid ${C.border}}
+  .table th{text-align:left;height:${C.h.row}px;padding:6px 12px;font-size:${C.fs.xs}px;font-weight:500;color:${C.textMuted};border-bottom:2px solid ${C.border}}
   .table td{height:${C.h.row}px;padding:4px 12px;font-size:${C.fs.base}px;border-bottom:1px solid ${C.border}}
   .table tr:last-child td{border-bottom:none}
-  .table tr:hover td{background:${C.okBg}}
+  .table tr:hover td{background:${C.tableHover}}
+  .tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;color:${C.textMuted};padding:6px 4px;margin-right:16px;font-weight:500;font-size:${C.fs.base}px;min-height:${C.h.control}px}
+  .tab:hover:not(:disabled){color:${C.text}}
+  .tab.active{color:${C.text};border-bottom-color:${C.link}}
+  .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:${C.surface2};border-bottom:1px solid ${C.border};padding:4px 12px;margin:0 0 12px;min-height:44px}
+  .toolbar select{width:auto;min-width:160px}
   .priority-1{color:${C.text};font-weight:600}
   .priority-2{color:${C.textMuted};font-weight:600}
   .priority-3{color:${C.textMuted};font-weight:600}
@@ -1162,7 +1183,7 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
               <div style={{ height: "100%", width: `${pct}%`, background: C.green, borderRadius: 3, transition: "width 0.4s" }} />
             </div>
           </div>
-          <button className="btn-ghost" style={{ fontSize: C.fs.xs, whiteSpace: "nowrap" }} onClick={() => setView("settings")}>Edit Quarter →</button>
+          <button className="btn-ghost btn-link" style={{ fontSize: C.fs.xs, whiteSpace: "nowrap" }} onClick={() => setView("settings")}>Edit Quarter →</button>
         </div>
       </div>
 
@@ -1185,7 +1206,7 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
         <div className="card">
           <div className="section-header">
             <h3 style={{ fontSize: C.fs.md }}>{q} — Task Progress</h3>
-            <button className="btn-ghost" onClick={() => setView("tasks")}>View All →</button>
+            <button className="btn-ghost btn-link" onClick={() => setView("tasks")}>View All →</button>
           </div>
           <div style={{ marginBottom: 16 }}>
             <div className="progress-bar"><div className="progress-fill" style={{ width: `${pct}%` }} /></div>
@@ -1207,7 +1228,7 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
             <div className="section-header">
               <h3 style={{ fontSize: C.fs.md }}>Huddles</h3>
             </div>
-            {(company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }]).map(h => {
+            {(company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }]).map((h, hIdx) => {
               const lastHM = (h.meetings || []).slice(-1)[0];
               const session = liveSessions[h.id];
               const isLive = session?.active === true;
@@ -1234,11 +1255,11 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
                     <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                       {isLive && (
                         <button onClick={() => setView("huddle:" + h.id)}
-                          style={{ padding: "6px 12px", fontSize: C.fs.xs, borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontFamily: C.fontUI, fontWeight: 600, cursor: "pointer" }}>
+                          style={{ padding: "6px 12px", fontSize: C.fs.xs, borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.text, fontFamily: C.fontUI, fontWeight: 600, cursor: "pointer" }}>
                           <Icon.signal /> Join
                         </button>
                       )}
-                      <button className="btn-primary" style={{ padding: "6px 12px", fontSize: C.fs.xs }} onClick={() => setView("huddle:" + h.id)}>
+                      <button className={hIdx === 0 ? "btn-primary" : "btn-secondary"} style={{ padding: "6px 12px", fontSize: C.fs.xs }} onClick={() => setView("huddle:" + h.id)}>
                         {isLive ? "Host View" : "Start →"}
                       </button>
                     </div>
@@ -1251,7 +1272,7 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
           <div className="card">
             <div className="section-header">
               <h3 style={{ fontSize: C.fs.md }}>Recent Headlines</h3>
-              <button className="btn-ghost" onClick={() => setView("headlines")}>View All →</button>
+              <button className="btn-ghost btn-link" onClick={() => setView("headlines")}>View All →</button>
             </div>
             {(company.headlines || []).slice(-3).reverse().map(h => (
               <div key={h.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: C.fs.base }}>
@@ -2165,11 +2186,11 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
             return (
               <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                 <button onClick={() => { navigator.clipboard.writeText(recap).catch(e => console.warn("[VAST] Clipboard copy failed:", e)); }}
-                  style={{ flex: 1, padding: "12px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.base, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  style={{ flex: 1, padding: "12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.textMuted, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.base, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   <Icon.copy /> Copy Recap
                 </button>
                 <button onClick={() => { window.location.href = `mailto:${emails}?subject=${subject}&body=${body}`; }}
-                  style={{ flex: 1, padding: "12px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.base, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  style={{ flex: 1, padding: "12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.text, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.base, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   <Icon.mail /> Send Recap
                 </button>
               </div>
@@ -2301,7 +2322,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
             </div>
           </div>
           <button onClick={() => { setIsViewer(false); }}
-            style={{ fontSize: C.fs.xs, padding: "4px 12px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, cursor: "pointer", fontFamily: C.fontUI, fontWeight: 600, flexShrink: 0 }}>
+            style={{ fontSize: C.fs.xs, padding: "4px 12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.textMuted, cursor: "pointer", fontFamily: C.fontUI, fontWeight: 600, flexShrink: 0 }}>
             Take Control
           </button>
         </div>
@@ -2505,7 +2526,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                   </div>
                   {weeks.length > RECENT_WEEKS && (
                     <button onClick={() => setScorecardShowAll(s => !s)}
-                      style={{ flexShrink: 0, padding: "6px 12px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer", whiteSpace: "nowrap" }}>
+                      style={{ flexShrink: 0, padding: "6px 12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.textMuted, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer", whiteSpace: "nowrap" }}>
                       {scorecardShowAll ? `Show recent ${RECENT_WEEKS}` : "Show all weeks"}
                     </button>
                   )}
@@ -3016,10 +3037,10 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                                   {members.length === 0 && <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>No members in this huddle.</div>}
                                 </div>
                                 <div style={{ display: "flex", gap: 6 }}>
-                                  <button onClick={commitAddAsTodo} style={{ flex: 1, padding: "6px 8px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer" }}>
+                                  <button onClick={commitAddAsTodo} style={{ flex: 1, padding: "6px 8px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.text, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer" }}>
                                     Add To-Do
                                   </button>
-                                  <button onClick={() => setTodoPickerOpen(false)} style={{ padding: "6px 8px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily: C.fontUI, fontSize: C.fs.xs, cursor: "pointer" }}>
+                                  <button onClick={() => setTodoPickerOpen(false)} style={{ padding: "6px 8px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.textMuted, fontFamily: C.fontUI, fontSize: C.fs.xs, cursor: "pointer" }}>
                                     Cancel
                                   </button>
                                 </div>
@@ -3033,7 +3054,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                             ✓ Solved
                           </button>
                           <button onClick={() => markNotSolved(activeItem)}
-                            style={{ flex: 1, padding: "12px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.md, cursor:"pointer"}}>
+                            style={{ flex: 1, padding: "12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.text, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.md, cursor:"pointer"}}>
                             ↩ Not solved
                           </button>
                         </div>
@@ -3047,7 +3068,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                               {inFocus.filter(f => f.id !== activeItem.id).map(f => (
                                 <button key={f.id} onClick={() => setActiveIssueId(f.id)}
-                                  style={{ padding: "4px 12px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily: C.fontUI, fontSize:C.fs.xs, cursor:"pointer" }}>
+                                  style={{ padding: "4px 12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.textMuted, fontFamily: C.fontUI, fontSize:C.fs.xs, cursor:"pointer" }}>
                                   {f.title.length > 30 ? f.title.slice(0, 30) + "…" : f.title}
                                 </button>
                               ))}
@@ -3140,7 +3161,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                       {allDone && (
                         <button onClick={() => { setAlreadySelected([]); setSpotlight(null); }}
-                          style={{ fontSize: C.fs.xs, padding: "8px 12px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: "transparent", color: C.text, cursor: "pointer", fontFamily: C.fontUI, fontWeight: 600 }}>
+                          style={{ fontSize: C.fs.xs, padding: "8px 12px", borderRadius: C.radius.control, border: "1px solid transparent", background: "transparent", color: C.text, cursor: "pointer", fontFamily: C.fontUI, fontWeight: 600 }}>
                           ↺ Reset Pool
                         </button>
                       )}
@@ -3303,17 +3324,16 @@ function Tasks({ company, onSave, onAdd }) {
     })()}
       action={<button className="btn-primary" onClick={() => setShowAdd(true)}><Icon.plus /> Add Task</button>}>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ display: "flex", gap: 8, flex: 1 }}>
+      <div className="toolbar">
+        <div style={{ display: "flex", gap: 0, flex: 1 }}>
         {["company", "individual"].map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            style={{ padding: "8px 20px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, cursor: "pointer", fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.sm, background: tab === t ? C.text : C.surface2, color: tab === t  ? C.surface2 : C.textMuted }}>
+          <button key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
             {t === "company" ? "Company Tasks" : "Individual Tasks"}
           </button>
         ))}
         </div>
         <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
-          style={{ padding: "8px 12px", fontSize: C.fs.sm, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.text }}>
+          style={{ fontSize: C.fs.sm }}>
           <option value="all">All Huddles</option>
           {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
         </select>
@@ -3610,9 +3630,9 @@ function Scorecard({ company, onSave }) {
 
       {scorecardError && <div style={{ color: C.red, background: C.redTint1, border: `1px solid ${C.redTint3}`, borderRadius: C.radius.control, padding: "8px 12px", marginBottom: 12, fontSize: C.fs.sm }}>{scorecardError}</div>}
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+      <div className="toolbar" style={{ justifyContent: "flex-end" }}>
         <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
-          style={{ padding: "6px 12px", fontSize: C.fs.sm, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.text }}>
+          style={{ fontSize: C.fs.sm }}>
           <option value="all">All Huddles</option>
           {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
         </select>
@@ -3635,8 +3655,8 @@ function Scorecard({ company, onSave }) {
                 <tr>
                   <th>Measurable</th>
                   <th>Responsible</th>
-                  <th>Target</th>
-                  {visibleWeeks.map(w => <th key={w} className="num" style={{ textAlign: "center" }}>{w.split("-W")[1] ? `W${w.split("-W")[1]}` : w}</th>)}
+                  <th style={{ textAlign: "right" }}>Target</th>
+                  {visibleWeeks.map(w => <th key={w} className="num" style={{ textAlign: "right", paddingRight: 16, background: w === wk ? C.selBg : undefined, boxShadow: w === wk ? `inset 2px 0 0 ${C.selBorder}` : undefined, color: w === wk ? C.link : undefined }}>{w.split("-W")[1] ? `W${w.split("-W")[1]}` : w}</th>)}
                   <th>Huddle</th>
                 </tr>
               </thead>
@@ -3652,7 +3672,7 @@ function Scorecard({ company, onSave }) {
                         {members.map(mem => <option key={mem.id} value={mem.name}>{mem.name}</option>)}
                       </select>
                     </td>
-                    <td style={{ color: C.textMuted, whiteSpace: "nowrap" }}>
+                    <td style={{ color: C.textMuted, whiteSpace: "nowrap", textAlign: "right" }}>
                       {m.operator && m.operator !== "gte" ? {gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="}[m.operator] : "≥"} <span className="num">{m.target}</span>{m.unit ? ` ${m.unit}` : ""}
                     </td>
                     {visibleWeeks.map(w => {
@@ -3672,12 +3692,12 @@ function Scorecard({ company, onSave }) {
                     };
                     const onTarget = checkTarget(val, m);
                       return (
-                        <td key={w} style={{ textAlign: "center", background: isCurrentWeek ? C.selBg : "transparent" }}>
+                        <td key={w} style={{ textAlign: "right", background: isCurrentWeek ? C.selBg : "transparent", boxShadow: isCurrentWeek ? `inset 2px 0 0 ${C.selBorder}` : undefined }}>
                           <ScorecardCell
                             value={val}
                             onCommit={(v) => setEntry(m.id, v, w)}
                             placeholder="—"
-                            style={{ width: 70, textAlign: "center", padding: "6px 8px", fontSize: C.fs.sm, fontWeight: val ? 600 : 400,
+                            style={{ width: 70, textAlign: "right", padding: "6px 8px", fontSize: C.fs.sm, fontWeight: val ? 600 : 400,
                               border: `1px solid ${isCurrentWeek ? C.borderStrong : C.border}`,
                               borderRadius: C.radius.control, background: onTarget === true ? C.greenTint : onTarget === false ? C.redTint1 : C.surface2,
                               color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.text) : C.textDim,
@@ -3784,7 +3804,7 @@ function Scorecard({ company, onSave }) {
               <label className="label">Weekly Target</label>
               <div style={{ display: "flex", gap: 8 }}>
                 <select value={newM.operator || "gte"} onChange={e => setNewM(m => ({ ...m, operator: e.target.value }))}
-                  style={{ width: 90, flexShrink: 0 }}>
+                  style={{ width: 160, flexShrink: 0 }}>
                   <option value="gte">≥ (at least)</option>
                   <option value="lte">≤ (at most)</option>
                   <option value="gt">&gt; (more than)</option>
@@ -3912,10 +3932,10 @@ function Headlines({ company, onSave, onAdd }) {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div className="toolbar" style={{ justifyContent: "space-between" }}>
           <span style={{ fontSize: C.fs.base, color: C.textMuted }}>{active.length} active · {reviewed.length} reviewed</span>
           <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
-            style={{ padding: "6px 12px", fontSize: C.fs.sm, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.text }}>
+            style={{ fontSize: C.fs.sm }}>
             <option value="all">All Huddles</option>
             {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
           </select>
@@ -4009,9 +4029,9 @@ function Issues({ company, onSave, onAdd }) {
 
       <div style={{ maxWidth: 700 }}>
         {issueError && <div style={{ color: C.red, background: C.redTint1, border: `1px solid ${C.redTint3}`, borderRadius: C.radius.control, padding: "8px 12px", marginBottom: 12, fontSize: C.fs.sm }}>{issueError}</div>}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <div className="toolbar" style={{ justifyContent: "flex-end" }}>
           <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
-            style={{ padding: "6px 12px", fontSize: C.fs.sm, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.text }}>
+            style={{ fontSize: C.fs.sm }}>
             <option value="all">All Huddles</option>
             {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
           </select>
@@ -4253,9 +4273,9 @@ function Todos({ company, onSave, onAdd }) {
           )}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <div className="toolbar" style={{ justifyContent: "flex-end" }}>
           <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
-            style={{ padding: "6px 12px", fontSize: C.fs.sm, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.text }}>
+            style={{ fontSize: C.fs.sm }}>
             <option value="all">All Huddles</option>
             {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
           </select>
@@ -4603,7 +4623,7 @@ function MeetingHistory({ company }) {
                               {copied === m.id ? "✓ Copied!" : "Copy Recap"}
                             </button>
                             <button onClick={e => { e.stopPropagation(); sendRecapEmail(m); }}
-                              style={{ padding: "6px 12px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                              style={{ padding: "6px 12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.text, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
                               <Icon.mail /> Send Recap
                             </button>
                           </div>
