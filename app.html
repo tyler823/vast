@@ -993,6 +993,7 @@ const Icon = {
   menu: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
   sun: () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
   moon: () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
+  reports: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="18" x2="8" y2="14"/><line x1="12" y1="18" x2="12" y2="11"/><line x1="16" y1="18" x2="16" y2="15"/></svg>,
   liveDot: () => <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.green, display: "inline-block", flexShrink: 0, animation: "pulse 1.2s infinite" }} />,
 };
 
@@ -1094,6 +1095,7 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
       <Link id="history" icon={Icon.history} label="Meeting History" />
       <Link id="quarterhistory" icon={Icon.archive} label="Historical Quarters" />
       <Link id="settings" icon={Icon.settings} label="Settings" />
+      <Link id="reports" icon={Icon.reports} label="Reports" />
     </>
   );
 
@@ -5265,6 +5267,829 @@ function Settings({ company, onSave, session }) {
   );
 }
 
+// ─── REPORTS (read-only) ─────────────────────────────────────────────
+// Everything here is computed from the company data the app has already
+// loaded. Nothing in this section writes to Firebase or adds a listener.
+// Fields added by later saves (completedAt, resolvedAt, statusHistory,
+// attendees, quarterStart/quarterEnd) are used when present; older records
+// without them fall back to "Not tracked" / partial notes.
+const RPT_DAY = 86400000;
+const rptVar = (name) => `var(--c-${name.replace(/[A-Z]/g, m => "-" + m.toLowerCase())})`;
+const rptParseQ = (label) => {
+  const m = /^\s*Q([1-4])\s+(\d{4})\s*$/i.exec(String(label || ""));
+  return m ? { q: Number(m[1]), year: Number(m[2]) } : null;
+};
+const rptSameLabel = (a, b) => String(a || "").trim().replace(/\s+/g, " ").toLowerCase() === String(b || "").trim().replace(/\s+/g, " ").toLowerCase();
+const rptQuarterOf = (d) => Math.floor(d.getMonth() / 3) + 1;
+// Period = a calendar quarter (q 1–4) or a full year (q 0), in local time.
+const rptPeriod = (year, q) => {
+  const start = q ? new Date(year, (q - 1) * 3, 1) : new Date(year, 0, 1);
+  const end = q ? new Date(year, q * 3, 0, 23, 59, 59, 999) : new Date(year, 11, 31, 23, 59, 59, 999);
+  return { year, q, start, end, label: q ? `Q${q} ${year}` : String(year) };
+};
+const rptFmtDate = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const rptPct = (n, d) => d > 0 ? n / d : null;
+const rptPctText = (p) => p == null ? "—" : `${Math.round(p * 100)}%`;
+const rptNum1 = (v) => v == null || isNaN(v) ? "—" : (Math.round(v * 10) / 10).toString();
+const rptWeekNum = (key) => parseInt(String(key).split("-W")[1], 10);
+// Same rule as the scorecard's target check: blank → no judgement.
+const rptMeets = (val, m) => {
+  if (val === "" || val === undefined || val === null) return null;
+  const v = parseFloat(val), t = parseFloat(m.target);
+  if (isNaN(v) || isNaN(t)) return null;
+  const op = m.operator || "gte";
+  if (op === "gte") return v >= t;
+  if (op === "lte") return v <= t;
+  if (op === "gt") return v > t;
+  if (op === "lt") return v < t;
+  if (op === "eq") return v === t;
+  return null;
+};
+const RPT_OPS = { gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" };
+
+// All meetings once: data/meetings first, then any huddle copies not already seen.
+function rptMeetings(company) {
+  const out = []; const seen = new Set();
+  toArray(company.meetings).forEach(m => { if (!m) return; if (m.id) { if (seen.has(m.id)) return; seen.add(m.id); } out.push(m); });
+  toArray(company.huddles).forEach(h => toArray(h && h.meetings).forEach(m => {
+    if (!m || (m.id && seen.has(m.id))) return;
+    if (m.id) seen.add(m.id);
+    out.push({ ...m, huddleId: m.huddleId || h.id, huddleName: m.huddleName || h.name });
+  }));
+  return out;
+}
+
+// Years that have any dated data (plus the current year), newest first.
+function rptYears(company) {
+  const ys = new Set([new Date().getFullYear()]);
+  const add = (iso) => { if (!iso) return; const d = new Date(iso); if (!isNaN(d)) ys.add(d.getFullYear()); };
+  Object.keys((company.scorecard && company.scorecard.entries) || {}).forEach(k => { const y = parseInt(k, 10); if (y > 1990 && y < 3000) ys.add(y); });
+  toArray(company.todos).forEach(t => { if (t) { add(t.createdAt); add(t.completedAt); } });
+  toArray(company.issues).forEach(i => { if (i) { add(i.createdAt); add(i.resolvedAt); } });
+  toArray(company.headlines).forEach(h => { if (h) add(h.date); });
+  rptMeetings(company).forEach(m => add(m.date));
+  toArray(company.quarterHistory).forEach(q => { const p = q && rptParseQ(q.quarter); if (p) ys.add(p.year); });
+  const cq = rptParseQ(company.currentQuarter); if (cq) ys.add(cq.year);
+  return [...ys].sort((a, b) => b - a);
+}
+
+// Where a quarter's task list comes from. Current calendar quarter → live
+// quarterlyTasks; past quarter → the ONE archive entry with that label.
+function rptTaskSource(company, year, q, today) {
+  const label = `Q${q} ${year}`;
+  const p = rptPeriod(year, q);
+  if (p.start > today) return { label, tasks: null, note: "This quarter hasn't started yet.", future: true, period: p };
+  if (year === today.getFullYear() && q === rptQuarterOf(today)) {
+    const named = company.currentQuarter && !rptSameLabel(company.currentQuarter, label) ? `Showing your current quarterly tasks (the quarter is named “${company.currentQuarter}” in Settings).` : null;
+    return { label, tasks: toArray(company.quarterlyTasks).filter(Boolean), source: "current", note: named, period: p };
+  }
+  const matches = toArray(company.quarterHistory).filter(h => h && rptSameLabel(h.quarter, label));
+  if (matches.length === 0) return { label, tasks: null, note: `No archived quarter named “${label}” was found in Historical Quarters, so tasks can't be shown for it.`, period: p };
+  if (matches.length > 1) return { label, tasks: null, note: `There are ${matches.length} archived quarters named “${label}”. The report won't guess which one is right.`, period: p };
+  return { label, tasks: toArray(matches[0].tasks).filter(Boolean), source: "archive", note: null, period: p };
+}
+
+// Weeks a task spent Off Track, from its statusHistory (null = no history).
+function rptOffWeeks(hist, until) {
+  const h = toArray(hist).filter(x => x && x.at && !isNaN(new Date(x.at))).sort((a, b) => new Date(a.at) - new Date(b.at));
+  if (!h.length) return null;
+  let ms = 0;
+  h.forEach((x, i) => {
+    if (x.status !== "off") return;
+    const s = new Date(x.at), e = i + 1 < h.length ? new Date(h[i + 1].at) : until;
+    if (e > s) ms += e - s;
+  });
+  return ms / (7 * RPT_DAY);
+}
+
+function rptCompute(company, year, q) {
+  const today = new Date();
+  const period = rptPeriod(year, q);
+  const { start, end } = period;
+  const inP = (iso) => { if (!iso) return false; const d = new Date(iso); return !isNaN(d) && d >= start && d <= end; };
+  const beforeEnd = (iso) => !iso || isNaN(new Date(iso)) || new Date(iso) <= end;
+  const isCurrent = today >= start && today <= end;
+  const isFuture = start > today;
+  const curWk = weekKey();
+  const until = isCurrent ? today : end;
+
+  // ── Scorecard: ISO weeks whose Thursday falls in the period (not future weeks)
+  const weeks = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    if (d.getDay() === 4) { const k = weekKeyFromDate(d); if (k <= curWk) weeks.push(k); }
+  }
+  const measurables = toArray(company.scorecard && company.scorecard.measurables).filter(m => m && m.id);
+  const entries = (company.scorecard && company.scorecard.entries) || {};
+  const liveIds = new Set(measurables.map(m => m.id));
+  let deletedValues = 0;
+  weeks.forEach(w => { const e = entries[w] || {}; Object.keys(e).forEach(id => { if (!liveIds.has(id) && e[id] !== "" && e[id] != null) deletedValues++; }); });
+  const scRows = measurables.map(m => {
+    const op = m.operator || "gte";
+    const target = parseFloat(m.target);
+    const pts = weeks.map(w => {
+      const raw = (entries[w] || {})[m.id];
+      const v = raw === "" || raw == null ? NaN : parseFloat(raw);
+      return { week: w, value: isNaN(v) ? null : v, hit: rptMeets(raw, m) };
+    });
+    const vals = pts.filter(p => p.value != null);
+    const hit = pts.filter(p => p.hit === true).length;
+    const missed = pts.filter(p => p.hit === false).length;
+    const avg = vals.length ? vals.reduce((a, p) => a + p.value, 0) / vals.length : null;
+    const score = (v) => op === "lte" || op === "lt" ? -v : op === "eq" && !isNaN(target) ? -Math.abs(v - target) : v;
+    let best = null, worst = null;
+    vals.forEach(p => { if (!best || score(p.value) > score(best.value)) best = p; if (!worst || score(p.value) < score(worst.value)) worst = p; });
+    return { m, owner: m.owner || "Unassigned", goal: m.target !== undefined && m.target !== "" ? `${RPT_OPS[op] || "≥"} ${m.target}${m.unit ? " " + m.unit : ""}` : "No goal", target: isNaN(target) ? null : target,
+      pts, hit, missed, pct: rptPct(hit, hit + missed), avg, avgHit: avg == null ? null : rptMeets(avg, m), best, worst, entered: vals.length };
+  });
+  const scHit = scRows.reduce((a, r) => a + r.hit, 0), scMissed = scRows.reduce((a, r) => a + r.missed, 0);
+
+  // ── Quarterly tasks (one source per quarter in the period)
+  const qs = q ? [q] : [1, 2, 3, 4];
+  const taskQuarters = qs.map(qq => {
+    const src = rptTaskSource(company, year, qq, today);
+    if (!src.tasks) return src;
+    const qUntil = src.period.end < today ? src.period.end : today;
+    const rows = src.tasks.map(t => ({ title: t.title || "(untitled)", who: t.who || "Unassigned", status: t.status || "on", offWeeks: rptOffWeeks(t.statusHistory, qUntil), hasHistory: toArray(t.statusHistory).length > 0, carriedFrom: t.carriedFrom || null }));
+    const done = rows.filter(r => r.status === "done").length;
+    const owners = {};
+    rows.forEach(r => { const o = owners[r.who] = owners[r.who] || { owner: r.who, total: 0, done: 0 }; o.total++; if (r.status === "done") o.done++; });
+    return { ...src, rows, total: rows.length, done, pct: rptPct(done, rows.length), owners: Object.values(owners).sort((a, b) => a.owner.localeCompare(b.owner)), historyTracked: rows.some(r => r.hasHistory) };
+  });
+  const tqWith = taskQuarters.filter(t => t.rows);
+  const tasksTotal = tqWith.reduce((a, t) => a + t.total, 0), tasksDone = tqWith.reduce((a, t) => a + t.done, 0);
+
+  // ── To-dos
+  const todos = toArray(company.todos).filter(Boolean);
+  const tdCreated = todos.filter(t => inP(t.createdAt));
+  const tdCompleted = todos.filter(t => t.done && inP(t.completedAt));
+  const durs = tdCompleted.filter(t => t.createdAt && !isNaN(new Date(t.createdAt))).map(t => (new Date(t.completedAt) - new Date(t.createdAt)) / RPT_DAY).filter(x => x >= 0);
+  const tdDoneUpToEnd = todos.filter(t => t.done && beforeEnd(t.createdAt));
+  const tdDoneWithDate = tdDoneUpToEnd.filter(t => t.completedAt).length;
+  const tdTracked = todos.some(t => t.completedAt);
+  const BUCKETS = ["0–7 days", "8–14 days", "15–30 days", "30+ days"];
+  let aging = null;
+  if (isCurrent) {
+    const byOwner = {}; let unknownAge = 0;
+    todos.filter(t => !t.done).forEach(t => {
+      const created = t.createdAt ? new Date(t.createdAt) : null;
+      if (!created || isNaN(created)) { unknownAge++; return; }
+      const age = Math.floor((today - created) / RPT_DAY);
+      const b = age <= 7 ? 0 : age <= 14 ? 1 : age <= 30 ? 2 : 3;
+      const names = getAssignees(t).length ? getAssignees(t) : ["Unassigned"];
+      names.forEach(n => { const o = byOwner[n] = byOwner[n] || { owner: n, counts: [0, 0, 0, 0] }; o.counts[b]++; });
+    });
+    aging = { buckets: BUCKETS, rows: Object.values(byOwner).sort((a, b) => a.owner.localeCompare(b.owner)), unknownAge };
+  }
+  const tdOwners = {};
+  const tdOwner = (n) => tdOwners[n] = tdOwners[n] || { owner: n, created: 0, completed: 0, open: 0 };
+  const ownersOf = (t) => getAssignees(t).length ? getAssignees(t) : ["Unassigned"];
+  tdCreated.forEach(t => ownersOf(t).forEach(n => tdOwner(n).created++));
+  tdCompleted.forEach(t => ownersOf(t).forEach(n => tdOwner(n).completed++));
+  if (isCurrent) todos.filter(t => !t.done).forEach(t => ownersOf(t).forEach(n => tdOwner(n).open++));
+
+  // ── Huddles (ratings from MEETING records only)
+  const meetings = rptMeetings(company).filter(m => inP(m.date)).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const huddleName = (id, fallback) => ((toArray(company.huddles).find(h => h && h.id === id) || {}).name) || fallback || "Huddle";
+  const hd = {};
+  meetings.forEach(m => {
+    const k = m.huddleId || m.huddleName || "unknown";
+    const o = hd[k] = hd[k] || { huddle: huddleName(m.huddleId, m.huddleName), held: 0, minutes: 0, ratings: [], attendance: [] };
+    o.held++; o.minutes += Number(m.totalMinutes) || 0;
+    if (Number(m.rating) > 0) o.ratings.push(Number(m.rating));
+    if (Array.isArray(m.attendees) || (m.attendees && typeof m.attendees === "object")) o.attendance.push(toArray(m.attendees).length);
+  });
+  const huddleRows = Object.values(hd).map(o => ({ ...o, avgRating: o.ratings.length ? o.ratings.reduce((a, b) => a + b, 0) / o.ratings.length : null, avgAttend: o.attendance.length ? o.attendance.reduce((a, b) => a + b, 0) / o.attendance.length : null })).sort((a, b) => a.huddle.localeCompare(b.huddle));
+  const rated = meetings.filter(m => Number(m.rating) > 0);
+  const attendRecorded = meetings.filter(m => m.attendees != null).length;
+
+  // ── Headlines & issues
+  const headlines = toArray(company.headlines).filter(Boolean);
+  const hlAdded = headlines.filter(h => inP(h.date));
+  const hlReviewed = headlines.filter(h => h.reviewed && inP(h.reviewedAt));
+  const hlReviewedNoDate = headlines.filter(h => h.reviewed && !h.reviewedAt && beforeEnd(h.date)).length;
+  const issues = toArray(company.issues).filter(Boolean);
+  const isCreated = issues.filter(i => inP(i.createdAt));
+  const isResolved = issues.filter(i => i.status === "resolved" && inP(i.resolvedAt));
+  const isResolvedUpToEnd = issues.filter(i => i.status === "resolved" && beforeEnd(i.createdAt));
+  const isResolvedWithDate = isResolvedUpToEnd.filter(i => i.resolvedAt).length;
+  const isTracked = issues.some(i => i.resolvedAt);
+
+  return {
+    period, isCurrent, isFuture, today, weekNow: rptWeekNum(curWk),
+    scorecard: { weeks, rows: scRows, deletedValues, hit: scHit, missed: scMissed, pct: rptPct(scHit, scHit + scMissed) },
+    tasks: { quarters: taskQuarters, total: tasksTotal, done: tasksDone, pct: rptPct(tasksDone, tasksTotal), tracked: tqWith.length > 0 },
+    todos: { created: tdCreated.length, completed: tdCompleted.length, avgDays: durs.length ? durs.reduce((a, b) => a + b, 0) / durs.length : null,
+      doneUpToEnd: tdDoneUpToEnd.length, doneWithDate: tdDoneWithDate, tracked: tdTracked, aging, owners: Object.values(tdOwners).sort((a, b) => a.owner.localeCompare(b.owner)) },
+    huddles: { meetings, rows: huddleRows, held: meetings.length, minutes: meetings.reduce((a, m) => a + (Number(m.totalMinutes) || 0), 0),
+      avgRating: rated.length ? rated.reduce((a, m) => a + Number(m.rating), 0) / rated.length : null, rated: rated.length, attendRecorded },
+    headlines: { added: hlAdded.length, reviewed: hlReviewed.length, reviewedNoDate: hlReviewedNoDate },
+    issues: { created: isCreated.length, resolved: isResolved.length, resolvedUpToEnd: isResolvedUpToEnd.length, resolvedWithDate: isResolvedWithDate, tracked: isTracked,
+      openNow: issues.filter(i => i.status !== "resolved").length },
+  };
+}
+
+// ── Small presentational pieces (CSS variables, so print can force light) ──
+const RPT_STATUS = { good: "green", warn: "amber", bad: "red", none: "neutral" };
+function RptDot({ status, label }) {
+  return <span className="rpt-dot" role="img" aria-label={label || status} style={{ background: rptVar(RPT_STATUS[status] || "neutral") }} />;
+}
+function RptNote({ children }) {
+  return <div className="rpt-note">{children}</div>;
+}
+const rptLevel = (p, good = 0.8, warn = 0.5) => p == null ? "none" : p >= good ? "good" : p >= warn ? "warn" : "bad";
+const rptStatusWord = { good: "On target", warn: "Watch", bad: "Off target", none: "No status" };
+
+function RptTile({ label, value, status, sub, notTracked }) {
+  return (
+    <div className="rpt-tile">
+      <div className="rpt-tile-label">{label}</div>
+      {notTracked ? <div className="rpt-tile-nt">Not tracked</div> : (
+        <div className="rpt-tile-row"><RptDot status={status} label={rptStatusWord[status]} /><span className="rpt-big num">{value}</span></div>
+      )}
+      {sub && <div className="rpt-tile-sub">{sub}</div>}
+    </div>
+  );
+}
+
+// Vertical bars with optional goal line. data: [{label, value|null, status}]
+function RptBars({ data, goal, title, height = 150, showValues }) {
+  if (!data.length || data.every(d => d.value == null)) return <RptNote>No data for this period.</RptNote>;
+  const vals = data.filter(d => d.value != null).map(d => d.value);
+  let max = Math.max(...vals, goal != null ? goal : -Infinity, 0);
+  const min = Math.min(...vals, 0);
+  if (max === min) max = min + 1;
+  const n = data.length, bw = n > 20 ? 10 : n <= 6 ? 36 : 18, gap = n > 20 ? 4 : n <= 6 ? 24 : 10, left = 44, top = 18, bottom = 22;
+  const W = left + n * (bw + gap) + 8, H = height;
+  const y = (v) => top + (H - top - bottom) * (1 - (v - min) / (max - min));
+  const labelsOn = showValues != null ? showValues : n <= 16;
+  const xEvery = n > 20 ? 4 : 1;
+  return (
+    <svg className="rpt-chart" viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: Math.max(W, 260) * 1.25 }} role="img" aria-label={title}>
+      <title>{title}</title>
+      <line x1={left} x2={W - 4} y1={y(0)} y2={y(0)} stroke={rptVar("borderStrong")} strokeWidth="1" />
+      <text x={left - 6} y={y(max) + 4} textAnchor="end" className="rpt-ax">{rptNum1(max)}</text>
+      <text x={left - 6} y={y(0) + 4} textAnchor="end" className="rpt-ax">{rptNum1(Math.max(min, 0) === 0 ? 0 : min)}</text>
+      {data.map((d, i) => {
+        const x = left + i * (bw + gap) + gap / 2;
+        const fill = d.status === "good" ? rptVar("green") : d.status === "bad" ? rptVar("red") : rptVar("blue");
+        return (
+          <g key={i}>
+            {d.value != null ? (
+              <>
+                <rect x={x} y={Math.min(y(d.value), y(0))} width={bw} height={Math.max(1, Math.abs(y(0) - y(d.value)))} rx="2" fill={fill}><title>{`${d.label}: ${d.value}${d.status ? d.status === "good" ? " (hit)" : " (missed)" : ""}`}</title></rect>
+                {labelsOn && <text x={x + bw / 2} y={Math.min(y(d.value), y(0)) - 4} textAnchor="middle" className="rpt-val">{rptNum1(d.value)}</text>}
+              </>
+            ) : <text x={x + bw / 2} y={y(0) - 4} textAnchor="middle" className="rpt-ax">–</text>}
+            {i % xEvery === 0 && <text x={x + bw / 2} y={H - 6} textAnchor="middle" className="rpt-ax">{d.label}</text>}
+          </g>
+        );
+      })}
+      {goal != null && (
+        <g>
+          <line x1={left} x2={W - 4} y1={y(goal)} y2={y(goal)} stroke={rptVar("text")} strokeWidth="1.5" strokeDasharray="4 3" />
+          <text x={left - 6} y={y(goal) + 4} textAnchor="end" className="rpt-ax rpt-goal">{rptNum1(goal)}</text>
+        </g>
+      )}
+    </svg>
+  );
+}
+
+// One point per meeting, rating scale 0–10.
+function RptLine({ points, title }) {
+  if (!points.length) return <RptNote>No rated meetings in this period.</RptNote>;
+  const n = points.length, left = 30, right = 14, top = 16, bottom = 24, step = n > 1 ? Math.max(28, Math.min(70, 560 / (n - 1))) : 0;
+  const W = left + right + (n - 1) * step + 10, H = 170;
+  const x = (i) => left + 5 + i * step;
+  const y = (v) => top + (H - top - bottom) * (1 - v / 10);
+  const xEvery = Math.ceil(n / 10);
+  return (
+    <svg className="rpt-chart" viewBox={`0 0 ${Math.max(W, 360)} ${H}`} width="100%" style={{ maxWidth: Math.max(W, 360) * 1.25 }} role="img" aria-label={title}>
+      <title>{title}</title>
+      {[0, 5, 10].map(v => (
+        <g key={v}><line x1={left} x2={Math.max(W, 360) - 4} y1={y(v)} y2={y(v)} stroke={rptVar("border")} strokeWidth="1" />
+          <text x={left - 6} y={y(v) + 4} textAnchor="end" className="rpt-ax">{v}</text></g>
+      ))}
+      {n > 1 && <polyline fill="none" stroke={rptVar("blue")} strokeWidth="2" points={points.map((p, i) => `${x(i)},${y(p.value)}`).join(" ")} />}
+      {points.map((p, i) => (
+        <g key={i}>
+          <circle cx={x(i)} cy={y(p.value)} r="4" fill={rptVar("blue")} stroke={rptVar("surface2")} strokeWidth="2"><title>{`${p.label}: ${p.value}/10`}</title></circle>
+          {n <= 16 && <text x={x(i)} y={y(p.value) - 8} textAnchor="middle" className="rpt-val">{p.value}</text>}
+          {i % xEvery === 0 && <text x={x(i)} y={H - 6} textAnchor="middle" className="rpt-ax">{p.label}</text>}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function RptSection({ id, title, children, sub }) {
+  return (
+    <section className="rpt-section" id={id} aria-labelledby={id + "-h"}>
+      <h2 id={id + "-h"} className="rpt-h2">{title}</h2>
+      {sub && <div className="rpt-sub">{sub}</div>}
+      {children}
+    </section>
+  );
+}
+
+function RptSummary({ r }) {
+  const td = r.todos, is = r.issues, hu = r.huddles, sc = r.scorecard, tk = r.tasks;
+  return (
+    <RptSection id="rpt-summary" title="Summary">
+      <div className="rpt-tiles">
+        <RptTile label="Scorecard weeks on target" notTracked={sc.hit + sc.missed === 0} value={rptPctText(sc.pct)} status={rptLevel(sc.pct)} sub={`${sc.hit} of ${sc.hit + sc.missed} measurable-weeks`} />
+        <RptTile label="Quarterly tasks done" notTracked={!tk.tracked || tk.total === 0} value={rptPctText(tk.pct)} status={rptLevel(tk.pct)} sub={tk.tracked ? `${tk.done} of ${tk.total} tasks` : null} />
+        <RptTile label="To-dos completed" notTracked={!td.tracked} value={td.completed} status="none" sub={td.tracked && td.doneWithDate < td.doneUpToEnd ? "Partial — see To-dos" : null} />
+        <RptTile label="Huddles held" value={hu.held} status="none" sub={`${hu.minutes} minutes total`} />
+        <RptTile label="Average meeting rating" notTracked={hu.rated === 0} value={rptNum1(hu.avgRating)} status={hu.avgRating == null ? "none" : hu.avgRating >= 8 ? "good" : hu.avgRating >= 6 ? "warn" : "bad"} sub={hu.rated ? `${hu.rated} rated meeting${hu.rated === 1 ? "" : "s"}` : null} />
+        <RptTile label="Issues solved" notTracked={!is.tracked} value={is.resolved} status="none" sub={is.tracked && is.resolvedWithDate < is.resolvedUpToEnd ? "Partial — see Issues" : null} />
+      </div>
+      <div className="rpt-foot">Dots: green = 80%+ (rating 8+), amber = 50–79% (rating 6–7.9), red = below that. Gray = a count with no target.</div>
+    </RptSection>
+  );
+}
+
+function RptScorecard({ r }) {
+  const sc = r.scorecard;
+  const owners = {};
+  sc.rows.forEach(row => { (owners[row.owner] = owners[row.owner] || []).push(row); });
+  const ownerNames = Object.keys(owners).sort((a, b) => a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : a.localeCompare(b));
+  return (
+    <RptSection id="rpt-scorecard" title="Scorecard" sub={`${sc.weeks.length} week${sc.weeks.length === 1 ? "" : "s"} in this period${sc.weeks.length ? ` (W${rptWeekNum(sc.weeks[0])}–W${rptWeekNum(sc.weeks[sc.weeks.length - 1])})` : ""}`}>
+      {sc.rows.length === 0 ? <RptNote>No measurables set up.</RptNote> : sc.weeks.length === 0 ? <RptNote>No scorecard weeks in this period yet.</RptNote> : ownerNames.map(owner => (
+        <div key={owner} className="rpt-group">
+          <h3 className="rpt-h3">{owner}</h3>
+          <div className="rpt-mgrid">
+          {owners[owner].map(row => (
+            <div key={row.m.id} className="rpt-card rpt-keep">
+              <div className="rpt-row-between">
+                <div className="rpt-strong">{row.m.name || "(unnamed)"}</div>
+                <div className="rpt-muted">Goal <span className="num">{row.goal}</span></div>
+              </div>
+              {row.entered === 0 ? <RptNote>No numbers entered for this period.</RptNote> : (<>
+                <div className="rpt-stats">
+                  <span><RptDot status={rptLevel(row.pct)} label={rptStatusWord[rptLevel(row.pct)]} /> Hit <b className="num">{row.hit}</b> · Missed <b className="num">{row.missed}</b> · <b className="num">{rptPctText(row.pct)}</b></span>
+                  <span>Average <b className="num">{rptNum1(row.avg)}</b>{row.avgHit != null && <> ({row.avgHit ? "meets goal" : "misses goal"})</>}</span>
+                  <span>Best <b className="num">{rptNum1(row.best && row.best.value)}</b> <span className="rpt-muted num">W{row.best && rptWeekNum(row.best.week)}</span></span>
+                  <span>Worst <b className="num">{rptNum1(row.worst && row.worst.value)}</b> <span className="rpt-muted num">W{row.worst && rptWeekNum(row.worst.week)}</span></span>
+                </div>
+                <RptBars title={`${row.m.name}: weekly values${row.target != null ? `, goal ${row.goal}` : ""}`} goal={row.target}
+                  data={row.pts.map(p => ({ label: `W${rptWeekNum(p.week)}`, value: p.value, status: p.hit === true ? "good" : p.hit === false ? "bad" : null }))} />
+                <div className="rpt-legend"><span><i style={{ background: rptVar("green") }} /> hit</span><span><i style={{ background: rptVar("red") }} /> missed</span>{row.target != null && <span><i className="rpt-dash" /> goal</span>}<span>– = no number</span></div>
+              </>)}
+            </div>
+          ))}
+          </div>
+        </div>
+      ))}
+      {sc.deletedValues > 0 && <RptNote>{sc.deletedValues} value{sc.deletedValues === 1 ? "" : "s"} from deleted measurables not shown.</RptNote>}
+      <div className="rpt-foot">Weeks are judged against each measurable's current goal. A week belongs to the quarter that contains its Thursday.</div>
+    </RptSection>
+  );
+}
+
+function RptHuddles({ r }) {
+  const hu = r.huddles;
+  const pts = hu.meetings.filter(m => Number(m.rating) > 0).map(m => ({ label: new Date(m.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }), value: Number(m.rating) }));
+  return (
+    <RptSection id="rpt-huddles" title="Huddles">
+      {hu.held === 0 ? <RptNote>No huddles held in this period.</RptNote> : (<>
+        <div className="rpt-scroll rpt-keep">
+          <table className="rpt-table">
+            <thead><tr><th>Huddle</th><th className="r">Meetings</th><th className="r">Total minutes</th><th className="r">Avg rating</th><th className="r">Avg attendance</th></tr></thead>
+            <tbody>
+              {hu.rows.map(h => (
+                <tr key={h.huddle}><td>{h.huddle}</td><td className="r num">{h.held}</td><td className="r num">{h.minutes}</td><td className="r num">{rptNum1(h.avgRating)}</td>
+                  <td className="r">{h.avgAttend == null ? <span className="rpt-muted">Not tracked</span> : <span className="num">{rptNum1(h.avgAttend)}</span>}</td></tr>
+              ))}
+              <tr className="rpt-total"><td>All huddles</td><td className="r num">{hu.held}</td><td className="r num">{hu.minutes}</td><td className="r num">{rptNum1(hu.avgRating)}</td><td /></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 className="rpt-h3">Meeting rating trend</h3>
+        <div className="rpt-keep"><RptLine title="Meeting ratings, one point per meeting (0–10)" points={pts} /></div>
+        {hu.attendRecorded === 0 ? <RptNote>Attendance: Not tracked for this period.</RptNote>
+          : hu.attendRecorded < hu.held ? <RptNote>Attendance recorded for {hu.attendRecorded} of {hu.held} meetings.</RptNote> : null}
+      </>)}
+      <div className="rpt-foot">Ratings come from each saved meeting record.</div>
+    </RptSection>
+  );
+}
+
+const RPT_TASK_STATUS = { done: ["good", "Done"], on: ["good", "On track"], off: ["bad", "Off track"], notdone: ["warn", "Not done"] };
+function RptStatus({ s }) {
+  const [lvl, word] = RPT_TASK_STATUS[s] || ["none", s || "—"];
+  return <span style={{ whiteSpace: "nowrap" }}><RptDot status={lvl} label={word} /> {word}</span>;
+}
+
+// Single horizontal split bar (e.g. done vs not done) with numbers beside it.
+function RptSplitBar({ parts, title }) {
+  const total = parts.reduce((a, p) => a + p.value, 0);
+  if (!total) return <RptNote>No data for this period.</RptNote>;
+  let x = 0;
+  return (
+    <div className="rpt-keep">
+      <svg className="rpt-chart" viewBox="0 0 300 18" width="100%" style={{ maxWidth: 520 }} preserveAspectRatio="none" role="img" aria-label={title}>
+        <title>{title}</title>
+        {parts.map((p, i) => { const w = 300 * p.value / total; const el = w > 0 ? <rect key={i} x={x} y="0" width={Math.max(0, w - (i < parts.length - 1 ? 2 : 0))} height="18" rx="2" fill={p.color}><title>{`${p.label}: ${p.value}`}</title></rect> : null; x += w; return el; })}
+      </svg>
+      <div className="rpt-legend">{parts.map(p => <span key={p.label}><i style={{ background: p.color }} />{p.label} <b className="num" style={{ color: rptVar("text") }}>{p.value}</b></span>)}</div>
+    </div>
+  );
+}
+
+function RptTaskQuarter({ tq, showHeading }) {
+  return (
+    <div className="rpt-group">
+      {showHeading && <h3 className="rpt-h3">{tq.label}</h3>}
+      {tq.note && <RptNote>{tq.note}</RptNote>}
+      {tq.rows && (tq.rows.length === 0 ? <RptNote>No quarterly tasks recorded.</RptNote> : (<>
+        <div className="rpt-stats"><span>Completion <b className="num">{rptPctText(tq.pct)}</b> · <span className="num">{tq.done}</span> of <span className="num">{tq.total}</span> done</span><span className="rpt-muted">{tq.source === "archive" ? "From the Historical Quarters archive" : "From current Quarterly Tasks"}</span></div>
+        <RptSplitBar title={`${tq.label} tasks: ${tq.done} done, ${tq.total - tq.done} not done`} parts={[{ label: "Done", value: tq.done, color: rptVar("green") }, { label: "Not done", value: tq.total - tq.done, color: rptVar("borderStrong") }]} />
+        <div className="rpt-two">
+          <div className="rpt-scroll rpt-keep">
+            <table className="rpt-table">
+              <thead><tr><th>Owner</th><th className="r">Tasks</th><th className="r">Done</th><th className="r">%</th></tr></thead>
+              <tbody>{tq.owners.map(o => <tr key={o.owner}><td>{o.owner}</td><td className="r num">{o.total}</td><td className="r num">{o.done}</td><td className="r num">{rptPctText(rptPct(o.done, o.total))}</td></tr>)}</tbody>
+            </table>
+          </div>
+          <div className="rpt-scroll rpt-keep">
+            <table className="rpt-table">
+              <thead><tr><th>Task</th><th>Owner</th><th>Final status</th>{tq.historyTracked && <th className="r">Weeks off track</th>}</tr></thead>
+              <tbody>{tq.rows.map((t, i) => <tr key={i}><td>{t.title}{t.carriedFrom && <span className="rpt-muted"> (carried over)</span>}</td><td>{t.who}</td><td><RptStatus s={t.status} /></td>
+                {tq.historyTracked && <td className="r num">{t.offWeeks == null ? "—" : rptNum1(t.offWeeks)}</td>}</tr>)}</tbody>
+            </table>
+          </div>
+        </div>
+        {!tq.historyTracked && <RptNote>Status history not tracked for this period.</RptNote>}
+        {tq.historyTracked && tq.rows.some(t => !t.hasHistory) && <RptNote>“—” = no status history saved for that task.</RptNote>}
+      </>))}
+    </div>
+  );
+}
+
+function RptTasks({ r }) {
+  const tk = r.tasks;
+  return (
+    <RptSection id="rpt-tasks" title="Quarterly tasks" sub={r.period.q ? null : `Year total: ${tk.done} of ${tk.total} done (${rptPctText(tk.pct)}) across the quarters below.`}>
+      {tk.quarters.map(tq => <RptTaskQuarter key={tq.label} tq={tq} showHeading={!r.period.q} />)}
+    </RptSection>
+  );
+}
+
+const RPT_AGE_OPACITY = [0.35, 0.55, 0.78, 1];
+function RptAging({ aging }) {
+  if (!aging.rows.length) return <RptNote>No open to-dos right now.</RptNote>;
+  const max = Math.max(...aging.rows.map(o => o.counts.reduce((a, b) => a + b, 0)));
+  const rowH = 22, left = 110, W = 420, H = aging.rows.length * (rowH + 6) + 4;
+  return (
+    <div className="rpt-keep">
+      <svg className="rpt-chart" viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: 520 }} role="img" aria-label="Open to-dos by owner and age">
+        <title>Open to-dos by owner and age</title>
+        {aging.rows.map((o, i) => {
+          const y = 2 + i * (rowH + 6); let x = left; const total = o.counts.reduce((a, b) => a + b, 0);
+          return (
+            <g key={o.owner}>
+              <text x={left - 8} y={y + 15} textAnchor="end" className="rpt-lbl">{o.owner.length > 16 ? o.owner.slice(0, 15) + "…" : o.owner}</text>
+              {o.counts.map((c, b) => { const w = (W - left - 30) * c / max; const el = c ? <rect key={b} x={x} y={y} width={Math.max(0, w - 2)} height={rowH} rx="2" fill={rptVar("blue")} fillOpacity={RPT_AGE_OPACITY[b]}><title>{`${o.owner}, ${aging.buckets[b]}: ${c}`}</title></rect> : null; x += w; return el; })}
+              <text x={x + 4} y={y + 15} className="rpt-val">{total}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="rpt-legend">{aging.buckets.map((b, i) => <span key={b}><i style={{ background: rptVar("blue"), opacity: RPT_AGE_OPACITY[i] }} />{b}</span>)}</div>
+      <div className="rpt-scroll">
+        <table className="rpt-table">
+          <thead><tr><th>Owner</th>{aging.buckets.map(b => <th key={b} className="r">{b}</th>)}<th className="r">Total</th></tr></thead>
+          <tbody>{aging.rows.map(o => <tr key={o.owner}><td>{o.owner}</td>{o.counts.map((c, i) => <td key={i} className="r num">{c}</td>)}<td className="r num">{o.counts.reduce((a, b) => a + b, 0)}</td></tr>)}</tbody>
+        </table>
+      </div>
+      {aging.unknownAge > 0 && <RptNote>{aging.unknownAge} open to-do{aging.unknownAge === 1 ? " has" : "s have"} no created date and {aging.unknownAge === 1 ? "isn't" : "aren't"} shown.</RptNote>}
+    </div>
+  );
+}
+
+function RptTodos({ r }) {
+  const td = r.todos;
+  return (
+    <RptSection id="rpt-todos" title="To-dos">
+      <div className="rpt-tiles">
+        <RptTile label="Created in period" value={td.created} status="none" />
+        <RptTile label="Completed in period" notTracked={!td.tracked} value={td.completed} status="none" />
+        <RptTile label="Average days to complete" notTracked={!td.tracked || td.avgDays == null} value={rptNum1(td.avgDays)} status="none" />
+      </div>
+      {td.tracked && td.doneWithDate < td.doneUpToEnd && <RptNote>Completion dates recorded for {td.doneWithDate} of {td.doneUpToEnd} completed to-dos.</RptNote>}
+      {!td.tracked && <RptNote>Completion dates are not tracked yet, so completed to-dos can't be placed in a period.</RptNote>}
+      <h3 className="rpt-h3">Aging of open to-dos</h3>
+      {td.aging ? <RptAging aging={td.aging} /> : <RptNote>Aging is shown for the current period only.</RptNote>}
+      <h3 className="rpt-h3">By owner</h3>
+      {td.owners.length === 0 ? <RptNote>No data for this period.</RptNote> : (
+        <div className="rpt-scroll rpt-keep">
+          <table className="rpt-table">
+            <thead><tr><th>Owner</th><th className="r">Created</th><th className="r">Completed</th>{r.isCurrent && <th className="r">Open now</th>}</tr></thead>
+            <tbody>{td.owners.map(o => <tr key={o.owner}><td>{o.owner}</td><td className="r num">{o.created}</td><td className="r num">{td.tracked ? o.completed : "—"}</td>{r.isCurrent && <td className="r num">{o.open}</td>}</tr>)}</tbody>
+          </table>
+        </div>
+      )}
+      <div className="rpt-foot">A to-do with two owners counts once for each owner.</div>
+    </RptSection>
+  );
+}
+
+function RptHeadlinesIssues({ r }) {
+  const hl = r.headlines, is = r.issues;
+  return (
+    <RptSection id="rpt-hi" title="Headlines and issues">
+      <div className="rpt-scroll rpt-keep">
+        <table className="rpt-table">
+          <thead><tr><th>Measure</th><th className="r">Count</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Headlines added</td><td className="r num">{hl.added}</td><td /></tr>
+            <tr><td>Headlines reviewed</td><td className="r num">{hl.reviewed}</td><td className="rpt-muted">{hl.reviewedNoDate > 0 ? `${hl.reviewedNoDate} reviewed headline${hl.reviewedNoDate === 1 ? " has" : "s have"} no review date and can't be placed in a period.` : ""}</td></tr>
+            <tr><td>Issues created</td><td className="r num">{is.created}</td><td /></tr>
+            <tr><td>Issues resolved</td><td className="r">{is.tracked ? <span className="num">{is.resolved}</span> : <span className="rpt-muted">Not tracked</span>}</td>
+              <td className="rpt-muted">{is.tracked && is.resolvedWithDate < is.resolvedUpToEnd ? `Resolution dates recorded for ${is.resolvedWithDate} of ${is.resolvedUpToEnd} resolved issues.` : ""}</td></tr>
+            <tr className="rpt-total"><td>Open issues right now</td><td className="r num">{is.openNow}</td><td className="rpt-muted">Current count, not limited to the period</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </RptSection>
+  );
+}
+
+// Year view: the four quarters side by side. Future quarters show "—".
+function rptYearRows(company, year, yearReport) {
+  const qr = [1, 2, 3, 4].map(q => rptCompute(company, year, q));
+  const v = (fn) => qr.map(x => x.isFuture ? null : fn(x));
+  const Y = yearReport;
+  return {
+    quarters: qr,
+    rows: [
+      { label: "Scorecard weeks on target", pct: true, values: v(x => x.scorecard.pct), total: Y.scorecard.pct },
+      { label: "Quarterly tasks done", pct: true, values: v(x => x.tasks.tracked ? x.tasks.pct : null), total: Y.tasks.pct },
+      { label: "To-dos created", values: v(x => x.todos.created), total: Y.todos.created },
+      { label: "To-dos completed", values: v(x => x.todos.tracked ? x.todos.completed : null), total: Y.todos.tracked ? Y.todos.completed : null },
+      { label: "Huddles held", values: v(x => x.huddles.held), total: Y.huddles.held },
+      { label: "Average meeting rating", dec: true, values: v(x => x.huddles.avgRating), total: Y.huddles.avgRating },
+      { label: "Headlines added", values: v(x => x.headlines.added), total: Y.headlines.added },
+      { label: "Issues created", values: v(x => x.issues.created), total: Y.issues.created },
+      { label: "Issues solved", values: v(x => x.issues.tracked ? x.issues.resolved : null), total: Y.issues.tracked ? Y.issues.resolved : null },
+    ],
+  };
+}
+const rptYearFmt = (row, val) => val == null ? "—" : row.pct ? rptPctText(val) : row.dec ? rptNum1(val) : String(val);
+
+function RptYear({ r, company }) {
+  const yr = React.useMemo(() => rptYearRows(company, r.period.year, r), [company, r]);
+  const charts = yr.rows.filter(row => ["Scorecard weeks on target", "Quarterly tasks done", "To-dos completed", "Huddles held", "Average meeting rating", "Issues solved"].includes(row.label));
+  return (
+    <RptSection id="rpt-year" title="Year view" sub={`${r.period.year}, quarter by quarter`}>
+      <div className="rpt-scroll rpt-keep">
+        <table className="rpt-table">
+          <thead><tr><th>Measure</th>{[1, 2, 3, 4].map(q => <th key={q} className="r">Q{q}</th>)}<th className="r">Year</th></tr></thead>
+          <tbody>{yr.rows.map(row => <tr key={row.label}><td>{row.label}</td>{row.values.map((val, i) => <td key={i} className="r num">{rptYearFmt(row, val)}</td>)}<td className="r num rpt-strong">{rptYearFmt(row, row.total)}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <div className="rpt-ygrid">
+        {charts.map(row => (
+          <div key={row.label} className="rpt-keep">
+            <h3 className="rpt-h3">{row.label}</h3>
+            {row.values.every(x => x == null) ? <RptNote>No data for this year.</RptNote> : (
+              <RptBars title={`${row.label} by quarter`} height={130} showValues
+                data={row.values.map((val, i) => ({ label: `Q${i + 1}`, value: val == null ? null : row.pct ? Math.round(val * 100) : row.dec ? Math.round(val * 10) / 10 : val, status: null }))} />
+            )}
+            {row.pct && <div className="rpt-foot" style={{ marginTop: 0 }}>Shown as %.</div>}
+          </div>
+        ))}
+      </div>
+      <div className="rpt-foot">“—” = quarter not started, or not tracked for that quarter.</div>
+    </RptSection>
+  );
+}
+
+// ── Excel export (SheetJS, loaded only when the button is clicked) ──
+function rptLoadSheetJS() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (window._rptXlsxPromise) return window._rptXlsxPromise;
+  window._rptXlsxPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    s.async = true;
+    s.onload = () => window.XLSX ? resolve(window.XLSX) : reject(new Error("The Excel library didn't load."));
+    s.onerror = () => { window._rptXlsxPromise = null; reject(new Error("Couldn't download the Excel library. Check your connection and try again.")); };
+    document.head.appendChild(s);
+  });
+  return window._rptXlsxPromise;
+}
+const rptXPct = (p) => p == null ? null : { v: p, t: "n", z: "0%" };
+const rptXNum = (v) => v == null || isNaN(v) ? null : Math.round(v * 100) / 100;
+const rptXDate = (iso) => { if (!iso) return null; const d = new Date(iso); return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
+
+function rptWorkbook(XLSX, company, r, companyName) {
+  const wb = XLSX.utils.book_new();
+  const add = (name, rows, widths) => {
+    const ws = XLSX.utils.aoa_to_sheet(rows.map(row => row.map(c => c === undefined ? null : c)));
+    if (widths) ws["!cols"] = widths.map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  };
+  const p = r.period, sc = r.scorecard, tk = r.tasks, td = r.todos, hu = r.huddles, hl = r.headlines, is = r.issues;
+  const NT = "Not tracked";
+  add("Summary", [
+    ["VAST report", p.label], ["Company", companyName], ["From", rptXDate(p.start)], ["To", rptXDate(p.end)],
+    ["Status", r.isCurrent ? `In progress — through week ${r.weekNow}` : r.isFuture ? "Not started" : "Complete"], ["Exported", rptXDate(new Date())], [],
+    ["Measure", "Value", "Out of / detail"],
+    ["Scorecard weeks on target", sc.hit + sc.missed ? rptXPct(sc.pct) : NT, sc.hit + sc.missed ? sc.hit + sc.missed : null],
+    ["Scorecard weeks hit", sc.hit, null],
+    ["Quarterly tasks done (%)", tk.tracked && tk.total ? rptXPct(tk.pct) : NT, tk.tracked ? tk.total : null],
+    ["Quarterly tasks done", tk.tracked ? tk.done : NT, null],
+    ["To-dos completed", td.tracked ? td.completed : NT, td.tracked && td.doneWithDate < td.doneUpToEnd ? `Completion dates recorded for ${td.doneWithDate} of ${td.doneUpToEnd}` : null],
+    ["Huddles held", hu.held, null],
+    ["Huddle minutes", hu.minutes, null],
+    ["Average meeting rating", hu.rated ? rptXNum(hu.avgRating) : NT, hu.rated || null],
+    ["Issues solved", is.tracked ? is.resolved : NT, is.tracked && is.resolvedWithDate < is.resolvedUpToEnd ? `Resolution dates recorded for ${is.resolvedWithDate} of ${is.resolvedUpToEnd}` : null],
+  ], [30, 18, 40]);
+  const wkHead = sc.weeks.map(w => `W${rptWeekNum(w)}`);
+  add("Scorecard", [
+    ["Owner", "Measurable", "Goal", "Goal value", "Weeks hit", "Weeks missed", "% hit", "Average", "Best", "Best week", "Worst", "Worst week", ...wkHead],
+    ...sc.rows.map(row => [row.owner, row.m.name || "", row.goal, row.target, row.hit, row.missed, rptXPct(row.pct), rptXNum(row.avg),
+      row.best ? row.best.value : null, row.best ? `W${rptWeekNum(row.best.week)}` : null, row.worst ? row.worst.value : null, row.worst ? `W${rptWeekNum(row.worst.week)}` : null,
+      ...row.pts.map(pt => pt.value)]),
+    [], ["Weeks are judged against each measurable's current goal."],
+    ...(sc.deletedValues ? [[`${sc.deletedValues} value(s) from deleted measurables not shown.`]] : []),
+  ], [18, 26, 10, 10, 10, 12, 8, 10, 8, 10, 8, 11, ...wkHead.map(() => 7)]);
+  const taskRows = [["Quarter", "Source", "Task", "Owner", "Final status", "Weeks off track", "Carried over from"]];
+  tk.quarters.forEach(tq => {
+    if (!tq.rows) { taskRows.push([tq.label, null, tq.note]); return; }
+    if (!tq.rows.length) taskRows.push([tq.label, tq.source, "No quarterly tasks recorded."]);
+    tq.rows.forEach(t => taskRows.push([tq.label, tq.source === "archive" ? "Historical Quarters" : "Current tasks", t.title, t.who, (RPT_TASK_STATUS[t.status] || [null, t.status])[1], t.offWeeks == null ? null : rptXNum(t.offWeeks), t.carriedFrom ? t.carriedFrom.quarter || "" : null]));
+  });
+  taskRows.push([], ["Quarter", "Owner", "Tasks", "Done", "% done"]);
+  tk.quarters.forEach(tq => (tq.owners || []).forEach(o => taskRows.push([tq.label, o.owner, o.total, o.done, rptXPct(rptPct(o.done, o.total))])));
+  add("Tasks", taskRows, [10, 18, 34, 18, 12, 14, 16]);
+  const tdRows = [
+    ["Created in period", td.created], ["Completed in period", td.tracked ? td.completed : NT], ["Average days to complete", td.avgDays == null ? null : rptXNum(td.avgDays)],
+    ["Completed to-dos with a completion date", td.doneWithDate], ["Completed to-dos (created by period end)", td.doneUpToEnd], [],
+    ["Owner", "Created", "Completed", ...(r.isCurrent ? ["Open now"] : [])],
+    ...td.owners.map(o => [o.owner, o.created, td.tracked ? o.completed : null, ...(r.isCurrent ? [o.open] : [])]), [],
+  ];
+  if (td.aging) { tdRows.push(["Open to-do aging (today)"], ["Owner", ...td.aging.buckets, "Total"]); td.aging.rows.forEach(o => tdRows.push([o.owner, ...o.counts, o.counts.reduce((a, b) => a + b, 0)])); }
+  else tdRows.push(["Aging is shown for the current period only."]);
+  add("To-dos", tdRows, [40, 10, 12, 12, 12, 10]);
+  add("Huddles", [
+    ["Huddle", "Meetings", "Total minutes", "Average rating", "Average attendance"],
+    ...hu.rows.map(h => [h.huddle, h.held, h.minutes, rptXNum(h.avgRating), h.avgAttend == null ? NT : rptXNum(h.avgAttend)]),
+    ["All huddles", hu.held, hu.minutes, rptXNum(hu.avgRating), null], [],
+    ["Date", "Huddle", "Minutes", "Rating", "Attendees", "Attendee names"],
+    ...hu.meetings.map(m => [rptXDate(m.date), m.huddleName || ((toArray(company.huddles).find(h => h && h.id === m.huddleId) || {}).name) || "", Number(m.totalMinutes) || 0, Number(m.rating) > 0 ? Number(m.rating) : null,
+      m.attendees != null ? toArray(m.attendees).length : NT, m.attendees != null ? toArray(m.attendees).join(", ") : null]),
+  ], [22, 20, 14, 14, 18, 40]);
+  add("Headlines & Issues", [
+    ["Measure", "Count", "Note"],
+    ["Headlines added", hl.added], ["Headlines reviewed", hl.reviewed, hl.reviewedNoDate ? `${hl.reviewedNoDate} reviewed without a review date` : null],
+    ["Issues created", is.created], ["Issues resolved", is.tracked ? is.resolved : NT, is.tracked && is.resolvedWithDate < is.resolvedUpToEnd ? `Resolution dates recorded for ${is.resolvedWithDate} of ${is.resolvedUpToEnd}` : null],
+    ["Open issues right now", is.openNow, "Current count"],
+  ], [26, 10, 44]);
+  if (!p.q) {
+    const yr = rptYearRows(company, p.year, r);
+    add("Year view", [["Measure", "Q1", "Q2", "Q3", "Q4", "Year"],
+      ...yr.rows.map(row => [row.label, ...[...row.values, row.total].map(v => v == null ? null : row.pct ? rptXPct(v) : row.dec ? rptXNum(v) : v)])], [28, 9, 9, 9, 9, 9]);
+  }
+  return wb;
+}
+
+const rptCss = () => `
+  .rpt-root{color:var(--c-text);font-family:var(--font-ui)}
+  .rpt-root .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+  .rpt-picker{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
+  .rpt-picker label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--c-text-muted)}
+  .rpt-picker select{width:auto;min-width:130px}
+  .rpt-period{font-size:13px;color:var(--c-text-muted);margin-bottom:16px}
+  .rpt-section{background:var(--c-surface2);border:1px solid var(--c-border);border-radius:4px;padding:16px;margin-bottom:16px}
+  .rpt-h2{font-size:17px;font-weight:600;margin:0 0 4px;color:var(--c-text)}
+  .rpt-h3{font-size:14px;font-weight:600;margin:16px 0 8px;color:var(--c-text)}
+  .rpt-sub{font-size:13px;color:var(--c-text-muted);margin-bottom:12px}
+  .rpt-muted{color:var(--c-text-muted)}
+  .rpt-strong{font-weight:600}
+  .rpt-note{font-size:13px;color:var(--c-text-muted);background:var(--c-surface3);border:1px solid var(--c-border);border-radius:4px;padding:8px 12px;margin:8px 0}
+  .rpt-foot{font-size:12px;color:var(--c-text-dim);margin-top:12px}
+  .rpt-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+  .rpt-tile{border:1px solid var(--c-border);border-radius:4px;padding:12px;background:var(--c-surface2);min-width:0}
+  .rpt-tile-label{font-size:12px;font-weight:600;color:var(--c-text-muted);margin-bottom:8px}
+  .rpt-tile-row{display:flex;align-items:center;gap:8px}
+  .rpt-big{font-size:28px;font-weight:600;line-height:1.1;color:var(--c-text)}
+  .rpt-tile-nt{font-size:15px;font-weight:600;color:var(--c-text-dim);line-height:31px}
+  .rpt-tile-sub{font-size:12px;color:var(--c-text-muted);margin-top:6px}
+  .rpt-dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0;vertical-align:middle}
+  .rpt-card{border:1px solid var(--c-border);border-radius:4px;padding:12px;margin-bottom:12px;background:var(--c-surface2)}
+  .rpt-row-between{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .rpt-stats{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;margin:8px 0;color:var(--c-text)}
+  .rpt-stats b{font-weight:600}
+  .rpt-chart{display:block;height:auto;margin-top:4px;overflow:visible}
+  .rpt-chart .rpt-ax{font-family:var(--font-mono);font-size:10px;fill:var(--c-text-muted)}
+  .rpt-chart .rpt-val{font-family:var(--font-mono);font-size:10px;fill:var(--c-text);paint-order:stroke;stroke:var(--c-surface2);stroke-width:3px;stroke-linejoin:round}
+  .rpt-mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(440px,100%),1fr));gap:0 12px}
+  .rpt-chart .rpt-goal{fill:var(--c-text);font-weight:600}
+  .rpt-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--c-text-muted);margin-top:4px}
+  .rpt-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+  .rpt-legend i.rpt-dash{width:14px;height:0;border-top:2px dashed var(--c-text);border-radius:0;vertical-align:3px}
+  .rpt-scroll{overflow-x:auto;max-width:100%}
+  .rpt-table{width:100%;border-collapse:collapse;font-size:13px}
+  .rpt-table th{text-align:left;font-size:12px;font-weight:600;color:var(--c-text-muted);border-bottom:2px solid var(--c-border);padding:6px 8px;white-space:nowrap}
+  .rpt-table td{border-bottom:1px solid var(--c-border);padding:6px 8px;color:var(--c-text);vertical-align:top}
+  .rpt-table .r{text-align:right}
+  .rpt-table tr.rpt-total td{font-weight:600;border-top:2px solid var(--c-border)}
+  .rpt-group{margin-bottom:8px}
+  .rpt-ygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:0 20px}
+  .rpt-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px;margin-top:8px}
+  .rpt-chart .rpt-lbl{font-family:var(--font-ui);font-size:11px;fill:var(--c-text)}
+  @media(max-width:1024px){.rpt-two{grid-template-columns:minmax(0,1fr)}}
+  .rpt-print-footer{display:none}
+  .rpt-print-head{display:none}
+  @media print{
+    @page{margin:14mm 12mm 18mm}
+    html,body{background:#fff!important}
+    .vast-rail,.rpt-noprint{display:none!important}
+    div:has(> .fade-in > .rpt-root){margin-left:0!important;background:#fff!important;min-height:0!important;padding:0!important}
+    div:has(> .fade-in > .rpt-root) > div:first-child{display:none!important}
+    .fade-in:has(> .rpt-root){padding:0!important;animation:none!important}
+    .rpt-root{${tokensToCssVars(LIGHT_THEME)};background:#fff}
+    .rpt-root *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .rpt-print-head{display:block;margin-bottom:8px}
+    .rpt-print-head .rpt-ph-title{font-size:18px;font-weight:600}
+    .rpt-section{break-before:page;border:none;padding:0;margin:0 0 12px;background:#fff}
+    #rpt-summary{break-before:auto}
+    .rpt-keep,.rpt-card,.rpt-tile,.rpt-table tr,.rpt-chart,.rpt-note{break-inside:avoid}
+    .rpt-h2,.rpt-h3{break-after:avoid}
+    .rpt-scroll{overflow:visible}
+    .rpt-mgrid,.rpt-two{grid-template-columns:minmax(0,1fr)!important}
+    .rpt-chart{max-width:440px!important}
+    .rpt-print-footer{display:flex;justify-content:space-between;gap:12px;position:fixed;bottom:0;left:0;right:0;font-size:10px;color:#5B6475;border-top:1px solid #E4E7EC;padding-top:4px;background:#fff}
+  }
+  @media(max-width:768px){.rpt-big{font-size:24px}.rpt-section{padding:12px}.rpt-picker select{min-width:0;flex:1}.rpt-picker label{flex:1}}
+`;
+
+function Reports({ company, session }) {
+  const today = new Date();
+  const years = React.useMemo(() => rptYears(company), [company]);
+  const [year, setYear] = useState(today.getFullYear());
+  const [q, setQ] = useState(rptQuarterOf(today)); // 0 = full year
+  const r = React.useMemo(() => rptCompute(company, year, q), [company, year, q]);
+  const companyName = company.name || (session && session.companyName) || "Company";
+  const p = r.period;
+  const through = r.isCurrent ? ` · through week ${r.weekNow} / through today` : r.isFuture ? " · not started yet" : "";
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const exportExcel = async () => {
+    if (exporting) return;
+    setExporting(true); setExportError("");
+    try {
+      const XLSX = await rptLoadSheetJS();
+      const wb = rptWorkbook(XLSX, company, r, companyName);
+      const safe = (x) => String(x).replace(/[^A-Za-z0-9 ._()&,'-]+/g, "-").trim();
+      XLSX.writeFile(wb, `VAST report - ${safe(companyName)} - ${safe(p.label)}.xlsx`);
+    } catch (e) {
+      console.warn("[VAST] Excel export failed:", e);
+      setExportError((e && e.message) || "Excel export failed. Please try again.");
+    } finally { setExporting(false); }
+  };
+  const actions = (
+    <div className="rpt-noprint" style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+      <button className="btn-secondary" onClick={() => window.print()}>Print / Save as PDF</button>
+      <button className="btn-primary" onClick={exportExcel} disabled={exporting}>{exporting ? "Preparing…" : "Export to Excel"}</button>
+    </div>
+  );
+  return (
+    <Layout title="Reports" subtitle={`${companyName} · ${p.label}`} action={actions}>
+      <style>{rptCss()}</style>
+      <div className="rpt-root">
+        <div className="rpt-print-head"><div className="rpt-ph-title">VAST report — {companyName}</div></div>
+        {exportError && <div className="rpt-note rpt-noprint" role="alert" style={{ color: rptVar("red") }}>{exportError}</div>}
+        <div className="rpt-picker rpt-noprint">
+          <label>Year
+            <select value={year} onChange={e => setYear(Number(e.target.value))} aria-label="Report year">
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </label>
+          <label>Period
+            <select value={q} onChange={e => setQ(Number(e.target.value))} aria-label="Report period">
+              {[1, 2, 3, 4].map(n => <option key={n} value={n}>Q{n}</option>)}
+              <option value={0}>Full year</option>
+            </select>
+          </label>
+        </div>
+        <div className="rpt-period"><b className="rpt-strong" style={{ color: rptVar("text") }}>{p.label}</b> · <span className="num">{rptFmtDate(p.start)} – {rptFmtDate(p.end)}</span>{through}</div>
+        <RptSummary r={r} />
+        <RptScorecard r={r} />
+        <RptTasks r={r} />
+        <RptTodos r={r} />
+        <RptHuddles r={r} />
+        <RptHeadlinesIssues r={r} />
+        {!q && <RptYear r={r} company={company} />}
+        <div className="rpt-print-footer" aria-hidden="true"><span>{companyName}</span><span>{p.label} report</span><span>Printed {rptFmtDate(new Date())}</span></div>
+      </div>
+    </Layout>
+  );
+}
+
 // ─── HISTORICAL QUARTERS ──────────────────────────────────────────────
 function QuarterHistory({ company }) {
   const history = [...(company.quarterHistory || [])].reverse();
@@ -5768,6 +6593,7 @@ function VASTApp() {
       {view === "history" && <MeetingHistory {...viewProps} />}
       {view === "quarterhistory" && <QuarterHistory {...viewProps} />}
       {view === "settings" && <Settings {...viewProps} />}
+      {view === "reports" && <Reports {...viewProps} />}
       </MobileMenuContext.Provider>
     </div>
     </SidebarCollapsedContext.Provider>
