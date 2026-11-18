@@ -5452,6 +5452,147 @@ function RptHuddles({ r }) {
   );
 }
 
+const RPT_TASK_STATUS = { done: ["good", "Done"], on: ["good", "On track"], off: ["bad", "Off track"], notdone: ["warn", "Not done"] };
+function RptStatus({ s }) {
+  const [lvl, word] = RPT_TASK_STATUS[s] || ["none", s || "—"];
+  return <span style={{ whiteSpace: "nowrap" }}><RptDot status={lvl} label={word} /> {word}</span>;
+}
+
+// Single horizontal split bar (e.g. done vs not done) with numbers beside it.
+function RptSplitBar({ parts, title }) {
+  const total = parts.reduce((a, p) => a + p.value, 0);
+  if (!total) return <RptNote>No data for this period.</RptNote>;
+  let x = 0;
+  return (
+    <div className="rpt-keep">
+      <svg className="rpt-chart" viewBox="0 0 300 18" width="100%" style={{ maxWidth: 520 }} preserveAspectRatio="none" role="img" aria-label={title}>
+        <title>{title}</title>
+        {parts.map((p, i) => { const w = 300 * p.value / total; const el = w > 0 ? <rect key={i} x={x} y="0" width={Math.max(0, w - (i < parts.length - 1 ? 2 : 0))} height="18" rx="2" fill={p.color}><title>{`${p.label}: ${p.value}`}</title></rect> : null; x += w; return el; })}
+      </svg>
+      <div className="rpt-legend">{parts.map(p => <span key={p.label}><i style={{ background: p.color }} />{p.label} <b className="num" style={{ color: rptVar("text") }}>{p.value}</b></span>)}</div>
+    </div>
+  );
+}
+
+function RptTaskQuarter({ tq, showHeading }) {
+  return (
+    <div className="rpt-group">
+      {showHeading && <h3 className="rpt-h3">{tq.label}</h3>}
+      {tq.note && <RptNote>{tq.note}</RptNote>}
+      {tq.rows && (tq.rows.length === 0 ? <RptNote>No quarterly tasks recorded.</RptNote> : (<>
+        <div className="rpt-stats"><span>Completion <b className="num">{rptPctText(tq.pct)}</b> · <span className="num">{tq.done}</span> of <span className="num">{tq.total}</span> done</span><span className="rpt-muted">{tq.source === "archive" ? "From the Historical Quarters archive" : "From current Quarterly Tasks"}</span></div>
+        <RptSplitBar title={`${tq.label} tasks: ${tq.done} done, ${tq.total - tq.done} not done`} parts={[{ label: "Done", value: tq.done, color: rptVar("green") }, { label: "Not done", value: tq.total - tq.done, color: rptVar("borderStrong") }]} />
+        <div className="rpt-two">
+          <div className="rpt-scroll rpt-keep">
+            <table className="rpt-table">
+              <thead><tr><th>Owner</th><th className="r">Tasks</th><th className="r">Done</th><th className="r">%</th></tr></thead>
+              <tbody>{tq.owners.map(o => <tr key={o.owner}><td>{o.owner}</td><td className="r num">{o.total}</td><td className="r num">{o.done}</td><td className="r num">{rptPctText(rptPct(o.done, o.total))}</td></tr>)}</tbody>
+            </table>
+          </div>
+          <div className="rpt-scroll rpt-keep">
+            <table className="rpt-table">
+              <thead><tr><th>Task</th><th>Owner</th><th>Final status</th>{tq.historyTracked && <th className="r">Weeks off track</th>}</tr></thead>
+              <tbody>{tq.rows.map((t, i) => <tr key={i}><td>{t.title}{t.carriedFrom && <span className="rpt-muted"> (carried over)</span>}</td><td>{t.who}</td><td><RptStatus s={t.status} /></td>
+                {tq.historyTracked && <td className="r num">{t.offWeeks == null ? "—" : rptNum1(t.offWeeks)}</td>}</tr>)}</tbody>
+            </table>
+          </div>
+        </div>
+        {!tq.historyTracked && <RptNote>Status history not tracked for this period.</RptNote>}
+        {tq.historyTracked && tq.rows.some(t => !t.hasHistory) && <RptNote>“—” = no status history saved for that task.</RptNote>}
+      </>))}
+    </div>
+  );
+}
+
+function RptTasks({ r }) {
+  const tk = r.tasks;
+  return (
+    <RptSection id="rpt-tasks" title="Quarterly tasks" sub={r.period.q ? null : `Year total: ${tk.done} of ${tk.total} done (${rptPctText(tk.pct)}) across the quarters below.`}>
+      {tk.quarters.map(tq => <RptTaskQuarter key={tq.label} tq={tq} showHeading={!r.period.q} />)}
+    </RptSection>
+  );
+}
+
+const RPT_AGE_OPACITY = [0.35, 0.55, 0.78, 1];
+function RptAging({ aging }) {
+  if (!aging.rows.length) return <RptNote>No open to-dos right now.</RptNote>;
+  const max = Math.max(...aging.rows.map(o => o.counts.reduce((a, b) => a + b, 0)));
+  const rowH = 22, left = 110, W = 420, H = aging.rows.length * (rowH + 6) + 4;
+  return (
+    <div className="rpt-keep">
+      <svg className="rpt-chart" viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: 520 }} role="img" aria-label="Open to-dos by owner and age">
+        <title>Open to-dos by owner and age</title>
+        {aging.rows.map((o, i) => {
+          const y = 2 + i * (rowH + 6); let x = left; const total = o.counts.reduce((a, b) => a + b, 0);
+          return (
+            <g key={o.owner}>
+              <text x={left - 8} y={y + 15} textAnchor="end" className="rpt-lbl">{o.owner.length > 16 ? o.owner.slice(0, 15) + "…" : o.owner}</text>
+              {o.counts.map((c, b) => { const w = (W - left - 30) * c / max; const el = c ? <rect key={b} x={x} y={y} width={Math.max(0, w - 2)} height={rowH} rx="2" fill={rptVar("blue")} fillOpacity={RPT_AGE_OPACITY[b]}><title>{`${o.owner}, ${aging.buckets[b]}: ${c}`}</title></rect> : null; x += w; return el; })}
+              <text x={x + 4} y={y + 15} className="rpt-val">{total}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="rpt-legend">{aging.buckets.map((b, i) => <span key={b}><i style={{ background: rptVar("blue"), opacity: RPT_AGE_OPACITY[i] }} />{b}</span>)}</div>
+      <div className="rpt-scroll">
+        <table className="rpt-table">
+          <thead><tr><th>Owner</th>{aging.buckets.map(b => <th key={b} className="r">{b}</th>)}<th className="r">Total</th></tr></thead>
+          <tbody>{aging.rows.map(o => <tr key={o.owner}><td>{o.owner}</td>{o.counts.map((c, i) => <td key={i} className="r num">{c}</td>)}<td className="r num">{o.counts.reduce((a, b) => a + b, 0)}</td></tr>)}</tbody>
+        </table>
+      </div>
+      {aging.unknownAge > 0 && <RptNote>{aging.unknownAge} open to-do{aging.unknownAge === 1 ? " has" : "s have"} no created date and {aging.unknownAge === 1 ? "isn't" : "aren't"} shown.</RptNote>}
+    </div>
+  );
+}
+
+function RptTodos({ r }) {
+  const td = r.todos;
+  return (
+    <RptSection id="rpt-todos" title="To-dos">
+      <div className="rpt-tiles">
+        <RptTile label="Created in period" value={td.created} status="none" />
+        <RptTile label="Completed in period" notTracked={!td.tracked} value={td.completed} status="none" />
+        <RptTile label="Average days to complete" notTracked={!td.tracked || td.avgDays == null} value={rptNum1(td.avgDays)} status="none" />
+      </div>
+      {td.tracked && td.doneWithDate < td.doneUpToEnd && <RptNote>Completion dates recorded for {td.doneWithDate} of {td.doneUpToEnd} completed to-dos.</RptNote>}
+      {!td.tracked && <RptNote>Completion dates are not tracked yet, so completed to-dos can't be placed in a period.</RptNote>}
+      <h3 className="rpt-h3">Aging of open to-dos</h3>
+      {td.aging ? <RptAging aging={td.aging} /> : <RptNote>Aging is shown for the current period only.</RptNote>}
+      <h3 className="rpt-h3">By owner</h3>
+      {td.owners.length === 0 ? <RptNote>No data for this period.</RptNote> : (
+        <div className="rpt-scroll rpt-keep">
+          <table className="rpt-table">
+            <thead><tr><th>Owner</th><th className="r">Created</th><th className="r">Completed</th>{r.isCurrent && <th className="r">Open now</th>}</tr></thead>
+            <tbody>{td.owners.map(o => <tr key={o.owner}><td>{o.owner}</td><td className="r num">{o.created}</td><td className="r num">{td.tracked ? o.completed : "—"}</td>{r.isCurrent && <td className="r num">{o.open}</td>}</tr>)}</tbody>
+          </table>
+        </div>
+      )}
+      <div className="rpt-foot">A to-do with two owners counts once for each owner.</div>
+    </RptSection>
+  );
+}
+
+function RptHeadlinesIssues({ r }) {
+  const hl = r.headlines, is = r.issues;
+  return (
+    <RptSection id="rpt-hi" title="Headlines and issues">
+      <div className="rpt-scroll rpt-keep">
+        <table className="rpt-table">
+          <thead><tr><th>Measure</th><th className="r">Count</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Headlines added</td><td className="r num">{hl.added}</td><td /></tr>
+            <tr><td>Headlines reviewed</td><td className="r num">{hl.reviewed}</td><td className="rpt-muted">{hl.reviewedNoDate > 0 ? `${hl.reviewedNoDate} reviewed headline${hl.reviewedNoDate === 1 ? " has" : "s have"} no review date and can't be placed in a period.` : ""}</td></tr>
+            <tr><td>Issues created</td><td className="r num">{is.created}</td><td /></tr>
+            <tr><td>Issues resolved</td><td className="r">{is.tracked ? <span className="num">{is.resolved}</span> : <span className="rpt-muted">Not tracked</span>}</td>
+              <td className="rpt-muted">{is.tracked && is.resolvedWithDate < is.resolvedUpToEnd ? `Resolution dates recorded for ${is.resolvedWithDate} of ${is.resolvedUpToEnd} resolved issues.` : ""}</td></tr>
+            <tr className="rpt-total"><td>Open issues right now</td><td className="r num">{is.openNow}</td><td className="rpt-muted">Current count, not limited to the period</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </RptSection>
+  );
+}
+
 const rptCss = () => `
   .rpt-root{color:var(--c-text);font-family:var(--font-ui)}
   .rpt-root .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
@@ -5494,6 +5635,9 @@ const rptCss = () => `
   .rpt-table .r{text-align:right}
   .rpt-table tr.rpt-total td{font-weight:600;border-top:2px solid var(--c-border)}
   .rpt-group{margin-bottom:8px}
+  .rpt-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px;margin-top:8px}
+  .rpt-chart .rpt-lbl{font-family:var(--font-ui);font-size:11px;fill:var(--c-text)}
+  @media(max-width:1024px){.rpt-two{grid-template-columns:minmax(0,1fr)}}
   .rpt-print-footer{display:none}
   @media(max-width:768px){.rpt-big{font-size:24px}.rpt-section{padding:12px}.rpt-picker select{min-width:0;flex:1}.rpt-picker label{flex:1}}
 `;
@@ -5527,7 +5671,10 @@ function Reports({ company, session }) {
         <div className="rpt-period"><b className="rpt-strong" style={{ color: rptVar("text") }}>{p.label}</b> · <span className="num">{rptFmtDate(p.start)} – {rptFmtDate(p.end)}</span>{through}</div>
         <RptSummary r={r} />
         <RptScorecard r={r} />
+        <RptTasks r={r} />
+        <RptTodos r={r} />
         <RptHuddles r={r} />
+        <RptHeadlinesIssues r={r} />
       </div>
     </Layout>
   );
