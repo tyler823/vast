@@ -436,6 +436,11 @@ const makeSTYLE = (C) => `
   .md-back{display:none}
   .strip{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline;font-size:${C.fs.sm}px;color:${C.textMuted};padding:8px 12px}
   .strip b{font-family:${C.fontMono};font-variant-numeric:tabular-nums;color:${C.text};font-weight:600;font-size:${C.fs.md}px;margin-right:4px}
+  .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:12px;align-items:start;margin-bottom:12px}
+  .set-wide{display:grid;grid-template-columns:240px minmax(0,1fr);gap:12px;align-items:start}
+  .set-wide .md-list{top:72px}
+  .set-hidden{display:none!important}
+  .set-wide > div > div > .set-sec{max-width:none}
   .addbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 12px}
   .addbar select,.addbar input[type=date]{flex-shrink:0}
   .addbar .addbar-main{flex:1 1 260px;min-width:200px;width:auto}
@@ -474,6 +479,7 @@ const makeSTYLE = (C) => `
     .icon-btn{min-height:44px!important;min-width:44px}
     .tabs .tab{min-height:44px;flex-shrink:0}
     .tabs{flex-wrap:nowrap;overflow-x:auto}
+    .toolbar .tabs,.panel-h .tabs{flex:1 1 100%!important}
   }
 `;
 
@@ -1267,32 +1273,34 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
               <div style={{ height: "100%", width: `${pct}%`, background: C.green, borderRadius: 3, transition: "width 0.4s" }} />
             </div>
           </div>
-          <button className="btn-ghost btn-link" style={{ fontSize: C.fs.xs, whiteSpace: "nowrap" }} onClick={() => setView("settings")}>Edit Quarter →</button>
+          <button className="btn-ghost btn-link" style={{ fontSize: C.fs.xs, whiteSpace: "nowrap" }} onClick={() => setView("settings")}>Edit quarter <Icon.arrowRight /></button>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 16, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 12 }}>
         {[
           { label: "Quarterly Tasks", value: `${onTrack + done}/${total}`, sub: "on or completed", color: C.text },
           { label: "Open Issues", value: openIssues, sub: "to resolve", color: C.text },
           { label: "Pending To-Dos", value: pendingTodos, sub: "this week", color: C.text },
           { label: "Avg Meeting Rating", value: avgRating, sub: `of ${_meetings.length} meetings`, color: isNaN(parseFloat(avgRating)) ? C.text : parseFloat(avgRating) >= 8 ? C.green : parseFloat(avgRating) >= 6 ? C.amber : C.red },
         ].map(s => (
-          <div key={s.label} className="stat-card">
-            <div style={{ fontSize: C.fs.display, fontWeight: 600, color: s.color, fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
-            <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.text, marginTop: 4 }}>{s.label}</div>
-            <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{s.sub}</div>
+          <div key={s.label} className="stat-card" style={{ textAlign: "left", padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ fontSize: 28, fontWeight: 600, color: s.color, fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums", lineHeight: 1.1, minWidth: 56 }}>{s.value}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.text }}>{s.label}</div>
+              <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{s.sub}</div>
+            </div>
           </div>
         ))}
       </div>
 
-      <div className="grid2" style={{ display: "grid", gap: 20 }}>
+      <div className="dash-grid">
         <div className="card">
-          <div className="section-header">
-            <h3 style={{ fontSize: C.fs.md }}>{q} — Task Progress</h3>
-            <button className="btn-ghost btn-link" onClick={() => setView("tasks")}>View All →</button>
+          <div className="section-header" style={{ marginBottom: 12 }}>
+            <h3 style={{ fontSize: C.fs.md }}>{q} — Task progress</h3>
+            <button className="btn-ghost btn-link" onClick={() => setView("tasks")}>View all <Icon.arrowRight /></button>
           </div>
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 12 }}>
             <div className="progress-bar"><div className="progress-fill" style={{ width: `${pct}%` }} /></div>
             <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginTop: 6 }}><span className="num">{pct}%</span> on track or complete</div>
           </div>
@@ -1307,9 +1315,8 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
           {!tasks.length && <div style={{ color: C.textMuted, fontSize: C.fs.base, textAlign: "center", padding: 20 }}>No tasks yet. Add them in Quarterly Tasks.</div>}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div className="card">
-            <div className="section-header">
+            <div className="section-header" style={{ marginBottom: 12 }}>
               <h3 style={{ fontSize: C.fs.md }}>Huddles</h3>
             </div>
             {(company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }]).map((h, hIdx) => {
@@ -1344,7 +1351,7 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
                         </button>
                       )}
                       <button className={hIdx === 0 ? "btn-primary" : "btn-secondary"} style={{ padding: "6px 12px", fontSize: C.fs.xs }} onClick={() => setView("huddle:" + h.id)}>
-                        {isLive ? "Host View" : "Start →"}
+                        {isLive ? "Host View" : <>Start <Icon.arrowRight /></>}
                       </button>
                     </div>
                   </div>
@@ -1354,9 +1361,9 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
           </div>
 
           <div className="card">
-            <div className="section-header">
-              <h3 style={{ fontSize: C.fs.md }}>Recent Headlines</h3>
-              <button className="btn-ghost btn-link" onClick={() => setView("headlines")}>View All →</button>
+            <div className="section-header" style={{ marginBottom: 12 }}>
+              <h3 style={{ fontSize: C.fs.md }}>Recent headlines</h3>
+              <button className="btn-ghost btn-link" onClick={() => setView("headlines")}>View all <Icon.arrowRight /></button>
             </div>
             {(company.headlines || []).slice(-3).reverse().map(h => (
               <div key={h.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: C.fs.base }}>
@@ -1365,7 +1372,6 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
             ))}
             {!(company.headlines || []).length && <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No headlines yet.</div>}
           </div>
-        </div>
       </div>
       <MyMeasurables company={company} onSave={onSave} me={me} />
     </Layout>
@@ -1538,10 +1544,9 @@ function MyMeasurables({ company, onSave, me }) {
                     <tr key={m.id}>
                       <td style={{ padding: "8px 0", borderTop: `1px solid ${C.border}` }}>
                         <div style={{ fontSize: C.fs.base, fontWeight: 600 }}>{m.name}</div>
-                        {m.unit && <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{m.unit}</div>}
                       </td>
                       <td style={{ textAlign: "center", padding: "8px 4px", borderTop: `1px solid ${C.border}`, fontSize: C.fs.xs, color: C.textMuted, whiteSpace: "nowrap" }}>
-                        {({ gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" })[m.operator || "gte"]} <span className="num">{m.target}</span>
+                        {({ gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" })[m.operator || "gte"]} <span className="num">{fmtMeasure(m.target, m.unit)}</span>
                       </td>
                       {displayWeeks.map(wk => {
                         const val = entries[wk]?.[m.id] ?? "";
@@ -1553,7 +1558,8 @@ function MyMeasurables({ company, onSave, me }) {
                               value={val}
                               onCommit={(v) => setEntry(m.id, wk, v)}
                               placeholder="—"
-                              style={{ width: 60, textAlign: "center", padding: "4px 4px", fontSize: C.fs.sm, fontWeight: val !== "" ? 600 : 400,
+                              format={(v) => fmtMeasure(v, m.unit, true)}
+                              style={{ width: 84, textAlign: "center", padding: "4px 4px", fontSize: C.fs.sm, fontWeight: val !== "" ? 600 : 400,
                                 border: `1px solid ${isCur ? C.borderStrong : C.border}`,
                                 borderRadius: C.radius.control,
                                 background: met === true ? C.greenTint : met === false ? C.redTint1 : isCur ? C.surface2 : "transparent",
@@ -1577,10 +1583,9 @@ function MyMeasurables({ company, onSave, me }) {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
                       <div>
                         <div style={{ fontSize: C.fs.base, fontWeight: 600 }}>{m.name}</div>
-                        {m.unit && <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{m.unit}</div>}
                       </div>
                       <div style={{ fontSize: C.fs.xs, color: C.textMuted, whiteSpace: "nowrap" }}>
-                        Goal: {({ gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" })[m.operator || "gte"]} <span className="num">{m.target}</span>
+                        Goal: {({ gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" })[m.operator || "gte"]} <span className="num">{fmtMeasure(m.target, m.unit)}</span>
                       </div>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1597,6 +1602,7 @@ function MyMeasurables({ company, onSave, me }) {
                               value={val}
                               onCommit={(v) => setEntry(m.id, wk, v)}
                               placeholder="—"
+                              format={(v) => fmtMeasure(v, m.unit, true)}
                               style={{ width: 90, textAlign: "center", padding: "6px 4px", fontSize: C.fs.base, fontWeight: val !== "" ? 600 : 400,
                                 border: `1px solid ${isCur ? C.borderStrong : C.border}`,
                                 borderRadius: C.radius.control,
@@ -3424,11 +3430,11 @@ function Tasks({ company, onSave, onAdd }) {
     })()}
       action={<button className="btn-primary" onClick={() => setShowAdd(true)}><Icon.plus /> Add Task</button>}>
 
-      <div className="toolbar">
-        <div style={{ display: "flex", gap: 0, flex: 1 }}>
+      <div className="toolbar" style={{ border: `1px solid ${C.border}`, borderRadius: C.radius.card, paddingTop: 0, paddingBottom: 0 }}>
+        <div className="tabs" role="tablist" style={{ flex: 1, borderBottom: "none" }}>
         {["company", "individual"].map(t => (
-          <button key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
-            {t === "company" ? "Company Tasks" : "Individual Tasks"}
+          <button key={t} role="tab" aria-selected={tab === t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
+            {t === "company" ? "Company tasks" : "Individual tasks"}{t === "company" && <span className="cnt">{visibleTasks.length}</span>}
           </button>
         ))}
         </div>
@@ -3440,8 +3446,8 @@ function Tasks({ company, onSave, onAdd }) {
       </div>
 
       {tab === "company" && (
-        <div className="card">
-          <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+        <div className="panel">
+          <div className="strip" style={{ borderBottom: `1px solid ${C.border}` }}>
             {[["on", C.green, "On Track"], ["off", C.red, "Off Track"], ["done", C.green, "Done"], ["notdone", C.amber, "Not Done"]].map(([s, c, l]) => (
               <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: C.fs.sm, color: C.textMuted }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: c }} /><span className="num">{visibleTasks.filter(t => t.status === s).length}</span> {l}
@@ -3449,9 +3455,10 @@ function Tasks({ company, onSave, onAdd }) {
             ))}
             {huddleFilter !== "all" && <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginLeft: "auto" }}>Showing: <strong>{huddles.find(h => h.id === huddleFilter)?.name}</strong></div>}
           </div>
-          {visibleTasks.length === 0 && <div className="empty-state"><div style={{ fontSize: C.fs.base }}>{huddleFilter !== "all" ? "No tasks assigned to this huddle." : "No tasks yet. Add your first quarterly task!"}</div></div>}
-          <table className="table">
-            {visibleTasks.length > 0 && <thead><tr><th>Task</th><th>Who</th><th>Huddle</th><th>SMART</th><th>Status</th><th></th></tr></thead>}
+          {visibleTasks.length === 0 && <div className="lempty">{huddleFilter !== "all" ? "No tasks assigned to this huddle." : "No tasks yet. Add your first quarterly task!"}</div>}
+          <div className="dt-wrap">
+          <table className="dt">
+            {visibleTasks.length > 0 && <thead><tr><th>Task</th><th className="r">Target</th><th>Owner</th><th>Huddle</th><th>SMART</th><th>Status</th><th className="shrink" aria-label="Actions"></th></tr></thead>}
             <tbody>
               {visibleTasks.map(t => {
                 if (editId === t.id) {
@@ -3460,6 +3467,7 @@ function Tasks({ company, onSave, onAdd }) {
                       <td>
                         <input value={editFields.title} onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))} style={{ width: "100%", minWidth: 180 }} autoFocus />
                       </td>
+                      <td />
                       <td>
                         {activeMembers(company).length > 0 ? (
                           <select value={editFields.who} onChange={e => setEditFields(f => ({ ...f, who: e.target.value }))} style={{ width: "100%" }}>
@@ -3476,7 +3484,7 @@ function Tasks({ company, onSave, onAdd }) {
                           {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                         </select>
                       </td>
-                      <td colSpan={2}>
+                      <td colSpan={3}>
                         <div style={{ display: "flex", gap: 8 }}>
                           <button className="btn-primary" style={{ padding: "6px 12px", fontSize: C.fs.xs }} onClick={() => saveEdit(t.id)}>Save</button>
                           <button className="btn-ghost" style={{ padding: "6px 8px", fontSize: C.fs.xs }} onClick={() => setEditId(null)}>Cancel</button>
@@ -3487,16 +3495,10 @@ function Tasks({ company, onSave, onAdd }) {
                 }
                 return (
                   <tr key={t.id}>
-                    <td style={{ fontWeight: 500 }}>
-                      {t.title}
-                      {t.operator && t.target && (
-                        <span style={{ marginLeft: 8, fontSize: C.fs.xs, color: C.textMuted, fontWeight: 400 }}>
-                          {OPERATORS[t.operator]} {t.target}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ color: C.textMuted }}>{t.who || "—"}</td>
-                    <td style={{ fontSize: C.fs.xs, color: C.textMuted }}>{t.huddleId ? (huddles.find(h => h.id === t.huddleId)?.name || "—") : "—"}</td>
+                    <td style={{ fontWeight: 500, minWidth: 220 }}>{t.title}</td>
+                    <td className="r num muted" style={{ whiteSpace: "nowrap" }}>{t.operator && t.target ? <>{OPERATORS[t.operator]} {fmtMeasure(t.target)}</> : "—"}</td>
+                    <td className="muted" style={{ whiteSpace: "nowrap" }}>{t.who || "—"}</td>
+                    <td className="muted" style={{ fontSize: C.fs.sm, whiteSpace: "nowrap" }}>{t.huddleId ? (huddles.find(h => h.id === t.huddleId)?.name || "—") : "—"}</td>
                     <td>{t.smart && <span className="chip">SMART</span>}</td>
                     <td>
                       {(() => {
@@ -3511,9 +3513,9 @@ function Tasks({ company, onSave, onAdd }) {
                         const effectiveColor = colors[t.status] || colors.on;
                         return (
                           <div style={{ position: "relative", display: "inline-flex", alignItems: "center", width: 132 }}>
-                          <span aria-hidden="true" className="dot" style={{ position: "absolute", left: 12, background: effectiveColor.color, pointerEvents: "none" }} />
-                          <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
-                            style={{ width: "100%", padding: "6px 8px 6px 26px", fontSize: C.fs.sm, background: C.surface2, color: C.text, border: `1px solid ${C.border}`, borderRadius: C.radius.control, fontWeight: 500 }}>
+                          <span aria-hidden="true" className="dot" style={{ position: "absolute", left: 9, background: effectiveColor.color, pointerEvents: "none" }} />
+                          <select className="quiet-select" aria-label={`Status of ${t.title}`} value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
+                            style={{ width: "100%", paddingLeft: 24, fontWeight: 500 }}>
                             <option value="on">On Track</option>
                             <option value="off">Off Track</option>
                             <option value="done">Done</option>
@@ -3524,9 +3526,9 @@ function Tasks({ company, onSave, onAdd }) {
                       })()}
                     </td>
                     <td>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button className="btn-ghost" style={{ padding: "6px 8px", fontSize: C.fs.sm }} onClick={() => startEdit(t)}>✏</button>
-                        <button className="btn-danger" style={{ padding: "6px 8px" }} onClick={() => deleteTask(t.id)}><Icon.trash /></button>
+                      <div style={{ display: "flex", gap: 2 }}>
+                        <button className="icon-btn" title="Edit" aria-label={`Edit task: ${t.title}`} onClick={() => startEdit(t)}><Icon.edit /></button>
+                        <button className="icon-btn danger" title="Delete" aria-label={`Delete task: ${t.title}`} onClick={() => deleteTask(t.id)}><Icon.trash /></button>
                       </div>
                     </td>
                   </tr>
@@ -3534,36 +3536,33 @@ function Tasks({ company, onSave, onAdd }) {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {tab === "individual" && (
-        <div>
+        <div className="panel">
           {activeMembers(company).map(member => {
             const legacyTasks = (company.individualTasks || {})[member.id] || [];
             const assignedTasks = filtered((company.quarterlyTasks || []).filter(t => t.who === member.name));
             const allTasks = [...assignedTasks, ...legacyTasks.filter(lt => !assignedTasks.find(at => at.id === lt.id))];
             return (
-              <div key={member.id} className="card" style={{ marginBottom: 16 }}>
-                <div style={{ fontFamily: C.fontUI, fontSize: C.fs.md, fontWeight: 600, marginBottom: 12 }}>{member.name}</div>
+              <div key={member.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontFamily: C.fontUI, fontSize: C.fs.sm, fontWeight: 600, padding: "10px 12px 6px", display: "flex", gap: 8, alignItems: "baseline" }}>{member.name}<span className="num" style={{ color: C.textMuted, fontWeight: 400, fontSize: C.fs.xs }}>{allTasks.length}</span></div>
                 {allTasks.map(t => {
                   const met = meetsTarget(t);
                   const statusColor = t.status === "notdone" ? C.amber : t.status === "off" || met === false ? C.red : t.status === "done" || met === true ? C.green : C.green;
                   const statusLabel = t.status === "notdone" ? "Not Done" : t.status === "done" ? "Done" : t.status === "off" ? "Off Track" : "On Track";
                   return (
-                    <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}`, gap: 12 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: C.fs.base, fontWeight: 500 }}>{t.title}</div>
-                        {t.operator && t.target && (
-                          <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginTop: 4 }}>{OPERATORS[t.operator]} {t.target}</div>
-                        )}
-                        {t.huddleId && <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4 }}>{huddles.find(h => h.id === t.huddleId)?.name}</div>}
-                      </div>
+                    <div key={t.id} className="lrow">
+                      <span className="grow" style={{ fontWeight: 500 }}>{t.title}</span>
+                      <span className="lmeta num" style={{ minWidth: 80, textAlign: "right" }}>{t.operator && t.target ? <>{OPERATORS[t.operator]} {fmtMeasure(t.target)}</> : ""}</span>
+                      <span className="lmeta lhuddle">{t.huddleId ? huddles.find(h => h.id === t.huddleId)?.name : ""}</span>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                         {t.smart && <span className="chip">SMART</span>}
-                        <span style={{ fontSize: C.fs.xs, fontWeight: 600, color: statusColor, background: `${statusColor}20`, border: `1px solid ${statusColor}50`, borderRadius: C.radius.control, padding: "4px 8px" }}>{statusLabel}</span>
-                        <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
-                          style={{ fontSize: C.fs.xs, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.textMuted }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: C.fs.sm, minWidth: 86 }}><span className="dot" style={{ background: statusColor }} aria-hidden="true" />{statusLabel}</span>
+                        <select className="quiet-select" aria-label={`Status of ${t.title}`} value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
+                          style={{ color: C.textMuted }}>
                           <option value="on">On Track</option>
                           <option value="off">Off Track</option>
                           <option value="done">Done</option>
@@ -3572,11 +3571,11 @@ function Tasks({ company, onSave, onAdd }) {
                     </div>
                   );
                 })}
-                {!allTasks.length && <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No tasks assigned to {member.name}{huddleFilter !== "all" ? " for this huddle" : ""}.</div>}
+                {!allTasks.length && <div className="lempty" style={{ paddingTop: 4 }}>No tasks assigned to {member.name}{huddleFilter !== "all" ? " for this huddle" : ""}.</div>}
               </div>
             );
           })}
-          {!activeMembers(company).length && <div className="card"><div className="empty-state">Add staff in Cortex to assign individual tasks.</div></div>}
+          {!activeMembers(company).length && <div className="lempty">Add staff in Cortex to assign individual tasks.</div>}
         </div>
       )}
 
@@ -4928,18 +4927,32 @@ function Settings({ company, onSave, session }) {
   // Team members are read-only here — the roster syncs from Cortex staff on
   // every load (see reconcileMembers). Invites / add / delete / rename are gone.
 
+  // Wide screens: section list on the left, the chosen section on the right.
+  const settingsWide = useViewportWidth() >= 1100;
+  const [settingsSec, setSettingsSec] = useState("company");
+  const SETTINGS_SECTIONS = [["company", "Company name"], ["huddles", "Huddles"], ["navigators", "Navigators"], ["charts", "Responsibility charts"], ["team", "Team members"], ["quarter", "Current quarter"], ["goals", "Annual goals"]];
+  const secCls = (id) => `card set-sec${settingsWide && settingsSec !== id ? " set-hidden" : ""}`;
+
   return (
     <Layout title="Settings" subtitle={company.name}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 12 }}>
+      <div className={settingsWide ? "set-wide" : ""}>
+      {settingsWide && (
+        <div className="panel md-list" role="tablist" aria-label="Settings sections" style={{ alignSelf: "start" }}>
+          {SETTINGS_SECTIONS.map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={settingsSec === id} className={`md-row ${settingsSec === id ? "sel" : ""}`} onClick={() => setSettingsSec(id)}>{label}</button>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: settingsWide ? "minmax(0,1fr)" : "repeat(auto-fill,minmax(320px,1fr))", gap: 12, alignContent: "start" }}>
         <div>
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("company")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Company Name</h3>
             <div className="field">
               <input placeholder="Your Company Name" value={companyName} onChange={e => setCompanyName(e.target.value)} onKeyDown={e => e.key === "Enter" && onSave({ name: companyName })} />
             </div>
             <button className="btn-secondary" onClick={() => onSave({ name: companyName })}>Save Name</button>
           </div>
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("huddles")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 4 }}>Huddles</h3>
             <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginBottom: 16 }}>Assign team members to each huddle. Members only appear in their assigned huddle's attendance & spotlight.</div>
             {huddles.map(h => {
@@ -4986,7 +4999,7 @@ function Settings({ company, onSave, session }) {
             </div>
           </div>
 
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("navigators")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Navigators</h3>
             {navigators.map(n => (
               <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
@@ -5000,7 +5013,7 @@ function Settings({ company, onSave, session }) {
             </div>
           </div>
 
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("charts")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Responsibility Charts</h3>
             {orgCharts.map(o => (
               <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
@@ -5014,7 +5027,7 @@ function Settings({ company, onSave, session }) {
             </div>
           </div>
 
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("team")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 4 }}>Team Members</h3>
             <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginBottom: 16 }}>Your VAST team is your Cortex staff list. Names, emails and roles sync from Cortex each time VAST loads.</div>
             {toArray(company.members).map(m => (
@@ -5037,7 +5050,7 @@ function Settings({ company, onSave, session }) {
         </div>
 
         <div>
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("quarter")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Current Quarter</h3>
             <div className="field">
               <label className="label">Quarter Label</label>
@@ -5079,7 +5092,7 @@ function Settings({ company, onSave, session }) {
             </div>
           </div>
 
-          <div className="card">
+          <div className={secCls("goals")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 4 }}>Annual Goals</h3>
             <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginBottom: 16 }}>Set goals for each company or division. Each can have its own label, target date, revenue, and profit goal.</div>
 
@@ -5153,6 +5166,7 @@ function Settings({ company, onSave, session }) {
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       {showNewQuarter && (() => {
@@ -5228,119 +5242,92 @@ function QuarterHistory({ company }) {
       </Layout>
     );
   }
+  return <QuarterHistoryView company={company} history={history} expanded={expanded} setExpanded={setExpanded} />;
+}
+
+function QuarterHistoryView({ company, history, expanded, setExpanded }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const sel = history.find(q => q.quarter === expanded) || history[0];
+  const qAvg = (q) => q.meetingRatings?.length ? (q.meetingRatings.reduce((a, r) => a + r.rating, 0) / q.meetingRatings.length).toFixed(1) : "—";
+  const rColor = (v) => v >= 8 ? C.green : v >= 6 ? C.amber : C.red;
+  const statusTag = (st) => <span className={st === "done" ? "tag-done" : st === "on" ? "tag-on" : st === "notdone" ? "tag-notdone" : "tag-off"}>{st === "done" ? "Completed" : st === "on" ? "On Track" : st === "notdone" ? "Not Done" : "Off Track"}</span>;
+  const tasks = sel.tasks || [];
+  const todos = sel.todos || [];
+  const solved = sel.solvedProblems || [];
+  const avgRating = qAvg(sel);
 
   return (
     <Layout title="Historical Quarters" subtitle={`${history.length} quarter${history.length !== 1 ? "s" : ""} archived`}>
-      <div>
-        {history.map(q => {
-          const isOpen = expanded === q.quarter;
-          const avgRating = q.meetingRatings?.length
-            ? (q.meetingRatings.reduce((a, r) => a + r.rating, 0) / q.meetingRatings.length).toFixed(1)
-            : "—";
-          const solved = q.solvedProblems || [];
-          const tasks = q.tasks || [];
-          const todos = q.todos || [];
-
-          return (
-            <div key={q.quarter} className="card" style={{ marginBottom: 16 }}>
-              {/* Quarter header */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
-                onClick={() => setExpanded(isOpen ? null : q.quarter)}>
-                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <div style={{ background: C.surface3, color: C.text, border: `1px solid ${C.border}`, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.base, padding: "6px 12px", borderRadius: C.radius.control }}>{q.quarter}</div>
-                  <div className="mob-wrap" style={{ display: "flex", gap: 20 }}>
-                    <span style={{ fontSize: C.fs.xs, color: C.textMuted }}><span style={{ color: C.text, fontWeight: 600 }}>{tasks.length}</span> Tasks</span>
-                    <span style={{ fontSize: C.fs.xs, color: C.textMuted }}><span style={{ color: C.text, fontWeight: 600 }}>{todos.length}</span> To-Dos</span>
-                    <span style={{ fontSize: C.fs.xs, color: C.textMuted }}><span style={{ color: C.green, fontWeight: 600 }}>{solved.length}</span> Solved</span>
-                    <span style={{ fontSize: C.fs.xs, color: C.textMuted }}>Avg Rating: <span style={{ color: avgRating >= 8 ? C.green : avgRating >= 6 ? C.yellow : C.red, fontWeight: 600 }}>{avgRating}</span></span>
-                  </div>
-                </div>
-                <span style={{ color: C.textMuted, fontSize: C.fs.md, transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}>›</span>
+      <div className={`md ${mobileOpen ? "has-sel" : ""}`}>
+        <div className="md-list-col panel md-list" role="listbox" aria-label="Archived quarters">
+          {history.map((q, i) => {
+            const on = q === sel;
+            const avg = qAvg(q);
+            return (
+              <button key={q.quarter + i} role="option" aria-selected={on} className={`md-row ${on ? "sel" : ""}`} onClick={() => { setExpanded(q.quarter); setMobileOpen(true); }}>
+                <span style={{ fontWeight: 600, minWidth: 80 }}>{q.quarter}</span>
+                <span style={{ flex: 1, color: C.textMuted, fontSize: C.fs.xs }}><span className="num">{(q.tasks || []).length}</span> tasks · <span className="num">{(q.todos || []).length}</span> to-dos · <span className="num">{(q.solvedProblems || []).length}</span> solved</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{avg !== "—" && <span className="dot" style={{ background: rColor(avg) }} aria-hidden="true" />}<span className="num">{avg}</span></span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="md-detail-col panel">
+          <div className="panel-h">
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+              <button className="btn-ghost md-back" onClick={() => setMobileOpen(false)}><Icon.arrowLeft /> Back</button>
+              <h3>{sel.quarter}</h3>
+              {sel.quarterStart && sel.quarterEnd && <span className="num" style={{ color: C.textMuted, fontSize: C.fs.sm }}>{dateStr(new Date(sel.quarterStart + "T00:00:00"))} – {dateStr(new Date(sel.quarterEnd + "T00:00:00"))}</span>}
+            </div>
+            <div className="strip" style={{ padding: 0 }}>
+              <span><b>{tasks.length}</b>tasks</span>
+              <span><b>{todos.length}</b>to-dos</span>
+              <span><b style={{ color: C.green }}>{solved.length}</b>solved</span>
+              <span><b style={{ color: avgRating === "—" ? C.text : rColor(avgRating) }}>{avgRating}</b>avg rating</span>
+            </div>
+          </div>
+          <div className="panel-b">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(420px,100%),1fr))", gap: "16px 24px" }}>
+              <div>
+                <h4 className="sec-title">Quarterly tasks</h4>
+                {tasks.length === 0 ? <div className="lempty" style={{ padding: "4px 0" }}>No tasks recorded.</div> : (
+                  <div className="dt-wrap"><table className="dt">
+                    <thead><tr><th>Task</th><th>Assigned to</th><th>Final status</th></tr></thead>
+                    <tbody>{tasks.map((t, i) => <tr key={i}><td>{t.title}</td><td className="muted">{t.who || "—"}</td><td>{statusTag(t.status)}</td></tr>)}</tbody>
+                  </table></div>
+                )}
               </div>
-
-              {isOpen && (
-                <div className="fade-in" style={{ marginTop: 20 }}>
-
-                  {/* Tasks table */}
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Quarterly Tasks</div>
-                    {tasks.length === 0 ? <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No tasks recorded.</div> : (
-                      <table className="table">
-                        <thead><tr><th>Task</th><th>Assigned To</th><th>Final Status</th></tr></thead>
-                        <tbody>
-                          {tasks.map((t, i) => (
-                            <tr key={i}>
-                              <td>{t.title}</td>
-                              <td style={{ color: C.textMuted }}>{t.who || "—"}</td>
-                              <td><span className={t.status === "done" ? "tag-done" : t.status === "on" ? "tag-on" : t.status === "notdone" ? "tag-notdone" : "tag-off"}>{t.status === "done" ? "Completed" : t.status === "on" ? "On Track" : t.status === "notdone" ? "Not Done" : "Off Track"}</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-
-                  {/* To-Dos table */}
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>To-Dos</div>
-                    {todos.length === 0 ? <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No to-dos recorded.</div> : (
-                      <table className="table">
-                        <thead><tr><th>To-Do</th><th>Assigned To</th><th>Status</th></tr></thead>
-                        <tbody>
-                          {todos.map((t, i) => (
-                            <tr key={i}>
-                              <td>{t.title}</td>
-                              <td style={{ color: C.textMuted }}>{t.assignee || "—"}</td>
-                              <td><span className={t.done ? "tag-done" : "tag-off"}>{t.done ? "Done" : "Incomplete"}</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-
-                  {/* Solved Problems table */}
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Problems Solved</div>
-                    {solved.length === 0 ? <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No problems marked solved this quarter.</div> : (
-                      <table className="table">
-                        <thead><tr><th>Problem</th><th>Source</th><th>Notes</th><th>Solved</th></tr></thead>
-                        <tbody>
-                          {solved.map((s, i) => (
-                            <tr key={i}>
-                              <td style={{ fontWeight: 600 }}>{s.title}</td>
-                              <td style={{ color: C.textMuted }}>{s.sourceLabel || "—"}</td>
-                              <td style={{ color: C.textMuted, fontSize: C.fs.xs, maxWidth: 280 }}>{s.notes || "—"}</td>
-                              <td className="num" style={{ color: C.textMuted, fontSize: C.fs.xs, whiteSpace: "nowrap" }}>{s.solvedAt ? dateStr(new Date(s.solvedAt)) : "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-
-                  {/* Meeting ratings */}
-                  {q.meetingRatings?.length > 0 && (
-                    <div>
-                      <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Meeting Ratings This Quarter</div>
-                      <table className="table">
-                        <thead><tr><th>Date</th><th>Rating</th></tr></thead>
-                        <tbody>
-                          {q.meetingRatings.map((r, i) => (
-                            <tr key={i}>
-                              <td className="num" style={{ color: C.textMuted }}>{dateStr(new Date(r.date))}</td>
-                              <td><span style={{ fontWeight: 600, color: r.rating >= 8 ? C.green : r.rating >= 6 ? C.yellow : C.red }}>{r.rating}/10</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+              <div>
+                <h4 className="sec-title">To-dos</h4>
+                {todos.length === 0 ? <div className="lempty" style={{ padding: "4px 0" }}>No to-dos recorded.</div> : (
+                  <div className="dt-wrap"><table className="dt">
+                    <thead><tr><th>To-do</th><th>Assigned to</th><th>Status</th></tr></thead>
+                    <tbody>{todos.map((t, i) => <tr key={i}><td>{t.title}</td><td className="muted">{t.assignee || "—"}</td><td><span className={t.done ? "tag-done" : "tag-off"}>{t.done ? "Done" : "Incomplete"}</span></td></tr>)}</tbody>
+                  </table></div>
+                )}
+              </div>
+              <div>
+                <h4 className="sec-title">Problems solved</h4>
+                {solved.length === 0 ? <div className="lempty" style={{ padding: "4px 0" }}>No problems marked solved this quarter.</div> : (
+                  <div className="dt-wrap"><table className="dt">
+                    <thead><tr><th>Problem</th><th>Source</th><th>Notes</th><th className="r">Solved</th></tr></thead>
+                    <tbody>{solved.map((x, i) => <tr key={i}><td style={{ fontWeight: 600 }}>{x.title}</td><td className="muted">{x.sourceLabel || "—"}</td><td className="muted" style={{ fontSize: C.fs.sm }}>{x.notes || "—"}</td><td className="r num muted" style={{ whiteSpace: "nowrap" }}>{x.solvedAt ? dateStr(new Date(x.solvedAt)) : "—"}</td></tr>)}</tbody>
+                  </table></div>
+                )}
+              </div>
+              {sel.meetingRatings?.length > 0 && (
+                <div>
+                  <h4 className="sec-title">Meeting ratings this quarter</h4>
+                  <div className="dt-wrap"><table className="dt" style={{ width: "auto", minWidth: 280 }}>
+                    <thead><tr><th>Date</th><th className="r">Rating</th></tr></thead>
+                    <tbody>{sel.meetingRatings.map((r, i) => <tr key={i}><td className="num muted">{dateStr(new Date(r.date))}</td><td className="r num" style={{ fontWeight: 600, color: rColor(r.rating) }}>{r.rating}/10</td></tr>)}</tbody>
+                  </table></div>
                 </div>
               )}
             </div>
-          );
-        })}
+          </div>
+        </div>
       </div>
     </Layout>
   );
