@@ -2860,7 +2860,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                 const out = { problemQueue: (latest.problemQueue || []).filter(p => p.id !== item.id) };
                 if (item.source === "issue") {
                   const updatedIssues = (latest.issues || []).map(i =>
-                    i.id === item.id ? { ...i, status: "resolved" } : i
+                    i.id === item.id ? { ...i, status: "resolved", resolvedAt: now() } : i
                   );
                   out.issues = updatedIssues;
                   const matched = updatedIssues.find(i => i.id === item.id);
@@ -3995,7 +3995,7 @@ function Issues({ company, onSave, onAdd }) {
     setSavingId(id);
     try {
       onSave(latest => {
-        const updated = (latest.issues || []).map(i => i.id === id ? { ...i, status: "resolved" } : i);
+        const updated = (latest.issues || []).map(i => i.id === id ? { ...i, status: "resolved", resolvedAt: now() } : i);
         const target = updated.find(i => i.id === id);
         console.debug("[VAST/issues] Issues panel resolve()", { id, matchFound: !!target, matchedStatus: target?.status, totalAfter: updated.length, openAfter: updated.filter(i => i.status !== "resolved").length });
         return { issues: updated };
