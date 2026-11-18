@@ -288,7 +288,7 @@ const makeSTYLE = (C) => `
   .btn-link:hover:not(:disabled){text-decoration:underline}
   .btn-danger{background:${C.btnBg};border:1px solid transparent;color:${C.textMuted};padding:6px 12px;font-size:${C.fs.sm}px}
   .btn-danger:hover:not(:disabled){background:${C.dangerHoverBg};color:${C.red}}
-  .card{background:${C.surface2};border:1px solid ${C.border};border-radius:${C.radius.card}px;padding:16px;box-shadow:none}
+  .card{background:${C.surface2};border:1px solid ${C.border};border-radius:${C.radius.card}px;padding:14px 16px;box-shadow:none}
   .label{font-family:${C.fontUI};font-size:${C.fs.xs}px;font-weight:600;color:${C.textMuted};margin-bottom:8px;display:block}
   h1,h2,h3,h4{font-family:${C.fontUI};font-weight:600}
   h3{font-size:${C.fs.md}px}
@@ -391,6 +391,51 @@ const makeSTYLE = (C) => `
   .priority-3{color:${C.textMuted};font-weight:600}
   .row,[class*="-row"],[class*="-item"]{transition:border-color 0.12s,background 0.12s}
   button:not([class]),[role="button"]{transition:all 0.12s}
+  /* ── Layout & density (shared) ── */
+  .panel{background:${C.surface2};border:1px solid ${C.border};border-radius:${C.radius.card}px;min-width:0}
+  .panel-h{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 12px;min-height:44px;border-bottom:1px solid ${C.border}}
+  .panel-h h3{font-size:${C.fs.md}px;margin:0}
+  .panel-b{padding:12px}
+  .sec-title{font-size:${C.fs.sm}px;font-weight:600;color:${C.text};margin:0 0 8px;padding-bottom:6px;border-bottom:1px solid ${C.border}}
+  .dt-wrap{overflow:auto;max-width:100%}
+  .dt{width:100%;border-collapse:separate;border-spacing:0;font-size:${C.fs.base}px}
+  .dt th{position:sticky;top:0;z-index:2;background:${C.surface2};text-align:left;height:34px;padding:0 10px;font-size:${C.fs.xs}px;font-weight:600;color:${C.textMuted};border-bottom:1px solid ${C.borderStrong};white-space:nowrap}
+  .dt td{height:38px;padding:2px 10px;border-bottom:1px solid ${C.border};vertical-align:middle;color:${C.text}}
+  .dt tbody tr:hover td{background:${C.tableHover}}
+  .dt tr:last-child td{border-bottom:none}
+  .dt .r{text-align:right}
+  .dt .c{text-align:center}
+  .dt .shrink{width:1%;white-space:nowrap}
+  .dt .muted{color:${C.textMuted}}
+  .dt .clip{max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tabs{display:flex;align-items:flex-end;gap:0;border-bottom:1px solid ${C.border};min-height:40px;flex-wrap:wrap}
+  .tabs .tab{margin-right:20px;min-height:40px;padding:6px 2px;margin-bottom:-1px}
+  .tab .cnt{font-family:${C.fontMono};font-variant-numeric:tabular-nums;font-size:${C.fs.xs}px;color:${C.textMuted};margin-left:6px}
+  .tab.active .cnt{color:${C.text}}
+  .quiet-select,.quiet-input{background:transparent!important;border:1px solid transparent!important;box-shadow:none!important;width:auto;min-height:28px!important;padding:2px 6px;color:${C.text};font-size:${C.fs.sm}px;border-radius:${C.radius.control}px;cursor:pointer}
+  .quiet-select{padding-right:4px}
+  .quiet-select:hover,.quiet-select:focus,.quiet-input:hover,.quiet-input:focus{border-color:${C.inputBorder}!important;background:${C.inputBg}!important}
+  .icon-btn{background:transparent;border:1px solid transparent;color:${C.textMuted};padding:4px 6px;min-height:28px;border-radius:${C.radius.control}px;display:inline-flex;align-items:center;justify-content:center}
+  .icon-btn:hover:not(:disabled){background:${C.btnBg};color:${C.text}}
+  .icon-btn.danger:hover:not(:disabled){background:${C.dangerHoverBg};color:${C.red}}
+  .md{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:12px;align-items:start}
+  .md-list{position:sticky;top:72px;max-height:calc(100vh - 88px);overflow-y:auto}
+  .md-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:none;border-bottom:1px solid ${C.border};border-radius:0;padding:8px 12px;min-height:44px;color:${C.text};font-size:${C.fs.sm}px;font-weight:400;white-space:normal}
+  .md-row:hover{background:${C.tableHover}}
+  .md-row.sel{background:${C.selBg};box-shadow:inset 3px 0 0 ${C.selBorder}}
+  .md-back{display:none}
+  .strip{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline;font-size:${C.fs.sm}px;color:${C.textMuted};padding:8px 12px}
+  .strip b{font-family:${C.fontMono};font-variant-numeric:tabular-nums;color:${C.text};font-weight:600;font-size:${C.fs.md}px;margin-right:4px}
+  @media(max-width:768px){
+    .md{grid-template-columns:minmax(0,1fr)}
+    .md-list{position:static;max-height:none}
+    .md.has-sel .md-list-col{display:none}
+    .md:not(.has-sel) .md-detail-col{display:none}
+    .md-back{display:inline-flex}
+    .quiet-select,.quiet-input{min-height:44px!important}
+    .icon-btn{min-height:44px!important;min-width:44px}
+    .tabs .tab{min-height:44px}
+  }
 `;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -1093,20 +1138,20 @@ function Layout({ children, title, subtitle, action }) {
   return (
     <div style={{ marginLeft: ml, minHeight: "100vh", background: C.bg, paddingBottom: mobile ? 16 : 0, transition: "margin-left 0.2s ease" }}>
       {/* Header */}
-      <div style={{ borderBottom: `1px solid ${C.border}`, padding: mobile ? "12px 16px" : "20px 24px", background: C.surface, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, position: "sticky", top: 0, zIndex: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: mobile ? 8 : 0, minWidth: 0 }}>
+      <div className="page-header" style={{ borderBottom: `1px solid ${C.border}`, padding: mobile ? "6px 12px 6px 8px" : "0 20px", minHeight: 56, background: C.surface, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, position: "sticky", top: 0, zIndex: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
           {mobile && (
-            <button onClick={openMobileMenu}
+            <button onClick={openMobileMenu} aria-label="Open menu"
               style={{ background: "none", border: "none", color: C.text, fontSize: C.fs.title, cursor: "pointer", padding: "4px 6px", lineHeight: 1, flexShrink: 0 }}><Icon.menu /></button>
           )}
-          <div style={{ minWidth: 0 }}>
-            <h1 style={{ fontSize: C.fs.title, fontWeight: 600, color: C.text, margin: 0, overflowWrap: "anywhere", lineHeight: 1.3 }}>{title}</h1>
-            {subtitle && <div style={{ fontSize: C.fs.sm, color: C.textMuted, marginTop: 4, overflowWrap: "anywhere" }}>{subtitle}</div>}
+          <div style={{ minWidth: 0, display: "flex", flexDirection: mobile ? "column" : "row", alignItems: mobile ? "flex-start" : "baseline", gap: mobile ? 0 : 12 }}>
+            <h1 style={{ fontSize: C.fs.title, fontWeight: 600, color: C.text, margin: 0, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{title}</h1>
+            {subtitle && <div title={typeof subtitle === "string" ? subtitle : undefined} style={{ fontSize: mobile ? C.fs.xs : C.fs.sm, color: C.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, maxWidth: "100%" }}>{subtitle}</div>}
           </div>
         </div>
         {action && <div style={{ flexShrink: 0 }}>{action}</div>}
       </div>
-      <div style={{ padding: mobile ? "16px" : "24px 24px" }} className="fade-in">{children}</div>
+      <div style={{ padding: mobile ? "12px 16px 16px" : "16px 20px 20px" }} className="fade-in">{children}</div>
     </div>
   );
 }
@@ -3916,7 +3961,7 @@ function Headlines({ company, onSave, onAdd }) {
 
   return (
     <Layout title="Headlines" subtitle="Customer & Employee news from the week">
-      <div style={{ maxWidth: 700 }}>
+      <div>
         <div className="card" style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Add Headline</h3>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -4027,7 +4072,7 @@ function Issues({ company, onSave, onAdd }) {
     <Layout title="Issues" subtitle="Identify, Discuss & Solve"
       action={<button className="btn-primary" onClick={() => setShowAdd(true)}><Icon.plus /> Add Issue</button>}>
 
-      <div style={{ maxWidth: 700 }}>
+      <div>
         {issueError && <div style={{ color: C.red, background: C.redTint1, border: `1px solid ${C.redTint3}`, borderRadius: C.radius.control, padding: "8px 12px", marginBottom: 12, fontSize: C.fs.sm }}>{issueError}</div>}
         <div className="toolbar" style={{ justifyContent: "flex-end" }}>
           <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
@@ -4235,7 +4280,7 @@ function Todos({ company, onSave, onAdd }) {
 
   return (
     <Layout title="To-Dos" subtitle="Weekly action items">
-      <div style={{ maxWidth: 700 }}>
+      <div>
         <div className="card" style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Add To-Do</h3>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: activeMembers(company).length ? 8 : 0 }}>
@@ -4563,7 +4608,7 @@ function MeetingHistory({ company }) {
 
   return (
     <Layout title="Meeting History" subtitle={`${meetings.length} meeting${meetings.length !== 1 ? "s" : ""} on record`}>
-      <div style={{ maxWidth: 700 }}>
+      <div>
         {/* Huddle filter */}
         {huddles.length > 1 && (
           <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
@@ -4760,7 +4805,7 @@ function Settings({ company, onSave, session }) {
 
   return (
     <Layout title="Settings" subtitle={company.name}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 20, maxWidth: 900 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 12 }}>
         <div>
           <div className="card" style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Company Name</h3>
@@ -5061,7 +5106,7 @@ function QuarterHistory({ company }) {
 
   return (
     <Layout title="Historical Quarters" subtitle={`${history.length} quarter${history.length !== 1 ? "s" : ""} archived`}>
-      <div style={{ maxWidth: 900 }}>
+      <div>
         {history.map(q => {
           const isOpen = expanded === q.quarter;
           const avgRating = q.meetingRatings?.length
