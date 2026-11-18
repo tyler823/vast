@@ -5291,6 +5291,10 @@ const rptFmtDate = (d) => d.toLocaleDateString("en-US", { month: "short", day: "
 const rptPct = (n, d) => d > 0 ? n / d : null;
 const rptPctText = (p) => p == null ? "—" : `${Math.round(p * 100)}%`;
 const rptNum1 = (v) => v == null || isNaN(v) ? "—" : (Math.round(v * 10) / 10).toString();
+// Chart labels: compact for big numbers (152320 → "152k") so labels don't collide.
+const rptShort = (v) => { if (v == null || isNaN(v)) return "—"; const a = Math.abs(v); if (a >= 1e6) return (v / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, "") + "M"; if (a >= 1e4) return (v / 1e3).toFixed(a >= 1e5 ? 0 : 1).replace(/\.0$/, "") + "k"; return rptNum1(v); };
+// Text values in the measurable's unit, same style as the Scorecard ("$136,194.3").
+const rptUnitVal = (v, unit) => v == null || isNaN(v) ? "—" : fmtMeasure(rptNum1(v), unit, true);
 const rptWeekNum = (key) => parseInt(String(key).split("-W")[1], 10);
 // Same rule as the scorecard's target check: blank → no judgement.
 const rptMeets = (val, m) => {
@@ -5398,7 +5402,7 @@ function rptCompute(company, year, q) {
     const score = (v) => op === "lte" || op === "lt" ? -v : op === "eq" && !isNaN(target) ? -Math.abs(v - target) : v;
     let best = null, worst = null;
     vals.forEach(p => { if (!best || score(p.value) > score(best.value)) best = p; if (!worst || score(p.value) < score(worst.value)) worst = p; });
-    return { m, owner: m.owner || "Unassigned", goal: m.target !== undefined && m.target !== "" ? `${RPT_OPS[op] || "≥"} ${m.target}${m.unit ? " " + m.unit : ""}` : "No goal", target: isNaN(target) ? null : target,
+    return { m, owner: m.owner || "Unassigned", goal: m.target !== undefined && m.target !== "" ? `${RPT_OPS[op] || "≥"} ${fmtMeasure(m.target, m.unit)}` : "No goal", target: isNaN(target) ? null : target,
       pts, hit, missed, pct: rptPct(hit, hit + missed), avg, avgHit: avg == null ? null : rptMeets(avg, m), best, worst, entered: vals.length };
   });
   const scHit = scRows.reduce((a, r) => a + r.hit, 0), scMissed = scRows.reduce((a, r) => a + r.missed, 0);
@@ -5527,8 +5531,8 @@ function RptBars({ data, goal, title, height = 150, showValues }) {
     <svg className="rpt-chart" viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: Math.max(W, 260) * 1.25 }} role="img" aria-label={title}>
       <title>{title}</title>
       <line x1={left} x2={W - 4} y1={y(0)} y2={y(0)} stroke={rptVar("borderStrong")} strokeWidth="1" />
-      <text x={left - 6} y={y(max) + 4} textAnchor="end" className="rpt-ax">{rptNum1(max)}</text>
-      <text x={left - 6} y={y(0) + 4} textAnchor="end" className="rpt-ax">{rptNum1(Math.max(min, 0) === 0 ? 0 : min)}</text>
+      <text x={left - 6} y={y(max) + 4} textAnchor="end" className="rpt-ax">{rptShort(max)}</text>
+      <text x={left - 6} y={y(0) + 4} textAnchor="end" className="rpt-ax">{rptShort(Math.max(min, 0) === 0 ? 0 : min)}</text>
       {data.map((d, i) => {
         const x = left + i * (bw + gap) + gap / 2;
         const fill = d.status === "good" ? rptVar("green") : d.status === "bad" ? rptVar("red") : rptVar("blue");
@@ -5537,7 +5541,7 @@ function RptBars({ data, goal, title, height = 150, showValues }) {
             {d.value != null ? (
               <>
                 <rect x={x} y={Math.min(y(d.value), y(0))} width={bw} height={Math.max(1, Math.abs(y(0) - y(d.value)))} rx="2" fill={fill}><title>{`${d.label}: ${d.value}${d.status ? d.status === "good" ? " (hit)" : " (missed)" : ""}`}</title></rect>
-                {labelsOn && <text x={x + bw / 2} y={Math.min(y(d.value), y(0)) - 4} textAnchor="middle" className="rpt-val">{rptNum1(d.value)}</text>}
+                {labelsOn && <text x={x + bw / 2} y={Math.min(y(d.value), y(0)) - 4} textAnchor="middle" className="rpt-val">{rptShort(d.value)}</text>}
               </>
             ) : <text x={x + bw / 2} y={y(0) - 4} textAnchor="middle" className="rpt-ax">–</text>}
             {i % xEvery === 0 && <text x={x + bw / 2} y={H - 6} textAnchor="middle" className="rpt-ax">{d.label}</text>}
@@ -5547,7 +5551,7 @@ function RptBars({ data, goal, title, height = 150, showValues }) {
       {goal != null && (
         <g>
           <line x1={left} x2={W - 4} y1={y(goal)} y2={y(goal)} stroke={rptVar("text")} strokeWidth="1.5" strokeDasharray="4 3" />
-          <text x={left - 6} y={y(goal) + 4} textAnchor="end" className="rpt-ax rpt-goal">{rptNum1(goal)}</text>
+          <text x={left - 6} y={y(goal) + 4} textAnchor="end" className="rpt-ax rpt-goal">{rptShort(goal)}</text>
         </g>
       )}
     </svg>
@@ -5628,9 +5632,9 @@ function RptScorecard({ r }) {
               {row.entered === 0 ? <RptNote>No numbers entered for this period.</RptNote> : (<>
                 <div className="rpt-stats">
                   <span><RptDot status={rptLevel(row.pct)} label={rptStatusWord[rptLevel(row.pct)]} /> Hit <b className="num">{row.hit}</b> · Missed <b className="num">{row.missed}</b> · <b className="num">{rptPctText(row.pct)}</b></span>
-                  <span>Average <b className="num">{rptNum1(row.avg)}</b>{row.avgHit != null && <> ({row.avgHit ? "meets goal" : "misses goal"})</>}</span>
-                  <span>Best <b className="num">{rptNum1(row.best && row.best.value)}</b> <span className="rpt-muted num">W{row.best && rptWeekNum(row.best.week)}</span></span>
-                  <span>Worst <b className="num">{rptNum1(row.worst && row.worst.value)}</b> <span className="rpt-muted num">W{row.worst && rptWeekNum(row.worst.week)}</span></span>
+                  <span>Average <b className="num">{rptUnitVal(row.avg, row.m.unit)}</b>{row.avgHit != null && <> ({row.avgHit ? "meets goal" : "misses goal"})</>}</span>
+                  <span>Best <b className="num">{rptUnitVal(row.best && row.best.value, row.m.unit)}</b> <span className="rpt-muted num">W{row.best && rptWeekNum(row.best.week)}</span></span>
+                  <span>Worst <b className="num">{rptUnitVal(row.worst && row.worst.value, row.m.unit)}</b> <span className="rpt-muted num">W{row.worst && rptWeekNum(row.worst.week)}</span></span>
                 </div>
                 <RptBars title={`${row.m.name}: weekly values${row.target != null ? `, goal ${row.goal}` : ""}`} goal={row.target}
                   data={row.pts.map(p => ({ label: `W${rptWeekNum(p.week)}`, value: p.value, status: p.hit === true ? "good" : p.hit === false ? "bad" : null }))} />
