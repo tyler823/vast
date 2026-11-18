@@ -2082,7 +2082,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
     const snapshot = {
       quarter: qLabel,
       archivedAt: now(),
-      tasks: (latestData.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status })),
+      tasks: (latestData.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status, statusHistory: t.statusHistory })),
       todos: (latestData.todos || []).map(t => ({ title: t.title, assignee: t.assignee, done: t.done })),
       solvedProblems: [
         ...(existingIdx >= 0 ? (qh[existingIdx].solvedProblems || []) : []),
@@ -2620,7 +2620,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                         const col = isActive ? C.text : C.textMuted;
                         const bor = isActive ? C.selBorder : C.border;
                         return (
-                          <button key={s} onClick={() => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s } : x) }))}
+                          <button key={s} onClick={() => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s, ...(x.status !== s ? { statusHistory: [...toArray(x.statusHistory), { status: s, at: now() }] } : {}) } : x) }))}
                             style={{ padding: "4px 8px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, fontFamily: C.fontUI, cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${bor}`, background: bg, color: col, display: "inline-flex", alignItems: "center", gap: 6 }}>
                             <span aria-hidden="true" className="dot" style={{ background: dotCol, opacity: isActive ? 1 : 0.6 }} />{label}
                           </button>
@@ -3296,12 +3296,12 @@ function Tasks({ company, onSave, onAdd }) {
 
   const addTask = () => {
     if (!form.title.trim()) return;
-    const newTask = { id: uid(), ...form, createdAt: now() };
+    const newTask = { id: uid(), ...form, createdAt: now(), statusHistory: [{ status: form.status, at: now() }] };
     onAdd("quarterlyTasks", newTask);
     setForm({ title: "", who: "", smart: false, status: "on", huddleId: defaultHuddleId, target: "", operator: "" });
     setShowAdd(false);
   };
-  const updateStatus = (id, status) => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks || []).map(t => t.id === id ? { ...t, status } : t) }));
+  const updateStatus = (id, status) => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks || []).map(t => t.id === id ? { ...t, status, ...(t.status !== status ? { statusHistory: [...toArray(t.statusHistory), { status, at: now() }] } : {}) } : t) }));
   const deleteTask = (id) => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks || []).filter(t => t.id !== id) }));
 
   const startEdit = (t) => {
@@ -4682,7 +4682,7 @@ function Settings({ company, onSave, session }) {
       const snapshot = {
         quarter: oldLabel,
         archivedAt: now(),
-        tasks: (latest.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status })),
+        tasks: (latest.quarterlyTasks || []).map(t => ({ title: t.title, who: t.who, status: t.status, statusHistory: t.statusHistory })),
         todos: (latest.todos || []).map(t => ({ title: t.title, assignee: t.assignee, done: t.done })),
         solvedProblems: existingIdx >= 0 ? (qh[existingIdx].solvedProblems || []) : [],
         meetingRatings: existingIdx >= 0 ? (qh[existingIdx].meetingRatings || []) : []
@@ -4697,7 +4697,9 @@ function Settings({ company, onSave, session }) {
           id: uid(),
           title: t.title, who: t.who, huddleId: t.huddleId,
           smart: t.smart, target: t.target, operator: t.operator,
-          status: "on", createdAt: now(), notes: ""
+          status: "on", createdAt: now(), notes: "",
+          statusHistory: [{ status: "on", at: now() }],
+          carriedFrom: { id: t.id, quarter: oldLabel }
         }));
       return {
         quarterHistory: newQH,
