@@ -257,10 +257,12 @@ const makeSTYLE = (C) => `
   h3{font-size:${C.fs.md}px}
   .num,.mono{font-family:${C.fontMono};font-variant-numeric:tabular-nums}
   input[type=number],input[type=date],input[type=time]{font-family:${C.fontMono};font-variant-numeric:tabular-nums}
-  .tag-on{background:${C.greenTint};color:${C.green};border:1px solid ${C.greenBorder};padding:4px 8px;border-radius:${C.radius.pill}px;font-size:${C.fs.xs}px;font-weight:600}
-  .tag-off{background:${C.redTint1};color:${C.red};border:1px solid ${C.redTint3};padding:4px 8px;border-radius:${C.radius.pill}px;font-size:${C.fs.xs}px;font-weight:600}
-  .tag-done{background:${C.greenTint};color:${C.green};border:1px solid ${C.greenBorder};padding:4px 8px;border-radius:${C.radius.pill}px;font-size:${C.fs.xs}px;font-weight:600}
-  .tag-notdone{background:${C.amberBg};color:${C.amber};border:1px solid ${C.amberBorder};padding:4px 8px;border-radius:${C.radius.pill}px;font-size:${C.fs.xs}px;font-weight:600}
+  .tag-on,.tag-off,.tag-done,.tag-notdone,.status{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:${C.fs.sm}px;font-weight:500;color:${C.text};background:none;border:none;padding:0;line-height:1.4}
+  .tag-on::before,.tag-off::before,.tag-done::before,.tag-notdone::before{content:"";width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .tag-on::before,.tag-done::before{background:${C.green}}
+  .tag-off::before{background:${C.red}}
+  .tag-notdone::before{background:${C.amber}}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
   .sidebar-link{display:flex;align-items:center;gap:8px;padding:8px 16px;border-radius:${C.radius.control}px;color:${C.textMuted};font-size:14px;font-weight:500;cursor:pointer;transition:all 0.15s;text-decoration:none;border:none;background:none;width:100%;text-align:left}
   .sidebar-link:hover{background:${C.surface3};color:${C.text}}
   .sidebar-link.active{background:${C.selBg};color:${C.text};border-left:3px solid ${C.accent};padding-left:13px}
@@ -310,7 +312,7 @@ const makeSTYLE = (C) => `
     .rating-btn{width:48px!important;height:48px!important;font-size:16px!important}
     .label{font-size:${C.fs.xs}px!important}
     .chip{font-size:13px!important;padding:6px 12px!important}
-    .tag-on,.tag-off,.tag-done,.tag-notdone{font-size:12px!important;padding:4px 11px!important}
+    .tag-on,.tag-off,.tag-done,.tag-notdone{font-size:14px!important;padding:0!important}
     .badge{min-width:22px!important;height:22px!important;font-size:${C.fs.xs}px!important}
     .table th{font-size:12px!important;padding:10px 12px!important}
     .table td{font-size:14px!important;padding:12px!important}
@@ -1189,9 +1191,9 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ fontSize: C.fs.base, fontWeight: 600 }}>{h.name}</div>
                         {isLive && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, background: C.greenTint, border: `1px solid ${C.greenBorder}`, borderRadius: C.radius.control, padding: "4px 8px" }}>
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, display: "inline-block", animation: "pulse 1.2s infinite" }} />
-                            <span style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.green}}>In progress</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, display: "inline-block", animation: "pulse 1.2s infinite" }} />
+                            <span style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.text}}>In progress</span>
                           </div>
                         )}
                       </div>
@@ -1404,7 +1406,7 @@ function MyMeasurables({ company, onSave, me }) {
                               onCommit={(v) => setEntry(m.id, wk, v)}
                               placeholder="—"
                               style={{ width: 60, textAlign: "center", padding: "4px 4px", fontSize: C.fs.sm, fontWeight: val !== "" ? 600 : 400,
-                                border: `1px solid ${isCur ? (met === true ? C.green : met === false ? C.red : C.borderStrong) : (met === true ? C.green : met === false ? C.red : C.border)}`,
+                                border: `1px solid ${isCur ? C.borderStrong : C.border}`,
                                 borderRadius: C.radius.control,
                                 background: met === true ? C.greenTint : met === false ? C.redTint1 : isCur ? C.surface2 : "transparent",
                                 color: met === true ? C.green : met === false ? C.red : val !== "" ? C.text : C.textDim,
@@ -1448,7 +1450,7 @@ function MyMeasurables({ company, onSave, me }) {
                               onCommit={(v) => setEntry(m.id, wk, v)}
                               placeholder="—"
                               style={{ width: 90, textAlign: "center", padding: "6px 4px", fontSize: C.fs.base, fontWeight: val !== "" ? 600 : 400,
-                                border: `1px solid ${isCur ? (met === true ? C.green : met === false ? C.red : C.borderStrong) : (met === true ? C.green : met === false ? C.red : C.border)}`,
+                                border: `1px solid ${isCur ? C.borderStrong : C.border}`,
                                 borderRadius: C.radius.control,
                                 background: met === true ? C.greenTint : met === false ? C.redTint1 : isCur ? C.surface2 : "transparent",
                                 color: met === true ? C.green : met === false ? C.red : val !== "" ? C.text : C.textDim,
@@ -2525,7 +2527,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                             const isCur = wk === curWk;
                             // Current week: red highlight border; past/future: subtle styling
                             const inputBg = met === true ? C.greenTint : met === false ? C.redTint1 : isCur ? C.surface2 : "transparent";
-                            const inputBorder = met === true ? C.green : met === false ? C.red : isCur ? C.borderStrong : C.border;
+                            const inputBorder = isCur ? C.borderStrong : C.border;
                             const inputColor = met === true ? C.green : met === false ? C.red : C.text;
                             return (
                               <td key={wk} style={{ textAlign: "center", padding: "6px 4px", borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${isCur ? C.borderStrong : C.border}`, background: isCur ? C.selBg : "transparent" }}>
@@ -2560,16 +2562,17 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                       {t.who && <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{t.who}</div>}
                       {t.notes && !noteOpen[t.id] && <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:4 }} />{t.notes}</div>}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", minWidth: 0 }}>
                       {[["on","On Track"],["off","Off Track"],["done","Done"],["notdone","Not Done"]].map(([s, label]) => {
                         const isActive = t.status === s;
-                        const bg = isActive ? (s === "off" ? C.redTint2 : s === "notdone" ? C.amberBg : C.greenTint) : C.surface2;
-                        const col = isActive ? (s === "off" ? C.red : s === "notdone" ? C.amber : C.green) : C.textMuted;
-                        const bor = isActive ? (s === "off" ? C.red : s === "notdone" ? C.amber : C.green) : C.border;
+                        const dotCol = s === "off" ? C.red : s === "notdone" ? C.amber : C.green;
+                        const bg = isActive ? C.selBg : C.surface2;
+                        const col = isActive ? C.text : C.textMuted;
+                        const bor = isActive ? C.selBorder : C.border;
                         return (
                           <button key={s} onClick={() => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s } : x) }))}
-                            style={{ padding: "4px 12px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, fontFamily: C.fontUI, cursor: "pointer", border: `1px solid ${bor}`, background: bg, color: col }}>
-                            {label}
+                            style={{ padding: "4px 8px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, fontFamily: C.fontUI, cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${bor}`, background: bg, color: col, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <span aria-hidden="true" className="dot" style={{ background: dotCol, opacity: isActive ? 1 : 0.6 }} />{label}
                           </button>
                         );
                       })}
@@ -3360,13 +3363,16 @@ function Tasks({ company, onSave, onAdd }) {
                         // Color follows the status word shown in the dropdown (meetsTarget is unchanged).
                         const effectiveColor = colors[t.status] || colors.on;
                         return (
+                          <div style={{ position: "relative", display: "inline-flex", alignItems: "center", width: 132 }}>
+                          <span aria-hidden="true" className="dot" style={{ position: "absolute", left: 12, background: effectiveColor.color, pointerEvents: "none" }} />
                           <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
-                            style={{ width: 120, padding: "6px 8px", fontSize: C.fs.xs, background: effectiveColor.bg, color: effectiveColor.color, border: `1px solid ${effectiveColor.border}`, borderRadius: C.radius.control, fontWeight: 600 }}>
+                            style={{ width: "100%", padding: "6px 8px 6px 26px", fontSize: C.fs.sm, background: C.surface2, color: C.text, border: `1px solid ${C.border}`, borderRadius: C.radius.control, fontWeight: 500 }}>
                             <option value="on">On Track</option>
                             <option value="off">Off Track</option>
                             <option value="done">Done</option>
                             <option value="notdone">Not Done</option>
                           </select>
+                          </div>
                         );
                       })()}
                     </td>
@@ -3645,7 +3651,7 @@ function Scorecard({ company, onSave }) {
                             onCommit={(v) => setEntry(m.id, v, w)}
                             placeholder="—"
                             style={{ width: 70, textAlign: "center", padding: "6px 8px", fontSize: C.fs.sm, fontWeight: val ? 600 : 400,
-                              border: `1px solid ${onTarget === true ? C.green : onTarget === false ? C.red : isCurrentWeek ? C.borderStrong : C.border}`,
+                              border: `1px solid ${isCurrentWeek ? C.borderStrong : C.border}`,
                               borderRadius: C.radius.control, background: onTarget === true ? C.greenTint : onTarget === false ? C.redTint1 : C.surface2,
                               color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.text) : C.textDim,
                               outline: "none", fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
@@ -3720,7 +3726,7 @@ function Scorecard({ company, onSave }) {
                             onCommit={(v) => setEntry(m.id, v, w)}
                             placeholder="—"
                             style={{ width: 90, textAlign: "center", padding: "8px 8px", fontSize: C.fs.base, fontWeight: val ? 600 : 400,
-                              border: `1px solid ${onTarget === true ? C.green : onTarget === false ? C.red : isCurrentWeek ? C.borderStrong : C.border}`,
+                              border: `1px solid ${isCurrentWeek ? C.borderStrong : C.border}`,
                               borderRadius: C.radius.control, background: onTarget === true ? C.greenTint : onTarget === false ? C.redTint1 : C.surface2,
                               color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.text) : C.textDim,
                               outline: "none", fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
@@ -3844,7 +3850,7 @@ function Headlines({ company, onSave, onAdd }) {
         <div style={{ marginBottom: 4 }}>
           <span className="chip" style={{ marginRight: 8, fontSize: C.fs.xs, background: C.surface3, borderColor: C.border, color: C.textMuted }}>{h.type}</span>
           {h.huddleId && <span className="chip" style={{ marginRight: 8, fontSize: C.fs.xs }}>{huddles.find(x => x.id === h.huddleId)?.name || ""}</span>}
-          {isReviewed && <span className="chip" style={{ fontSize: C.fs.xs, background: C.greenTint, borderColor: C.greenBorder, color: C.green }}>Reviewed</span>}
+          {isReviewed && <span className="tag-done">Reviewed</span>}
         </div>
         <span style={{ fontSize: C.fs.base, textDecoration: isReviewed ? "line-through" : "none" }}>{h.text}</span>
         <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4 }}><span className="num">{dateStr(new Date(h.date))}</span>{isReviewed && h.reviewedAt ? ` · Reviewed ${dateStr(new Date(h.reviewedAt))}` : ""}</div>
