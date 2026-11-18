@@ -4134,7 +4134,8 @@ function Todos({ company, onSave, onAdd }) {
     onAdd("todos", newTodo);
     setForm({ title: "", assignees: [], dueDate: todoDueDefault(), huddleId: form.huddleId });
   };
-  const toggle = (id) => onSave(latest => ({ todos: (latest.todos || []).map(t => t.id === id ? { ...t, done: !t.done } : t) }));
+  // Ticking saves completedAt; un-ticking clears it (null removes the field in Firebase).
+  const toggle = (id) => onSave(latest => ({ todos: (latest.todos || []).map(t => t.id === id ? { ...t, done: !t.done, completedAt: !t.done ? now() : null } : t) }));
   const del = (id) => onSave(latest => ({ todos: (latest.todos || []).filter(t => t.id !== id) }));
 
   const startEdit = (t) => {
