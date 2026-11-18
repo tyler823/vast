@@ -288,7 +288,7 @@ const makeSTYLE = (C) => `
   .btn-link:hover:not(:disabled){text-decoration:underline}
   .btn-danger{background:${C.btnBg};border:1px solid transparent;color:${C.textMuted};padding:6px 12px;font-size:${C.fs.sm}px}
   .btn-danger:hover:not(:disabled){background:${C.dangerHoverBg};color:${C.red}}
-  .card{background:${C.surface2};border:1px solid ${C.border};border-radius:${C.radius.card}px;padding:16px;box-shadow:none}
+  .card{background:${C.surface2};border:1px solid ${C.border};border-radius:${C.radius.card}px;padding:14px 16px;box-shadow:none}
   .label{font-family:${C.fontUI};font-size:${C.fs.xs}px;font-weight:600;color:${C.textMuted};margin-bottom:8px;display:block}
   h1,h2,h3,h4{font-family:${C.fontUI};font-weight:600}
   h3{font-size:${C.fs.md}px}
@@ -391,6 +391,96 @@ const makeSTYLE = (C) => `
   .priority-3{color:${C.textMuted};font-weight:600}
   .row,[class*="-row"],[class*="-item"]{transition:border-color 0.12s,background 0.12s}
   button:not([class]),[role="button"]{transition:all 0.12s}
+  /* ── Scorecard grid ── */
+  .sc-wrap{max-height:calc(100vh - 150px)}
+  .sc-table td,.sc-table th{white-space:nowrap}
+  .sc-table th.sc-name,.sc-table td.sc-name{position:sticky;left:0;z-index:1;background:${C.surface2};min-width:200px;max-width:340px;box-shadow:inset -1px 0 0 ${C.border}}
+  .sc-table th.sc-name{z-index:3}
+  .sc-table tbody tr:hover td.sc-name{background:${C.tableHover}}
+  .sc-table td.sc-cell{padding:2px 4px;text-align:right}
+  .sc-input{width:88px;height:30px;min-height:30px!important;text-align:right;padding:2px 8px;font-family:${C.fontMono};font-variant-numeric:tabular-nums;font-size:${C.fs.sm}px;border:1px solid transparent!important;border-radius:${C.radius.control}px;box-shadow:none!important}
+  .sc-input:hover{border-color:${C.inputBorder}!important}
+  .sc-input:focus{border-color:${C.focus}!important;background:${C.inputBg}!important;color:${C.text}!important}
+  /* ── Layout & density (shared) ── */
+  .panel{background:${C.surface2};border:1px solid ${C.border};border-radius:${C.radius.card}px;min-width:0}
+  .panel-h{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 12px;min-height:44px;border-bottom:1px solid ${C.border}}
+  .panel-h h3{font-size:${C.fs.md}px;margin:0}
+  .panel-b{padding:12px}
+  .sec-title{font-size:${C.fs.sm}px;font-weight:600;color:${C.text};margin:0 0 8px;padding-bottom:6px;border-bottom:1px solid ${C.border}}
+  .dt-wrap{overflow:auto;max-width:100%}
+  .dt{width:100%;border-collapse:separate;border-spacing:0;font-size:${C.fs.base}px}
+  .dt th{position:sticky;top:0;z-index:2;background:${C.surface2};text-align:left;height:34px;padding:0 10px;font-size:${C.fs.xs}px;font-weight:600;color:${C.textMuted};border-bottom:1px solid ${C.borderStrong};white-space:nowrap}
+  .dt td{height:38px;padding:2px 10px;border-bottom:1px solid ${C.border};vertical-align:middle;color:${C.text}}
+  .dt tbody tr:hover td{background:${C.tableHover}}
+  .dt tr:last-child td{border-bottom:none}
+  .dt .r{text-align:right}
+  .dt .c{text-align:center}
+  .dt .shrink{width:1%;white-space:nowrap}
+  .dt .muted{color:${C.textMuted}}
+  .dt .clip{max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tabs{display:flex;align-items:flex-end;gap:0;border-bottom:1px solid ${C.border};min-height:40px;flex-wrap:wrap}
+  .tabs .tab{margin-right:20px;min-height:40px;padding:6px 2px;margin-bottom:-1px}
+  .tab .cnt{font-family:${C.fontMono};font-variant-numeric:tabular-nums;font-size:${C.fs.xs}px;color:${C.textMuted};margin-left:6px}
+  .tab.active .cnt{color:${C.text}}
+  .quiet-select,.quiet-input{background:transparent!important;border:1px solid transparent!important;box-shadow:none!important;width:auto;min-height:28px!important;padding:2px 6px;color:${C.text};font-size:${C.fs.sm}px;border-radius:${C.radius.control}px;cursor:pointer}
+  .quiet-select{padding-right:4px}
+  .quiet-select:hover,.quiet-select:focus,.quiet-input:hover,.quiet-input:focus{border-color:${C.inputBorder}!important;background:${C.inputBg}!important}
+  .icon-btn{background:transparent;border:1px solid transparent;color:${C.textMuted};padding:4px 6px;min-height:28px;border-radius:${C.radius.control}px;display:inline-flex;align-items:center;justify-content:center}
+  .icon-btn:hover:not(:disabled){background:${C.btnBg};color:${C.text}}
+  .icon-btn.danger:hover:not(:disabled){background:${C.dangerHoverBg};color:${C.red}}
+  .md{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:12px;align-items:start}
+  .md-list{position:sticky;top:72px;max-height:calc(100vh - 88px);overflow-y:auto}
+  .md-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:none;border-bottom:1px solid ${C.border};border-radius:0;padding:8px 12px;min-height:44px;color:${C.text};font-size:${C.fs.sm}px;font-weight:400;white-space:normal}
+  .md-row:hover{background:${C.tableHover}}
+  .md-row.sel{background:${C.selBg};box-shadow:inset 3px 0 0 ${C.selBorder}}
+  .md-back{display:none}
+  .strip{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline;font-size:${C.fs.sm}px;color:${C.textMuted};padding:8px 12px}
+  .strip b{font-family:${C.fontMono};font-variant-numeric:tabular-nums;color:${C.text};font-weight:600;font-size:${C.fs.md}px;margin-right:4px}
+  .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:12px;align-items:start;margin-bottom:12px}
+  .set-wide{display:grid;grid-template-columns:240px minmax(0,1fr);gap:12px;align-items:start}
+  .set-wide .md-list{top:72px}
+  .set-hidden{display:none!important}
+  .set-wide > div > div > .set-sec{max-width:none}
+  .addbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 12px}
+  .addbar select,.addbar input[type=date]{flex-shrink:0}
+  .addbar .addbar-main{flex:1 1 260px;min-width:200px;width:auto}
+  .lrow{display:flex;align-items:center;gap:12px;min-height:40px;padding:4px 12px;border-bottom:1px solid ${C.border};font-size:${C.fs.base}px;color:${C.text}}
+  .lrow:last-child{border-bottom:none}
+  .lrow:hover{background:${C.tableHover}}
+  .lrow .grow{flex:1;min-width:0;overflow-wrap:anywhere}
+  .lmeta{color:${C.textMuted};font-size:${C.fs.xs}px;white-space:nowrap;flex-shrink:0}
+  .lhuddle{width:140px;overflow:hidden;text-overflow:ellipsis}
+  .lowner{width:160px;overflow:hidden;text-overflow:ellipsis}
+  .ldate{width:96px;text-align:right}
+  .ldate.wide{width:156px}
+  .lact{display:flex;gap:4px;align-items:center;flex-shrink:0}
+  .lbtn{min-height:28px!important;padding:3px 10px!important;font-size:${C.fs.xs}px!important}
+  .lempty{padding:16px 12px;color:${C.textMuted};font-size:${C.fs.sm}px}
+  .chip.lchip{flex-shrink:0}
+  @media(max-width:768px){
+    .addbar > *{flex:1 1 calc(50% - 4px)}
+    .addbar .addbar-main,.addbar .btn-primary,.addbar .addbar-people{flex-basis:100%}
+    .addbar select,.addbar input[type=date]{width:auto!important}
+    .lrow{flex-wrap:wrap;gap:6px 8px;padding:8px 12px}
+    .lrow .grow{flex-basis:100%;order:-1;font-weight:500}
+    .lrow.keep-order .grow{order:0;flex-basis:calc(100% - 40px)}
+    .lhuddle,.lowner{width:auto}
+    .ldate,.ldate.wide{width:auto;text-align:left}
+    .lact{margin-left:auto}
+    .lbtn{min-height:44px!important}
+  }
+  @media(max-width:768px){
+    .md{grid-template-columns:minmax(0,1fr)}
+    .md-list{position:static;max-height:none}
+    .md.has-sel .md-list-col{display:none}
+    .md:not(.has-sel) .md-detail-col{display:none}
+    .md-back{display:inline-flex}
+    .quiet-select,.quiet-input{min-height:44px!important}
+    .icon-btn{min-height:44px!important;min-width:44px}
+    .tabs .tab{min-height:44px;flex-shrink:0}
+    .tabs{flex-wrap:nowrap;overflow-x:auto}
+    .toolbar .tabs,.panel-h .tabs{flex:1 1 100%!important}
+  }
 `;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -1113,20 +1203,20 @@ function Layout({ children, title, subtitle, action }) {
   return (
     <div style={{ marginLeft: ml, minHeight: "100vh", background: C.bg, paddingBottom: mobile ? 16 : 0, transition: "margin-left 0.2s ease" }}>
       {/* Header */}
-      <div style={{ borderBottom: `1px solid ${C.border}`, padding: mobile ? "12px 16px" : "20px 24px", background: C.surface, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, position: "sticky", top: 0, zIndex: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: mobile ? 8 : 0, minWidth: 0 }}>
+      <div className="page-header" style={{ borderBottom: `1px solid ${C.border}`, padding: mobile ? "6px 12px 6px 8px" : "0 20px", minHeight: 56, background: C.surface, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, position: "sticky", top: 0, zIndex: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
           {mobile && (
-            <button onClick={openMobileMenu}
+            <button onClick={openMobileMenu} aria-label="Open menu"
               style={{ background: "none", border: "none", color: C.text, fontSize: C.fs.title, cursor: "pointer", padding: "4px 6px", lineHeight: 1, flexShrink: 0 }}><Icon.menu /></button>
           )}
-          <div style={{ minWidth: 0 }}>
-            <h1 style={{ fontSize: C.fs.title, fontWeight: 600, color: C.text, margin: 0, overflowWrap: "anywhere", lineHeight: 1.3 }}>{title}</h1>
-            {subtitle && <div style={{ fontSize: C.fs.sm, color: C.textMuted, marginTop: 4, overflowWrap: "anywhere" }}>{subtitle}</div>}
+          <div style={{ minWidth: 0, display: "flex", flexDirection: mobile ? "column" : "row", alignItems: mobile ? "flex-start" : "baseline", gap: mobile ? 0 : 12 }}>
+            <h1 style={{ fontSize: C.fs.title, fontWeight: 600, color: C.text, margin: 0, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{title}</h1>
+            {subtitle && <div title={typeof subtitle === "string" ? subtitle : undefined} style={{ fontSize: mobile ? C.fs.xs : C.fs.sm, color: C.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, maxWidth: "100%" }}>{subtitle}</div>}
           </div>
         </div>
         {action && <div style={{ flexShrink: 0 }}>{action}</div>}
       </div>
-      <div style={{ padding: mobile ? "16px" : "24px 24px" }} className="fade-in">{children}</div>
+      <div style={{ padding: mobile ? "12px 16px 16px" : "16px 20px 20px" }} className="fade-in">{children}</div>
     </div>
   );
 }
@@ -1203,32 +1293,34 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
               <div style={{ height: "100%", width: `${pct}%`, background: C.green, borderRadius: 3, transition: "width 0.4s" }} />
             </div>
           </div>
-          <button className="btn-ghost btn-link" style={{ fontSize: C.fs.xs, whiteSpace: "nowrap" }} onClick={() => setView("settings")}>Edit Quarter →</button>
+          <button className="btn-ghost btn-link" style={{ fontSize: C.fs.xs, whiteSpace: "nowrap" }} onClick={() => setView("settings")}>Edit quarter <Icon.arrowRight /></button>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 16, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 12 }}>
         {[
           { label: "Quarterly Tasks", value: `${onTrack + done}/${total}`, sub: "on or completed", color: C.text },
           { label: "Open Issues", value: openIssues, sub: "to resolve", color: C.text },
           { label: "Pending To-Dos", value: pendingTodos, sub: "this week", color: C.text },
           { label: "Avg Meeting Rating", value: avgRating, sub: `of ${_meetings.length} meetings`, color: isNaN(parseFloat(avgRating)) ? C.text : parseFloat(avgRating) >= 8 ? C.green : parseFloat(avgRating) >= 6 ? C.amber : C.red },
         ].map(s => (
-          <div key={s.label} className="stat-card">
-            <div style={{ fontSize: C.fs.display, fontWeight: 600, color: s.color, fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
-            <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.text, marginTop: 4 }}>{s.label}</div>
-            <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{s.sub}</div>
+          <div key={s.label} className="stat-card" style={{ textAlign: "left", padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ fontSize: 28, fontWeight: 600, color: s.color, fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums", lineHeight: 1.1, minWidth: 56 }}>{s.value}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.text }}>{s.label}</div>
+              <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{s.sub}</div>
+            </div>
           </div>
         ))}
       </div>
 
-      <div className="grid2" style={{ display: "grid", gap: 20 }}>
+      <div className="dash-grid">
         <div className="card">
-          <div className="section-header">
-            <h3 style={{ fontSize: C.fs.md }}>{q} — Task Progress</h3>
-            <button className="btn-ghost btn-link" onClick={() => setView("tasks")}>View All →</button>
+          <div className="section-header" style={{ marginBottom: 12 }}>
+            <h3 style={{ fontSize: C.fs.md }}>{q} — Task progress</h3>
+            <button className="btn-ghost btn-link" onClick={() => setView("tasks")}>View all <Icon.arrowRight /></button>
           </div>
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 12 }}>
             <div className="progress-bar"><div className="progress-fill" style={{ width: `${pct}%` }} /></div>
             <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginTop: 6 }}><span className="num">{pct}%</span> on track or complete</div>
           </div>
@@ -1243,9 +1335,8 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
           {!tasks.length && <div style={{ color: C.textMuted, fontSize: C.fs.base, textAlign: "center", padding: 20 }}>No tasks yet. Add them in Quarterly Tasks.</div>}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div className="card">
-            <div className="section-header">
+            <div className="section-header" style={{ marginBottom: 12 }}>
               <h3 style={{ fontSize: C.fs.md }}>Huddles</h3>
             </div>
             {(company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }]).map((h, hIdx) => {
@@ -1280,7 +1371,7 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
                         </button>
                       )}
                       <button className={hIdx === 0 ? "btn-primary" : "btn-secondary"} style={{ padding: "6px 12px", fontSize: C.fs.xs }} onClick={() => setView("huddle:" + h.id)}>
-                        {isLive ? "Host View" : "Start →"}
+                        {isLive ? "Host View" : <>Start <Icon.arrowRight /></>}
                       </button>
                     </div>
                   </div>
@@ -1290,9 +1381,9 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
           </div>
 
           <div className="card">
-            <div className="section-header">
-              <h3 style={{ fontSize: C.fs.md }}>Recent Headlines</h3>
-              <button className="btn-ghost btn-link" onClick={() => setView("headlines")}>View All →</button>
+            <div className="section-header" style={{ marginBottom: 12 }}>
+              <h3 style={{ fontSize: C.fs.md }}>Recent headlines</h3>
+              <button className="btn-ghost btn-link" onClick={() => setView("headlines")}>View all <Icon.arrowRight /></button>
             </div>
             {(company.headlines || []).slice(-3).reverse().map(h => (
               <div key={h.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: C.fs.base }}>
@@ -1301,7 +1392,6 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
             ))}
             {!(company.headlines || []).length && <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No headlines yet.</div>}
           </div>
-        </div>
       </div>
       <MyMeasurables company={company} onSave={onSave} me={me} />
     </Layout>
@@ -1313,8 +1403,22 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
 // silently overwrite the user mid-typing. While the input is focused, prop
 // changes (Firestore listener echoes) are ignored; on blur we sync. Every
 // keystroke also writes through to Firestore so progress is durable.
-function ScorecardCell({ value, onCommit, placeholder, style }) {
+// Display-only number formatting: "130000" + "$" → "$130,000". Anything that
+// isn't a plain number is shown exactly as typed. Never used for saving.
+const fmtMeasure = (raw, unit, cell) => {
+  const str = String(raw ?? "").trim();
+  if (!/^-?\d+(\.\d+)?$/.test(str)) return raw ?? "";
+  const n = Number(str);
+  const body = Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 6 });
+  const sign = n < 0 ? "-" : "";
+  const u = String(unit || "").trim();
+  if (u === "$") return `${sign}$${body}`;
+  if (u === "%") return `${sign}${body}%`;
+  return `${sign}${body}${u && !cell ? " " + u : ""}`;
+};
+function ScorecardCell({ value, onCommit, placeholder, style, format, className }) {
   const [local, setLocal] = useState(value ?? "");
+  const [focused, setFocused] = useState(false);
   const focusedRef = useRef(false);
   useEffect(() => {
     if (!focusedRef.current) setLocal(value ?? "");
@@ -1322,12 +1426,14 @@ function ScorecardCell({ value, onCommit, placeholder, style }) {
   return (
     <input
       type="text"
-      value={local}
+      value={format && !focused ? format(local) : local}
       placeholder={placeholder}
       style={style}
-      onFocus={() => { focusedRef.current = true; }}
+      className={className}
+      onFocus={() => { focusedRef.current = true; setFocused(true); }}
       onBlur={() => {
         focusedRef.current = false;
+        setFocused(false);
         if (local !== (value ?? "")) onCommit(local);
         else setLocal(value ?? "");
       }}
@@ -1458,10 +1564,9 @@ function MyMeasurables({ company, onSave, me }) {
                     <tr key={m.id}>
                       <td style={{ padding: "8px 0", borderTop: `1px solid ${C.border}` }}>
                         <div style={{ fontSize: C.fs.base, fontWeight: 600 }}>{m.name}</div>
-                        {m.unit && <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{m.unit}</div>}
                       </td>
                       <td style={{ textAlign: "center", padding: "8px 4px", borderTop: `1px solid ${C.border}`, fontSize: C.fs.xs, color: C.textMuted, whiteSpace: "nowrap" }}>
-                        {({ gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" })[m.operator || "gte"]} <span className="num">{m.target}</span>
+                        {({ gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" })[m.operator || "gte"]} <span className="num">{fmtMeasure(m.target, m.unit)}</span>
                       </td>
                       {displayWeeks.map(wk => {
                         const val = entries[wk]?.[m.id] ?? "";
@@ -1473,7 +1578,8 @@ function MyMeasurables({ company, onSave, me }) {
                               value={val}
                               onCommit={(v) => setEntry(m.id, wk, v)}
                               placeholder="—"
-                              style={{ width: 60, textAlign: "center", padding: "4px 4px", fontSize: C.fs.sm, fontWeight: val !== "" ? 600 : 400,
+                              format={(v) => fmtMeasure(v, m.unit, true)}
+                              style={{ width: 84, textAlign: "center", padding: "4px 4px", fontSize: C.fs.sm, fontWeight: val !== "" ? 600 : 400,
                                 border: `1px solid ${isCur ? C.borderStrong : C.border}`,
                                 borderRadius: C.radius.control,
                                 background: met === true ? C.greenTint : met === false ? C.redTint1 : isCur ? C.surface2 : "transparent",
@@ -1497,10 +1603,9 @@ function MyMeasurables({ company, onSave, me }) {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
                       <div>
                         <div style={{ fontSize: C.fs.base, fontWeight: 600 }}>{m.name}</div>
-                        {m.unit && <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{m.unit}</div>}
                       </div>
                       <div style={{ fontSize: C.fs.xs, color: C.textMuted, whiteSpace: "nowrap" }}>
-                        Goal: {({ gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" })[m.operator || "gte"]} <span className="num">{m.target}</span>
+                        Goal: {({ gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" })[m.operator || "gte"]} <span className="num">{fmtMeasure(m.target, m.unit)}</span>
                       </div>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1517,6 +1622,7 @@ function MyMeasurables({ company, onSave, me }) {
                               value={val}
                               onCommit={(v) => setEntry(m.id, wk, v)}
                               placeholder="—"
+                              format={(v) => fmtMeasure(v, m.unit, true)}
                               style={{ width: 90, textAlign: "center", padding: "6px 4px", fontSize: C.fs.base, fontWeight: val !== "" ? 600 : 400,
                                 border: `1px solid ${isCur ? C.borderStrong : C.border}`,
                                 borderRadius: C.radius.control,
@@ -3347,11 +3453,11 @@ function Tasks({ company, onSave, onAdd }) {
     })()}
       action={<button className="btn-primary" onClick={() => setShowAdd(true)}><Icon.plus /> Add Task</button>}>
 
-      <div className="toolbar">
-        <div style={{ display: "flex", gap: 0, flex: 1 }}>
+      <div className="toolbar" style={{ border: `1px solid ${C.border}`, borderRadius: C.radius.card, paddingTop: 0, paddingBottom: 0 }}>
+        <div className="tabs" role="tablist" style={{ flex: 1, borderBottom: "none" }}>
         {["company", "individual"].map(t => (
-          <button key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
-            {t === "company" ? "Company Tasks" : "Individual Tasks"}
+          <button key={t} role="tab" aria-selected={tab === t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
+            {t === "company" ? "Company tasks" : "Individual tasks"}{t === "company" && <span className="cnt">{visibleTasks.length}</span>}
           </button>
         ))}
         </div>
@@ -3363,8 +3469,8 @@ function Tasks({ company, onSave, onAdd }) {
       </div>
 
       {tab === "company" && (
-        <div className="card">
-          <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+        <div className="panel">
+          <div className="strip" style={{ borderBottom: `1px solid ${C.border}` }}>
             {[["on", C.green, "On Track"], ["off", C.red, "Off Track"], ["done", C.green, "Done"], ["notdone", C.amber, "Not Done"]].map(([s, c, l]) => (
               <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: C.fs.sm, color: C.textMuted }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: c }} /><span className="num">{visibleTasks.filter(t => t.status === s).length}</span> {l}
@@ -3372,9 +3478,10 @@ function Tasks({ company, onSave, onAdd }) {
             ))}
             {huddleFilter !== "all" && <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginLeft: "auto" }}>Showing: <strong>{huddles.find(h => h.id === huddleFilter)?.name}</strong></div>}
           </div>
-          {visibleTasks.length === 0 && <div className="empty-state"><div style={{ fontSize: C.fs.base }}>{huddleFilter !== "all" ? "No tasks assigned to this huddle." : "No tasks yet. Add your first quarterly task!"}</div></div>}
-          <table className="table">
-            {visibleTasks.length > 0 && <thead><tr><th>Task</th><th>Who</th><th>Huddle</th><th>SMART</th><th>Status</th><th></th></tr></thead>}
+          {visibleTasks.length === 0 && <div className="lempty">{huddleFilter !== "all" ? "No tasks assigned to this huddle." : "No tasks yet. Add your first quarterly task!"}</div>}
+          <div className="dt-wrap">
+          <table className="dt">
+            {visibleTasks.length > 0 && <thead><tr><th>Task</th><th className="r">Target</th><th>Owner</th><th>Huddle</th><th>SMART</th><th>Status</th><th className="shrink" aria-label="Actions"></th></tr></thead>}
             <tbody>
               {visibleTasks.map(t => {
                 if (editId === t.id) {
@@ -3383,6 +3490,7 @@ function Tasks({ company, onSave, onAdd }) {
                       <td>
                         <input value={editFields.title} onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))} style={{ width: "100%", minWidth: 180 }} autoFocus />
                       </td>
+                      <td />
                       <td>
                         {activeMembers(company).length > 0 ? (
                           <select value={editFields.who} onChange={e => setEditFields(f => ({ ...f, who: e.target.value }))} style={{ width: "100%" }}>
@@ -3399,7 +3507,7 @@ function Tasks({ company, onSave, onAdd }) {
                           {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                         </select>
                       </td>
-                      <td colSpan={2}>
+                      <td colSpan={3}>
                         <div style={{ display: "flex", gap: 8 }}>
                           <button className="btn-primary" style={{ padding: "6px 12px", fontSize: C.fs.xs }} onClick={() => saveEdit(t.id)}>Save</button>
                           <button className="btn-ghost" style={{ padding: "6px 8px", fontSize: C.fs.xs }} onClick={() => setEditId(null)}>Cancel</button>
@@ -3410,16 +3518,10 @@ function Tasks({ company, onSave, onAdd }) {
                 }
                 return (
                   <tr key={t.id}>
-                    <td style={{ fontWeight: 500 }}>
-                      {t.title}
-                      {t.operator && t.target && (
-                        <span style={{ marginLeft: 8, fontSize: C.fs.xs, color: C.textMuted, fontWeight: 400 }}>
-                          {OPERATORS[t.operator]} {t.target}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ color: C.textMuted }}>{t.who || "—"}</td>
-                    <td style={{ fontSize: C.fs.xs, color: C.textMuted }}>{t.huddleId ? (huddles.find(h => h.id === t.huddleId)?.name || "—") : "—"}</td>
+                    <td style={{ fontWeight: 500, minWidth: 220 }}>{t.title}</td>
+                    <td className="r num muted" style={{ whiteSpace: "nowrap" }}>{t.operator && t.target ? <>{OPERATORS[t.operator]} {fmtMeasure(t.target)}</> : "—"}</td>
+                    <td className="muted" style={{ whiteSpace: "nowrap" }}>{t.who || "—"}</td>
+                    <td className="muted" style={{ fontSize: C.fs.sm, whiteSpace: "nowrap" }}>{t.huddleId ? (huddles.find(h => h.id === t.huddleId)?.name || "—") : "—"}</td>
                     <td>{t.smart && <span className="chip">SMART</span>}</td>
                     <td>
                       {(() => {
@@ -3434,9 +3536,9 @@ function Tasks({ company, onSave, onAdd }) {
                         const effectiveColor = colors[t.status] || colors.on;
                         return (
                           <div style={{ position: "relative", display: "inline-flex", alignItems: "center", width: 132 }}>
-                          <span aria-hidden="true" className="dot" style={{ position: "absolute", left: 12, background: effectiveColor.color, pointerEvents: "none" }} />
-                          <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
-                            style={{ width: "100%", padding: "6px 8px 6px 26px", fontSize: C.fs.sm, background: C.surface2, color: C.text, border: `1px solid ${C.border}`, borderRadius: C.radius.control, fontWeight: 500 }}>
+                          <span aria-hidden="true" className="dot" style={{ position: "absolute", left: 9, background: effectiveColor.color, pointerEvents: "none" }} />
+                          <select className="quiet-select" aria-label={`Status of ${t.title}`} value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
+                            style={{ width: "100%", paddingLeft: 24, fontWeight: 500 }}>
                             <option value="on">On Track</option>
                             <option value="off">Off Track</option>
                             <option value="done">Done</option>
@@ -3447,9 +3549,9 @@ function Tasks({ company, onSave, onAdd }) {
                       })()}
                     </td>
                     <td>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button className="btn-ghost" style={{ padding: "6px 8px", fontSize: C.fs.sm }} onClick={() => startEdit(t)}>✏</button>
-                        <button className="btn-danger" style={{ padding: "6px 8px" }} onClick={() => deleteTask(t.id)}><Icon.trash /></button>
+                      <div style={{ display: "flex", gap: 2 }}>
+                        <button className="icon-btn" title="Edit" aria-label={`Edit task: ${t.title}`} onClick={() => startEdit(t)}><Icon.edit /></button>
+                        <button className="icon-btn danger" title="Delete" aria-label={`Delete task: ${t.title}`} onClick={() => deleteTask(t.id)}><Icon.trash /></button>
                       </div>
                     </td>
                   </tr>
@@ -3457,36 +3559,33 @@ function Tasks({ company, onSave, onAdd }) {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {tab === "individual" && (
-        <div>
+        <div className="panel">
           {activeMembers(company).map(member => {
             const legacyTasks = (company.individualTasks || {})[member.id] || [];
             const assignedTasks = filtered((company.quarterlyTasks || []).filter(t => t.who === member.name));
             const allTasks = [...assignedTasks, ...legacyTasks.filter(lt => !assignedTasks.find(at => at.id === lt.id))];
             return (
-              <div key={member.id} className="card" style={{ marginBottom: 16 }}>
-                <div style={{ fontFamily: C.fontUI, fontSize: C.fs.md, fontWeight: 600, marginBottom: 12 }}>{member.name}</div>
+              <div key={member.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontFamily: C.fontUI, fontSize: C.fs.sm, fontWeight: 600, padding: "10px 12px 6px", display: "flex", gap: 8, alignItems: "baseline" }}>{member.name}<span className="num" style={{ color: C.textMuted, fontWeight: 400, fontSize: C.fs.xs }}>{allTasks.length}</span></div>
                 {allTasks.map(t => {
                   const met = meetsTarget(t);
                   const statusColor = t.status === "notdone" ? C.amber : t.status === "off" || met === false ? C.red : t.status === "done" || met === true ? C.green : C.green;
                   const statusLabel = t.status === "notdone" ? "Not Done" : t.status === "done" ? "Done" : t.status === "off" ? "Off Track" : "On Track";
                   return (
-                    <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}`, gap: 12 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: C.fs.base, fontWeight: 500 }}>{t.title}</div>
-                        {t.operator && t.target && (
-                          <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginTop: 4 }}>{OPERATORS[t.operator]} {t.target}</div>
-                        )}
-                        {t.huddleId && <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4 }}>{huddles.find(h => h.id === t.huddleId)?.name}</div>}
-                      </div>
+                    <div key={t.id} className="lrow">
+                      <span className="grow" style={{ fontWeight: 500 }}>{t.title}</span>
+                      <span className="lmeta num" style={{ minWidth: 80, textAlign: "right" }}>{t.operator && t.target ? <>{OPERATORS[t.operator]} {fmtMeasure(t.target)}</> : ""}</span>
+                      <span className="lmeta lhuddle">{t.huddleId ? huddles.find(h => h.id === t.huddleId)?.name : ""}</span>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                         {t.smart && <span className="chip">SMART</span>}
-                        <span style={{ fontSize: C.fs.xs, fontWeight: 600, color: statusColor, background: `${statusColor}20`, border: `1px solid ${statusColor}50`, borderRadius: C.radius.control, padding: "4px 8px" }}>{statusLabel}</span>
-                        <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
-                          style={{ fontSize: C.fs.xs, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.textMuted }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: C.fs.sm, minWidth: 86 }}><span className="dot" style={{ background: statusColor }} aria-hidden="true" />{statusLabel}</span>
+                        <select className="quiet-select" aria-label={`Status of ${t.title}`} value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
+                          style={{ color: C.textMuted }}>
                           <option value="on">On Track</option>
                           <option value="off">Off Track</option>
                           <option value="done">Done</option>
@@ -3495,11 +3594,11 @@ function Tasks({ company, onSave, onAdd }) {
                     </div>
                   );
                 })}
-                {!allTasks.length && <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No tasks assigned to {member.name}{huddleFilter !== "all" ? " for this huddle" : ""}.</div>}
+                {!allTasks.length && <div className="lempty" style={{ paddingTop: 4 }}>No tasks assigned to {member.name}{huddleFilter !== "all" ? " for this huddle" : ""}.</div>}
               </div>
             );
           })}
-          {!activeMembers(company).length && <div className="card"><div className="empty-state">Add staff in Cortex to assign individual tasks.</div></div>}
+          {!activeMembers(company).length && <div className="lempty">Add staff in Cortex to assign individual tasks.</div>}
         </div>
       )}
 
@@ -3573,6 +3672,24 @@ function Tasks({ company, onSave, onAdd }) {
 }
 
 // ─── SCORECARD ────────────────────────────────────────────────────────
+function QuietFmtInput({ value, onChange, unit, placeholder, ariaLabel }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <input className="quiet-input num" value={focused ? value : fmtMeasure(value, unit)} onChange={onChange} placeholder={placeholder} aria-label={ariaLabel}
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={{ width: 96, textAlign: "right" }} />
+  );
+}
+// Viewport width (resize-aware) — used only to decide how many weeks fit.
+function useViewportWidth() {
+  const [w, setW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const on = () => setW(window.innerWidth);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  return w;
+}
+
 function Scorecard({ company, onSave }) {
   // Default new measurables to the team's first/active huddle (no orphans).
   const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
@@ -3586,6 +3703,7 @@ function Scorecard({ company, onSave }) {
   const members = activeMembers(company);
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const isMobile = useMobile();
+  const viewportW = useViewportWidth();
   const [huddleFilter, setHuddleFilter] = useState("all");
   const filtered = huddleFilter === "all" ? measurables : measurables.filter(m => m.huddleId === huddleFilter);
 
@@ -3643,9 +3761,10 @@ function Scorecard({ company, onSave }) {
   // current week (rightmost). Display-only — `weeks` itself is never mutated and
   // cells stay keyed by their own week, so saving is unaffected.
   const curIdx = weeks.indexOf(wk);
+  const weekWindow = viewportW >= 1440 ? 13 : 9;
   const visibleWeeks = curIdx >= 0
-    ? weeks.slice(Math.max(0, curIdx - 8), curIdx + 1)
-    : weeks.slice(-9);
+    ? weeks.slice(Math.max(0, curIdx - (weekWindow - 1)), curIdx + 1)
+    : weeks.slice(-weekWindow);
 
   return (
     <Layout title="Scorecard" subtitle="Track your most important numbers"
@@ -3653,7 +3772,8 @@ function Scorecard({ company, onSave }) {
 
       {scorecardError && <div style={{ color: C.red, background: C.redTint1, border: `1px solid ${C.redTint3}`, borderRadius: C.radius.control, padding: "8px 12px", marginBottom: 12, fontSize: C.fs.sm }}>{scorecardError}</div>}
 
-      <div className="toolbar" style={{ justifyContent: "flex-end" }}>
+      <div className="toolbar" style={{ justifyContent: "space-between", border: `1px solid ${C.border}`, borderRadius: C.radius.card }}>
+        <span style={{ fontSize: C.fs.sm, color: C.textMuted }}><span className="num" style={{ color: C.text }}>{filtered.length}</span> measurable{filtered.length === 1 ? "" : "s"}{!isMobile && <> · last <span className="num" style={{ color: C.text }}>{visibleWeeks.length}</span> weeks</>}</span>
         <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
           style={{ fontSize: C.fs.sm }}>
           <option value="all">All Huddles</option>
@@ -3671,32 +3791,35 @@ function Scorecard({ company, onSave }) {
       ) : (
         <>
           {!isMobile && (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
-            <table className="table" style={{ minWidth: 700 }}>
+        <div className="panel" style={{ overflow: "hidden" }}>
+          <div className="dt-wrap sc-wrap">
+            <table className="dt sc-table">
               <thead>
                 <tr>
-                  <th>Measurable</th>
+                  <th className="sc-name">Measurable</th>
                   <th>Responsible</th>
-                  <th style={{ textAlign: "right" }}>Target</th>
-                  {visibleWeeks.map(w => <th key={w} className="num" style={{ textAlign: "right", paddingRight: 16, background: w === wk ? C.selBg : undefined, boxShadow: w === wk ? `inset 2px 0 0 ${C.selBorder}` : undefined, color: w === wk ? C.link : undefined }}>{w.split("-W")[1] ? `W${w.split("-W")[1]}` : w}</th>)}
+                  <th className="r">Goal</th>
+                  {visibleWeeks.map(w => <th key={w} className="num r" style={{ paddingRight: 12, background: w === wk ? C.selBg : undefined, boxShadow: w === wk ? `inset 2px 0 0 ${C.selBorder}` : undefined, color: w === wk ? C.link : undefined }}>{w.split("-W")[1] ? `W${w.split("-W")[1]}` : w}</th>)}
                   <th>Huddle</th>
+                  <th className="r">Qtr goal</th>
+                  <th>Calc</th>
+                  <th className="shrink" aria-label="Actions"></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(m => (
                   <tr key={m.id}>
-                    <td style={{ fontWeight: 600 }}><div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}><button className="btn-secondary" style={{ padding: "4px 8px", fontSize: C.fs.xs }} onClick={() => editMeasurable(m)}>Edit</button><span>{m.name}{m.unit && <span style={{ color: C.textMuted, fontSize: C.fs.xs, marginLeft: 4 }}>({m.unit})</span>}</span></div></td>
+                    <td className="sc-name" title={m.name}><span style={{ fontWeight: 600, display: "block", whiteSpace: (m.name || "").length > 40 ? "normal" : "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</span></td>
                     <td>
-                      <select value={m.owner || ""} onChange={e => {
+                      <select className="quiet-select" aria-label={`Responsible for ${m.name}`} value={m.owner || ""} onChange={e => {
                         writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, owner: e.target.value } : x));
-                      }} style={{ width: 130, padding: "4px 8px", fontSize: C.fs.xs }}>
+                      }}>
                         <option value="">Unassigned</option>
                         {members.map(mem => <option key={mem.id} value={mem.name}>{mem.name}</option>)}
                       </select>
                     </td>
-                    <td style={{ color: C.textMuted, whiteSpace: "nowrap", textAlign: "right" }}>
-                      {m.operator && m.operator !== "gte" ? {gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="}[m.operator] : "≥"} <span className="num">{m.target}</span>{m.unit ? ` ${m.unit}` : ""}
+                    <td className="r num muted" style={{ whiteSpace: "nowrap" }}>
+                      {m.operator && m.operator !== "gte" ? {gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="}[m.operator] : "≥"} {fmtMeasure(m.target, m.unit)}
                     </td>
                     {visibleWeeks.map(w => {
                       const val = entries[w]?.[m.id] ?? "";
@@ -3715,37 +3838,43 @@ function Scorecard({ company, onSave }) {
                     };
                     const onTarget = checkTarget(val, m);
                       return (
-                        <td key={w} style={{ textAlign: "right", background: isCurrentWeek ? C.selBg : "transparent", boxShadow: isCurrentWeek ? `inset 2px 0 0 ${C.selBorder}` : undefined }}>
+                        <td key={w} className="sc-cell" style={{ background: isCurrentWeek ? C.selBg : "transparent", boxShadow: isCurrentWeek ? `inset 2px 0 0 ${C.selBorder}` : undefined }}>
                           <ScorecardCell
                             value={val}
                             onCommit={(v) => setEntry(m.id, v, w)}
                             placeholder="—"
-                            style={{ width: 70, textAlign: "right", padding: "6px 8px", fontSize: C.fs.sm, fontWeight: val ? 600 : 400,
-                              border: `1px solid ${isCurrentWeek ? C.borderStrong : C.border}`,
-                              borderRadius: C.radius.control, background: onTarget === true ? C.greenTint : onTarget === false ? C.redTint1 : C.surface2,
-                              color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.text) : C.textDim,
-                              fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
+                            format={(v) => fmtMeasure(v, m.unit, true)}
+                            className="sc-input"
+                            style={{ fontWeight: val ? 600 : 400,
+                              background: onTarget === true ? C.greenTint : onTarget === false ? C.redTint1 : "transparent",
+                              color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.text) : C.textDim }}
                           />
                         </td>
                       );
                     })}
                     <td>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <select value={m.rollup || "sum"} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, rollup: e.target.value } : x))}
-                          style={{ fontSize: C.fs.xs, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.textMuted, maxWidth: 110 }}>
-                          <option value="sum">Sum</option>
-                          <option value="avg">Average</option>
-                          <option value="latest">Latest</option>
-                        </select>
-                        <input value={m.quarterlyGoal || ""} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, quarterlyGoal: e.target.value } : x))}
-                          placeholder="Qtr goal"
-                          style={{ fontSize: C.fs.xs, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.textMuted, width: 80 }} />
-                        <select value={m.huddleId || ""} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, huddleId: e.target.value } : x))}
-                          style={{ fontSize: C.fs.xs, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.textMuted, maxWidth: 130 }}>
-                          <option value="">No Huddle</option>
-                          {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-                        </select>
-                        <button className="btn-danger" style={{ padding: "6px 8px" }} onClick={() => deleteMeasurable(m.id)}><Icon.trash /></button>
+                      <select className="quiet-select" aria-label={`Huddle for ${m.name}`} value={m.huddleId || ""} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, huddleId: e.target.value } : x))}
+                        style={{ color: C.textMuted, maxWidth: 170 }}>
+                        <option value="">No Huddle</option>
+                        {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                      </select>
+                    </td>
+                    <td className="r">
+                      <QuietFmtInput value={m.quarterlyGoal || ""} unit={m.unit} placeholder="—" ariaLabel={`Quarterly goal for ${m.name}`}
+                        onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, quarterlyGoal: e.target.value } : x))} />
+                    </td>
+                    <td>
+                      <select className="quiet-select" aria-label={`Calculation for ${m.name}`} value={m.rollup || "sum"} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, rollup: e.target.value } : x))}
+                        style={{ color: C.textMuted }}>
+                        <option value="sum">Sum</option>
+                        <option value="avg">Average</option>
+                        <option value="latest">Latest</option>
+                      </select>
+                    </td>
+                    <td className="shrink">
+                      <div style={{ display: "flex", gap: 2 }}>
+                        <button className="icon-btn" title="Edit" aria-label={`Edit ${m.name}`} onClick={() => editMeasurable(m)}><Icon.edit /></button>
+                        <button className="icon-btn danger" title="Delete" aria-label={`Delete ${m.name}`} onClick={() => deleteMeasurable(m.id)}><Icon.trash /></button>
                       </div>
                     </td>
                   </tr>
@@ -3914,72 +4043,60 @@ function Headlines({ company, onSave, onAdd }) {
   const reviewed = applyHuddleFilter(headlines.filter(h => h.reviewed));
   console.debug("[VAST/headlines] Panel filter", { total: headlines.length, active: active.length, reviewed: reviewed.length, allFlags: headlines.map(h => ({ id: h.id, text: h.text, reviewed: !!h.reviewed, huddleId: h.huddleId })) });
 
+  const huddleNameOf = (id) => huddles.find(x => x.id === id)?.name || "";
   const HeadlineRow = ({ h, isReviewed }) => (
-    <div key={h.id} style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "flex-start", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}`, gap: 8, opacity: isReviewed ? 0.6 : 1 }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ marginBottom: 4 }}>
-          <span className="chip" style={{ marginRight: 8, fontSize: C.fs.xs, background: C.surface3, borderColor: C.border, color: C.textMuted }}>{h.type}</span>
-          {h.huddleId && <span className="chip" style={{ marginRight: 8, fontSize: C.fs.xs }}>{huddles.find(x => x.id === h.huddleId)?.name || ""}</span>}
-          {isReviewed && <span className="tag-done">Reviewed</span>}
-        </div>
-        <span style={{ fontSize: C.fs.base, textDecoration: isReviewed ? "line-through" : "none" }}>{h.text}</span>
-        <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4 }}><span className="num">{dateStr(new Date(h.date))}</span>{isReviewed && h.reviewedAt ? ` · Reviewed ${dateStr(new Date(h.reviewedAt))}` : ""}</div>
-      </div>
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+    <div className="lrow" style={{ opacity: isReviewed ? 0.75 : 1 }}>
+      <span className="chip lchip" style={{ minWidth: 80, justifyContent: "center" }}>{h.type}</span>
+      <span className="lmeta lhuddle" title={huddleNameOf(h.huddleId)}>{huddleNameOf(h.huddleId) || "—"}</span>
+      <span className="grow" style={{ textDecoration: isReviewed ? "line-through" : "none" }}>{h.text}</span>
+      {isReviewed && <span className="lmeta">{h.reviewedAt ? <>Reviewed <span className="num">{dateStr(new Date(h.reviewedAt))}</span></> : "Reviewed"}</span>}
+      <span className="lmeta num ldate">{dateStr(new Date(h.date))}</span>
+      <span className="lact">
         {!isReviewed && (
-          <button className="btn-ghost" style={{ fontSize: C.fs.xs, color: C.green, border: `1px solid ${C.greenBorder}`, padding: "4px 8px", borderRadius: C.radius.control }} onClick={() => markReviewed(h.id)}>✓ Reviewed</button>
+          <button className="btn-secondary lbtn" onClick={() => markReviewed(h.id)}><Icon.check /> Reviewed</button>
         )}
         {isReviewed && (
-          <button className="btn-ghost" style={{ fontSize: C.fs.xs, padding: "4px 8px", borderRadius: C.radius.control }} onClick={() => unmarkReviewed(h.id)}>Reopen</button>
+          <button className="btn-secondary lbtn" onClick={() => unmarkReviewed(h.id)}>Reopen</button>
         )}
-        <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(h.id)}><Icon.trash /></button>
-      </div>
+        <button className="icon-btn danger" title="Delete" aria-label={`Delete headline: ${h.text}`} onClick={() => del(h.id)}><Icon.trash /></button>
+      </span>
     </div>
   );
 
   return (
     <Layout title="Headlines" subtitle="Customer & Employee news from the week">
-      <div style={{ maxWidth: 700 }}>
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Add Headline</h3>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} style={{ width: isMobile ? "calc(50% - 5px)" : 140 }}>
-              <option>Customer</option><option>Employee</option>
-            </select>
-            <select value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ width: isMobile ? "calc(50% - 5px)" : 150 }}>
-              <option value="">No Huddle</option>
-              {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-            </select>
-            <input placeholder="What happened this week?" value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: isMobile ? "1 1 100%" : 1 }} />
-            <button className="btn-primary" style={{ padding: "8px 20px", width: isMobile ? "100%" : undefined }} onClick={add}>Add</button>
-          </div>
-        </div>
-
-        <div className="toolbar" style={{ justifyContent: "space-between" }}>
-          <span style={{ fontSize: C.fs.base, color: C.textMuted }}>{active.length} active · {reviewed.length} reviewed</span>
-          <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
-            style={{ fontSize: C.fs.sm }}>
-            <option value="all">All Huddles</option>
+      <div>
+        <div className="panel addbar" style={{ marginBottom: 12 }}>
+          <select aria-label="Headline type" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} style={{ width: 130 }}>
+            <option>Customer</option><option>Employee</option>
+          </select>
+          <select aria-label="Huddle" value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ width: 170 }}>
+            <option value="">No Huddle</option>
             {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
           </select>
+          <input className="addbar-main" aria-label="New headline" placeholder="Add a headline — what happened this week?" value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} />
+          <button className="btn-primary" onClick={add}><Icon.plus /> Add</button>
         </div>
 
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: C.fs.md, marginBottom: 12 }}>Active ({active.length})</h3>
-          {active.length === 0 && <div style={{ fontSize: C.fs.sm, color: C.textMuted, padding: "8px 0" }}>No active headlines. All caught up!</div>}
-          {[...active].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={false} />)}
-        </div>
-
-        {reviewed.length > 0 && (
-          <div className="card">
-            <button className="btn-ghost" style={{ width: "100%", textAlign: "left", padding: "4px 0", marginBottom: showReviewed ? 12 : 0 }}
-              onClick={() => setShowReviewed(s => !s)}>
-              <span style={{ fontSize: C.fs.md, fontWeight: 600 }}>Reviewed ({reviewed.length})</span>
-              <span style={{ marginLeft: 8, color: C.textMuted }}>{showReviewed ? "▲ Hide" : "▼ Show"}</span>
-            </button>
-            {showReviewed && [...reviewed].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={true} />)}
+        <div className="panel">
+          <div className="panel-h" style={{ paddingTop: 0, paddingBottom: 0 }}>
+            <div className="tabs" role="tablist" style={{ borderBottom: "none" }}>
+              <button role="tab" aria-selected={!showReviewed} className={`tab ${!showReviewed ? "active" : ""}`} onClick={() => setShowReviewed(false)}>Active<span className="cnt">{active.length}</span></button>
+              <button role="tab" aria-selected={showReviewed} className={`tab ${showReviewed ? "active" : ""}`} onClick={() => setShowReviewed(true)}>Reviewed<span className="cnt">{reviewed.length}</span></button>
+            </div>
+            <select aria-label="Filter by huddle" value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
+              style={{ fontSize: C.fs.sm, width: "auto", minWidth: 160 }}>
+              <option value="all">All Huddles</option>
+              {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
           </div>
-        )}
+          {!showReviewed && (active.length === 0
+            ? <div className="lempty">No active headlines. All caught up!</div>
+            : [...active].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={false} />))}
+          {showReviewed && (reviewed.length === 0
+            ? <div className="lempty">No reviewed headlines yet.</div>
+            : [...reviewed].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={true} />))}
+        </div>
       </div>
     </Layout>
   );
@@ -4045,59 +4162,48 @@ function Issues({ company, onSave, onAdd }) {
   console.debug("[VAST/issues] Issues panel filter", { total: issues.length, open: allOpen.length, resolved: allResolved.length, allStatuses: issues.map(i => ({ id: i.id, title: i.title, status: i.status, huddleId: i.huddleId })) });
   const open = (huddleFilter === "all" ? allOpen : allOpen.filter(i => i.huddleId === huddleFilter)).sort((a, b) => a.priority - b.priority);
   const resolved = huddleFilter === "all" ? allResolved : allResolved.filter(i => i.huddleId === huddleFilter);
+  const [issueTab, setIssueTab] = useState("open");
+  const huddleNameOf = (id) => huddles.find(x => x.id === id)?.name || "";
 
   return (
     <Layout title="Issues" subtitle="Identify, Discuss & Solve"
       action={<button className="btn-primary" onClick={() => setShowAdd(true)}><Icon.plus /> Add Issue</button>}>
 
-      <div style={{ maxWidth: 700 }}>
+      <div>
         {issueError && <div style={{ color: C.red, background: C.redTint1, border: `1px solid ${C.redTint3}`, borderRadius: C.radius.control, padding: "8px 12px", marginBottom: 12, fontSize: C.fs.sm }}>{issueError}</div>}
-        <div className="toolbar" style={{ justifyContent: "flex-end" }}>
-          <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
-            style={{ fontSize: C.fs.sm }}>
-            <option value="all">All Huddles</option>
-            {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-          </select>
+        <div className="panel">
+          <div className="panel-h" style={{ paddingTop: 0, paddingBottom: 0 }}>
+            <div className="tabs" role="tablist" style={{ borderBottom: "none" }}>
+              <button role="tab" aria-selected={issueTab === "open"} className={`tab ${issueTab === "open" ? "active" : ""}`} onClick={() => setIssueTab("open")}>Open<span className="cnt">{open.length}</span></button>
+              <button role="tab" aria-selected={issueTab === "resolved"} className={`tab ${issueTab === "resolved" ? "active" : ""}`} onClick={() => setIssueTab("resolved")}>Resolved<span className="cnt">{resolved.length}</span></button>
+            </div>
+            <select aria-label="Filter by huddle" value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
+              style={{ fontSize: C.fs.sm, width: "auto", minWidth: 160 }}>
+              <option value="all">All Huddles</option>
+              {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
+          </div>
+          {issueTab === "open" && (open.length === 0 ? <div className="lempty">No open issues.</div> : open.map(iss => (
+            <div key={iss.id} className="lrow">
+              <span className="chip lchip" title={`Priority ${iss.priority}`} style={{ fontWeight: 600, color: iss.priority == 1 ? C.text : C.textMuted, minWidth: 36, justifyContent: "center" }}>P{iss.priority}</span>
+              <span className="lmeta lhuddle" title={huddleNameOf(iss.huddleId)}>{huddleNameOf(iss.huddleId) || "—"}</span>
+              <span className="grow"><span style={{ fontWeight: 600 }}>{iss.title}</span>{iss.notes && <span style={{ color: C.textMuted, fontSize: C.fs.sm }}> — {iss.notes}</span>}</span>
+              <span className="lmeta num ldate">{dateStr(new Date(iss.createdAt))}</span>
+              <span className="lact">
+                <button className="btn-secondary lbtn" onClick={() => resolve(iss.id)} disabled={savingId === iss.id}>{savingId === iss.id ? "Saving…" : <><Icon.check /> Resolve</>}</button>
+                <button className="icon-btn danger" title="Delete" aria-label={`Delete issue: ${iss.title}`} onClick={() => del(iss.id)} disabled={savingId === iss.id}><Icon.trash /></button>
+              </span>
+            </div>
+          )))}
+          {issueTab === "resolved" && (resolved.length === 0 ? <div className="lempty">No resolved issues yet.</div> : [...resolved].reverse().map(iss => (
+            <div key={iss.id} className="lrow" style={{ opacity: 0.75 }}>
+              <span className="chip lchip" style={{ minWidth: 36, justifyContent: "center" }}>P{iss.priority}</span>
+              <span className="lmeta lhuddle" title={huddleNameOf(iss.huddleId)}>{huddleNameOf(iss.huddleId) || "—"}</span>
+              <span className="grow" style={{ textDecoration: "line-through", color: C.textMuted }}>{iss.title}</span>
+              <span className="lmeta num ldate">{iss.createdAt ? dateStr(new Date(iss.createdAt)) : "—"}</span>
+            </div>
+          )))}
         </div>
-        {open.length === 0 && <div className="card" style={{ marginBottom: 16 }}><div className="empty-state"><div style={{ fontSize: C.fs.base }}>No open issues. </div></div></div>}
-
-        {open.length > 0 && (
-          <div className="card" style={{ marginBottom: 20 }}>
-            <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Open Issues ({open.length})</h3>
-            {open.map(iss => (
-              <div key={iss.id} style={{ padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "flex-start", justifyContent: "space-between", gap: isMobile ? 8 : 0 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: C.fs.xs, fontWeight: 600, color: iss.priority == 1 ? C.text : C.textMuted, background: C.surface3, border: `1px solid ${C.border}`, padding: "4px 8px", borderRadius: C.radius.control }}>
-                        PRIORITY {iss.priority}
-                      </span>
-                      {iss.huddleId && <span className="chip" style={{ fontSize: C.fs.xs }}>{huddles.find(x => x.id === iss.huddleId)?.name || ""}</span>}
-                      <span style={{ fontSize: C.fs.base, fontWeight: 600 }}>{iss.title}</span>
-                    </div>
-                    {iss.notes && <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>{iss.notes}</div>}
-                    <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4 }}><span className="num">{dateStr(new Date(iss.createdAt))}</span></div>
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    <button className="btn-ghost" style={{ fontSize: C.fs.xs, color: C.green, borderColor: C.greenBorder }} onClick={() => resolve(iss.id)} disabled={savingId === iss.id}>{savingId === iss.id ? "Saving…" : "✓ Resolve"}</button>
-                    <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(iss.id)} disabled={savingId === iss.id}><Icon.trash /></button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {resolved.length > 0 && (
-          <div className="card">
-            <h3 style={{ fontSize: C.fs.md, marginBottom: 12, color: C.textMuted }}>Resolved ({resolved.length})</h3>
-            {resolved.slice(-5).reverse().map(iss => (
-              <div key={iss.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}`, opacity: 0.6 }}>
-                <span style={{ fontSize: C.fs.sm, textDecoration: "line-through", color: C.textMuted }}>{iss.title}</span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {showAdd && (
@@ -4175,6 +4281,7 @@ function Todos({ company, onSave, onAdd }) {
   const allDone = todos.filter(t => t.done);
   const pending = huddleFilter === "all" ? allPending : allPending.filter(t => t.huddleId === huddleFilter);
   const done = huddleFilter === "all" ? allDone : allDone.filter(t => t.huddleId === huddleFilter);
+  const [todoTab, setTodoTab] = useState("open");
 
   const TodoRow = ({ t }) => {
     const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
@@ -4183,7 +4290,7 @@ function Todos({ company, onSave, onAdd }) {
 
     if (isEditing) {
       return (
-        <div style={{ padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ padding: "12px", borderBottom: `1px solid ${C.border}`, background: C.selBg }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
             <input
               value={editFields.title}
@@ -4218,7 +4325,7 @@ function Todos({ company, onSave, onAdd }) {
                       background: sel ? C.selBg : C.surface2,
                       color: sel ? C.text : C.textMuted,
                       border: `1px solid ${sel ? C.selBorder : C.border}` }}>
-                    {sel ? "✓ " : ""}{m.name}
+                    {sel && <Icon.check />}{m.name}
                   </button>
                 );
               })}
@@ -4227,7 +4334,7 @@ function Todos({ company, onSave, onAdd }) {
                 const allSel = allNames.every(n => (editFields.assignees || []).includes(n));
                 setEditFields(f => ({ ...f, assignees: allSel ? [] : allNames }));
               }} style={{ padding: "4px 12px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI, background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
-                {activeMembers(company).every(m => (editFields.assignees || []).includes(m.name)) ? "✓ Everyone" : "Everyone"}
+                {activeMembers(company).every(m => (editFields.assignees || []).includes(m.name)) && <Icon.check />}Everyone
               </button>
             </div>
           )}
@@ -4240,49 +4347,42 @@ function Todos({ company, onSave, onAdd }) {
     }
 
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-        <div className={`checkbox ${t.done ? "checked" : ""}`} onClick={() => toggle(t.id)}>{t.done && <Icon.check />}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: C.fs.base, fontWeight: 500 }}>{t.title}</div>
-          <div style={{ fontSize: C.fs.xs, color: isOverdue ? C.red : C.textMuted, marginTop: 4 }}>
-            {getAssignees(t).length > 0 && <span>{getAssignees(t).join(", ")}</span>}
-            {getAssignees(t).length > 0 && (t.dueDate || huddleName) && <span> · </span>}
-            {t.dueDate && <span style={{ fontWeight: isOverdue ? 600 : 400 }}>{isOverdue ? "Overdue — " : "Due "}<span className="num">{dateStr(new Date(t.dueDate))}</span></span>}
-            {huddleName && <span style={{ color: C.textDim }}> · {huddleName}</span>}
-          </div>
-        </div>
-        <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim, fontSize: C.fs.xs }} onClick={() => startEdit(t)}>✏</button>
-        <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(t.id)}><Icon.trash /></button>
+      <div className="lrow keep-order">
+        <div className={`checkbox ${t.done ? "checked" : ""}`} role="checkbox" aria-checked={!!t.done} aria-label={`Mark done: ${t.title}`} onClick={() => toggle(t.id)}>{t.done && <Icon.check />}</div>
+        <span className="grow" style={{ fontWeight: 500 }}>{t.title}</span>
+        <span className="lmeta lowner" title={getAssignees(t).join(", ")}>{getAssignees(t).join(", ") || "—"}</span>
+        <span className="lmeta num ldate wide" style={{ color: isOverdue ? C.red : undefined, fontWeight: isOverdue ? 600 : 400 }}>{t.dueDate ? <>{isOverdue ? "Overdue " : ""}{dateStr(new Date(t.dueDate))}</> : "—"}</span>
+        <span className="lmeta lhuddle" title={huddleName || ""}>{huddleName || "—"}</span>
+        <span className="lact">
+          <button className="icon-btn" title="Edit" aria-label={`Edit to-do: ${t.title}`} onClick={() => startEdit(t)}><Icon.edit /></button>
+          <button className="icon-btn danger" title="Delete" aria-label={`Delete to-do: ${t.title}`} onClick={() => del(t.id)}><Icon.trash /></button>
+        </span>
       </div>
     );
   };
 
   return (
     <Layout title="To-Dos" subtitle="Weekly action items">
-      <div style={{ maxWidth: 700 }}>
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Add To-Do</h3>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: activeMembers(company).length ? 8 : 0 }}>
-            <input placeholder="What needs to happen?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: isMobile ? "1 1 100%" : 2, minWidth: isMobile ? 0 : 200 }} />
-            <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} style={{ flex: isMobile ? "1 1 calc(50% - 5px)" : 1, minWidth: isMobile ? 0 : 130 }} />
-            <select value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ flex: isMobile ? "1 1 calc(50% - 5px)" : 1, minWidth: isMobile ? 0 : 140 }}>
-              <option value="">No Huddle</option>
-              {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-            </select>
-            <button className="btn-primary" style={{ padding: "8px 20px", width: isMobile ? "100%" : undefined }} onClick={add}>Add</button>
-          </div>
+      <div>
+        <div className="panel addbar" style={{ marginBottom: 12 }}>
+          <input className="addbar-main" aria-label="New to-do" placeholder="Add a to-do — what needs to happen?" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} />
+          <input type="date" aria-label="Due date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} style={{ width: 150 }} />
+          <select aria-label="Huddle" value={form.huddleId || ""} onChange={e => setForm(f => ({ ...f, huddleId: e.target.value }))} style={{ width: 170 }}>
+            <option value="">No Huddle</option>
+            {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
           {activeMembers(company).length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-              <span style={{ fontSize: C.fs.xs, color: C.textMuted, marginRight: 4 }}>Assign to:</span>
+            <div className="addbar-people" style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: C.fs.xs, color: C.textMuted }}>Assign to:</span>
               {activeMembers(company).map(m => {
                 const sel = (form.assignees || []).includes(m.name);
                 return (
                   <button key={m.id} onClick={() => setForm(f => ({ ...f, assignees: sel ? f.assignees.filter(a => a !== m.name) : [...(f.assignees||[]), m.name] }))}
-                    style={{ padding: "4px 12px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI, transition: "all 0.15s",
+                    style={{ padding: "4px 10px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI, transition: "all 0.15s",
                       background: sel ? C.selBg : C.surface2,
                       color: sel ? C.text : C.textMuted,
                       border: `1px solid ${sel ? C.selBorder : C.border}` }}>
-                    {sel ? "✓ " : ""}{m.name}
+                    {sel && <Icon.check />}{m.name}
                   </button>
                 );
               })}
@@ -4290,39 +4390,41 @@ function Todos({ company, onSave, onAdd }) {
                 const allNames = activeMembers(company).map(m => m.name);
                 const allSel = allNames.every(n => (form.assignees||[]).includes(n));
                 setForm(f => ({ ...f, assignees: allSel ? [] : allNames }));
-              }} style={{ padding: "4px 12px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI, background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
-                {activeMembers(company).every(m => (form.assignees||[]).includes(m.name)) ? "✓ Everyone" : "Everyone"}
+              }} style={{ padding: "4px 10px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI, background: C.surface2, color: C.textMuted, border: `1px solid ${C.border}` }}>
+                {activeMembers(company).every(m => (form.assignees||[]).includes(m.name)) && <Icon.check />}Everyone
               </button>
             </div>
           )}
+          <button className="btn-primary" onClick={add}><Icon.plus /> Add</button>
         </div>
 
-        <div className="toolbar" style={{ justifyContent: "flex-end" }}>
-          <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
-            style={{ fontSize: C.fs.sm }}>
-            <option value="all">All Huddles</option>
-            {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-          </select>
-        </div>
-
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: C.fs.md, marginBottom: 12 }}>Pending ({pending.length})</h3>
-          {pending.length === 0 && <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No pending to-dos{huddleFilter !== "all" ? " for this huddle" : ""}.</div>}
-          {pending.map(t => <TodoRow key={t.id} t={t} />)}
-        </div>
-
-        {done.length > 0 && (
-          <div className="card">
-            <h3 style={{ fontSize: C.fs.md, marginBottom: 12, color: C.textMuted }}>Completed ({done.length})</h3>
-            {done.slice(-8).reverse().map(t => (
-              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${C.border}`, opacity: 0.6 }}>
-                <div className="checkbox checked"><Icon.check /></div>
-                <div style={{ flex: 1, textDecoration: "line-through", fontSize: C.fs.base, color: C.textMuted }}>{t.title}</div>
-                <button className="btn-ghost" style={{ padding: "4px 8px", color: C.textDim }} onClick={() => del(t.id)}><Icon.trash /></button>
-              </div>
-            ))}
+        <div className="panel">
+          <div className="panel-h" style={{ paddingTop: 0, paddingBottom: 0 }}>
+            <div className="tabs" role="tablist" style={{ borderBottom: "none" }}>
+              <button role="tab" aria-selected={todoTab === "open"} className={`tab ${todoTab === "open" ? "active" : ""}`} onClick={() => setTodoTab("open")}>Open<span className="cnt">{pending.length}</span></button>
+              <button role="tab" aria-selected={todoTab === "done"} className={`tab ${todoTab === "done" ? "active" : ""}`} onClick={() => setTodoTab("done")}>Done<span className="cnt">{done.length}</span></button>
+            </div>
+            <select aria-label="Filter by huddle" value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
+              style={{ fontSize: C.fs.sm, width: "auto", minWidth: 160 }}>
+              <option value="all">All Huddles</option>
+              {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
           </div>
-        )}
+          {todoTab === "open" && (pending.length === 0
+            ? <div className="lempty">No open to-dos{huddleFilter !== "all" ? " for this huddle" : ""}.</div>
+            : pending.map(t => <TodoRow key={t.id} t={t} />))}
+          {todoTab === "done" && (done.length === 0 ? <div className="lempty">No completed to-dos yet.</div> : [...done].reverse().map(t => (
+            <div key={t.id} className="lrow keep-order" style={{ opacity: 0.75 }}>
+              <div className="checkbox checked" aria-label="Done"><Icon.check /></div>
+              <span className="grow" style={{ textDecoration: "line-through", color: C.textMuted }}>{t.title}</span>
+              <span className="lmeta lowner">{getAssignees(t).join(", ") || "—"}</span>
+              <span className="lmeta lhuddle">{huddles.find(h => h.id === t.huddleId)?.name || "—"}</span>
+              <span className="lact">
+                <button className="icon-btn danger" title="Delete" aria-label={`Delete to-do: ${t.title}`} onClick={() => del(t.id)}><Icon.trash /></button>
+              </span>
+            </div>
+          )))}
+        </div>
       </div>
     </Layout>
   );
@@ -4557,8 +4659,10 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
 
 // ─── MEETING HISTORY ──────────────────────────────────────────────────
 function MeetingHistory({ company }) {
-  const allMeetings = [...(company.meetings || [])].reverse();
-  const [expanded, setExpanded] = React.useState(null);
+  // Newest first (by meeting date) so the most recent meeting is selected by default.
+  const allMeetings = [...(company.meetings || [])].reverse().sort((a, b) => new Date(b.date) - new Date(a.date));
+  const [selectedId, setSelectedId] = React.useState(null);
+  const [mobileDetail, setMobileDetail] = React.useState(false);
   const [copied, setCopied] = React.useState(null);
   const [huddleFilter, setHuddleFilter] = React.useState("all");
   const huddles = company.huddles || [];
@@ -4585,86 +4689,151 @@ function MeetingHistory({ company }) {
     window.location.href = `mailto:${emails}?subject=${subject}&body=${body}`;
   };
 
+  const selected = meetings.find(m => m.id === selectedId) || meetings[0] || null;
+  const rated = meetings.filter(m => Number(m.rating) > 0);
+  const timed = meetings.filter(m => Number(m.totalMinutes) > 0);
+  const avgRating = rated.length ? (rated.reduce((a, m) => a + Number(m.rating), 0) / rated.length).toFixed(1) : null;
+  const avgMinutes = timed.length ? Math.round(timed.reduce((a, m) => a + Number(m.totalMinutes), 0) / timed.length) : null;
+  const ratingColor = (r) => r >= 8 ? C.green : r >= 6 ? C.amber : C.red;
+  const huddleLabelOf = (m) => m.huddleName || (huddles.find(h => h.id === m.huddleId)?.name) || "Huddle";
+  const countFor = (id) => allMeetings.filter(m => m.huddleId === id).length;
+
   return (
     <Layout title="Meeting History" subtitle={`${meetings.length} meeting${meetings.length !== 1 ? "s" : ""} on record`}>
-      <div style={{ maxWidth: 700 }}>
-        {/* Huddle filter */}
-        {huddles.length > 1 && (
-          <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-            <button onClick={() => setHuddleFilter("all")}
-              style={{ padding: "6px 12px", borderRadius: C.radius.control, border: `1px solid ${huddleFilter === "all" ? C.selBorder : C.border}`, background: huddleFilter === "all" ? C.selBg : C.surface2, color: huddleFilter === "all" ? C.text : C.textMuted, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer" }}>
-              All Huddles
-            </button>
-            {huddles.map(h => (
-              <button key={h.id} onClick={() => setHuddleFilter(h.id)}
-                style={{ padding: "6px 12px", borderRadius: C.radius.control, border: `1px solid ${huddleFilter === h.id ? C.selBorder : C.border}`, background: huddleFilter === h.id ? C.selBg : C.surface2, color: huddleFilter === h.id ? C.text : C.textMuted, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer" }}>
-                {h.name}
-              </button>
-            ))}
+      <div>
+        <div className="panel" style={{ marginBottom: 12 }}>
+          <div className="strip">
+            <span><b>{meetings.length}</b>meeting{meetings.length !== 1 ? "s" : ""} on record</span>
+            <span><b>{avgRating ?? "—"}</b>average rating</span>
+            <span><b>{avgMinutes ?? "—"}</b>min average length</span>
           </div>
-        )}
+          {huddles.length > 1 && (
+            <div className="tabs" style={{ padding: "0 12px", borderTop: `1px solid ${C.border}`, borderBottom: "none" }} role="tablist">
+              <button role="tab" aria-selected={huddleFilter === "all"} className={`tab ${huddleFilter === "all" ? "active" : ""}`} onClick={() => setHuddleFilter("all")}>All huddles<span className="cnt">{allMeetings.length}</span></button>
+              {huddles.map(h => (
+                <button key={h.id} role="tab" aria-selected={huddleFilter === h.id} className={`tab ${huddleFilter === h.id ? "active" : ""}`} onClick={() => setHuddleFilter(h.id)}>{h.name}<span className="cnt">{countFor(h.id)}</span></button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {meetings.length === 0 ? (
-          <div className="card"><div className="empty-state"><div>No meetings yet{huddleFilter !== "all" ? " for this huddle" : ""}. Run your first Weekly Huddle to see history here.</div></div></div>
+          <div className="panel"><div className="panel-b" style={{ color: C.textMuted, fontSize: C.fs.sm }}>No meetings yet{huddleFilter !== "all" ? " for this huddle" : ""}. Run your first Weekly Huddle to see history here.</div></div>
         ) : (
-          meetings.map(m => {
-            const isOpen = expanded === m.id;
-            const huddleLabel = m.huddleName || (huddles.find(h => h.id === m.huddleId)?.name) || null;
-            return (
-              <div key={m.id} className="card" style={{ marginBottom: 16 }}>
-                {/* Header row */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
-                  onClick={() => setExpanded(isOpen ? null : m.id)}>
-                  <div>
-                    <div className="num" style={{ fontSize: C.fs.md, fontWeight: 600 }}>{dateStr(new Date(m.date))}</div>
-                    <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginTop: 4 }}>
-                      {huddleLabel && <span style={{ marginRight: 8 }}>{huddleLabel}</span>}
-                      ~<span className="num">{m.totalMinutes || "—"}</span> min
-                    </div>
+          <div className={`md ${mobileDetail ? "has-sel" : ""}`}>
+            <div className="md-list-col panel md-list" role="listbox" aria-label="Meetings">
+              {meetings.map(m => {
+                const sel = selected && selected.id === m.id;
+                return (
+                  <button key={m.id} role="option" aria-selected={sel} className={`md-row ${sel ? "sel" : ""}`} onClick={() => { setSelectedId(m.id); setMobileDetail(true); }}>
+                    <span className="num" style={{ minWidth: 92, fontWeight: 600 }}>{dateStr(new Date(m.date))}</span>
+                    <span style={{ flex: 1, minWidth: 0, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{huddleLabelOf(m)}</span>
+                    <span className="num" style={{ color: C.textMuted }}>{m.totalMinutes || "—"}m</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 34, justifyContent: "flex-end" }}>
+                      <span className="dot" style={{ background: ratingColor(m.rating) }} aria-hidden="true" />
+                      <span className="num" style={{ fontWeight: 600 }}>{m.rating ?? "—"}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {selected && (
+              <div className="md-detail-col panel">
+                <div className="panel-h">
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", minWidth: 0 }}>
+                    <button className="btn-ghost md-back" onClick={() => setMobileDetail(false)}><Icon.arrowLeft /> Back</button>
+                    <span className="num" style={{ fontWeight: 600, fontSize: C.fs.md }}>{dateStr(new Date(selected.date))}</span>
+                    <span style={{ color: C.textMuted }}>{huddleLabelOf(selected)}</span>
+                    <span className="num" style={{ color: C.textMuted }}>{selected.totalMinutes || "—"} min</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span className="dot" style={{ background: ratingColor(selected.rating) }} aria-hidden="true" />
+                      <span className="num" style={{ fontWeight: 600 }}>{selected.rating ?? "—"}</span><span style={{ color: C.textMuted }}>/ 10</span>
+                    </span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: C.fs.display, fontWeight: 600, color: m.rating >= 8 ? C.green : m.rating >= 6 ? C.yellow : C.red, fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{m.rating}</div>
-                      <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>/ 10</div>
+                  {selected.recapText && (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className="btn-secondary" onClick={e => { e.stopPropagation(); copyRecap(selected); }}
+                        style={copied === selected.id ? { background: C.greenTint, color: C.green } : undefined}>
+                        {copied === selected.id ? <><Icon.check /> Copied</> : "Copy Recap"}
+                      </button>
+                      <button className="btn-secondary" onClick={e => { e.stopPropagation(); sendRecapEmail(selected); }}>
+                        <Icon.mail /> Send Recap
+                      </button>
                     </div>
-                    <span style={{ color: C.textMuted, fontSize: C.fs.md, transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}>›</span>
-                  </div>
+                  )}
                 </div>
-
-                {/* Expanded recap */}
-                {isOpen && (
-                  <div className="fade-in" style={{ marginTop: 16 }}>
-                    {m.notes?.conclude && (
-                      <div style={{ fontSize: C.fs.sm, color: C.textMuted, background: C.surface2, borderRadius: C.radius.control, padding: "8px 12px", marginBottom: 12 }}>{m.notes.conclude}</div>
-                    )}
-                    {m.recapText ? (
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
-                          <span style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted }}>Meeting Recap</span>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={e => { e.stopPropagation(); copyRecap(m); }}
-                              style={{ padding: "6px 12px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: copied === m.id ? C.greenTint : C.surface2, color: copied === m.id ? C.green : C.textMuted, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer" }}>
-                              {copied === m.id ? "✓ Copied!" : "Copy Recap"}
-                            </button>
-                            <button onClick={e => { e.stopPropagation(); sendRecapEmail(m); }}
-                              style={{ padding: "6px 12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.text, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                              <Icon.mail /> Send Recap
-                            </button>
-                          </div>
-                        </div>
-                        <pre style={{ fontSize: C.fs.xs, lineHeight: 1.7, color: C.textMuted, whiteSpace: "pre-wrap", fontFamily: C.fontUI, background: C.surface2, borderRadius: C.radius.control, padding: "16px", maxHeight: 400, overflowY: "auto" }}>{m.recapText}</pre>
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: C.fs.sm, color: C.textDim, fontStyle: "italic" }}>No recap stored for this meeting.</div>
-                    )}
-                  </div>
-                )}
+                <div className="panel-b">
+                  {selected.recapText ? <RecapView text={selected.recapText} /> : (
+                    <>
+                      {selected.notes?.conclude && <div style={{ fontSize: C.fs.sm, color: C.text, maxWidth: "90ch", marginBottom: 8 }}>{selected.notes.conclude}</div>}
+                      <div style={{ fontSize: C.fs.sm, color: C.textDim }}>No recap stored for this meeting.</div>
+                    </>
+                  )}
+                </div>
               </div>
-            );
-          })
+            )}
+          </div>
         )}
       </div>
     </Layout>
+  );
+}
+
+// Display-only, structured view of a saved recap. It reads the recap TEXT
+// (the same text Copy/Send use) and never changes it. Anything it can't
+// recognise is shown as plain text.
+const RECAP_SECTIONS = {
+  "ATTENDEES": "Attendees", "HEADLINES FROM THE WEEK": "Headlines", "OFF-TRACK QUARTERLY TASKS": "Off-track quarterly tasks",
+  "OPEN TO-DOS BY TEAM MEMBER": "Open to-dos by person", "PROBLEMS SOLVED": "Problems solved", "MEETING NOTES": "Meeting notes", "INDIVIDUAL RATINGS": "Individual ratings",
+};
+function parseRecap(text) {
+  const lines = String(text || "").split("\n");
+  const sections = [];
+  let cur = null;
+  lines.forEach((ln, i) => {
+    if (i < 3) return; // title, huddle — date, duration (shown in the header row)
+    if (/^—+$/.test(ln.trim()) || ln.trim() === "Generated by VAST Platform") { cur = null; return; }
+    if (!ln.trim()) { cur = null; return; }
+    if (!cur && /^[A-Z][A-Z0-9 &'\-]+$/.test(ln.trim())) { cur = { key: ln.trim(), lines: [] }; sections.push(cur); return; }
+    if (!cur) { cur = { key: "", lines: [] }; sections.push(cur); }
+    cur.lines.push(ln);
+  });
+  return sections;
+}
+function RecapView({ text }) {
+  const sections = parseRecap(text);
+  if (!sections.length) return <pre style={{ fontSize: C.fs.sm, lineHeight: 1.6, color: C.text, whiteSpace: "pre-wrap", fontFamily: C.fontUI, maxWidth: "90ch", margin: 0 }}>{text}</pre>;
+  const block = (title, body, key) => <div key={key} style={{ marginBottom: 16 }}><h4 className="sec-title">{title}</h4>{body}</div>;
+  return (
+    <div>
+      {sections.map((sec, si) => {
+        const title = RECAP_SECTIONS[sec.key] || (sec.key ? sec.key.charAt(0) + sec.key.slice(1).toLowerCase() : "Notes");
+        const raw = sec.lines.map(l => l.trim());
+        if (sec.key === "ATTENDEES") return block(title, <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{raw.join(", ").split(/,\s*/).filter(Boolean).map(n => <span key={n} className="chip" style={{ color: C.text }}>{n}</span>)}</div>, si);
+        if (sec.key === "HEADLINES FROM THE WEEK") return block(title, <div>{raw.map((l, i) => { const m = /^\[([A-Z][A-Z ]*)\]\s*(.*)$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", maxWidth: "90ch" }}>{m && <span className="chip" style={{ flexShrink: 0 }}>{m[1].charAt(0) + m[1].slice(1).toLowerCase()}</span>}<span>{m ? m[2] : l}</span></div>; })}</div>, si);
+        if (sec.key === "OFF-TRACK QUARTERLY TASKS") return block(title, <div>{raw.map((l, i) => { const m = /^✗\s*(.*?)(?:\s\(([^()]*)\))?$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0" }}><span className="dot" style={{ background: C.red }} aria-label="Off track" /><span>{m ? m[1] : l}</span>{m && m[2] && <span style={{ color: C.textMuted }}>{m[2]}</span>}</div>; })}</div>, si);
+        if (sec.key === "PROBLEMS SOLVED") return block(title, <div>{raw.map((l, i) => { const m = /^✓\s*([^:]*)(?::\s*(.*))?$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", maxWidth: "90ch" }}><span className="dot" style={{ background: C.green, alignSelf: "center" }} aria-label="Solved" /><span style={{ fontWeight: 600 }}>{m ? m[1] : l}</span>{m && m[2] && <span style={{ color: C.textMuted }}>{m[2]}</span>}</div>; })}</div>, si);
+        if (sec.key === "OPEN TO-DOS BY TEAM MEMBER") {
+          const rows = []; let person = "";
+          sec.lines.forEach(l => {
+            const t = l.trim();
+            if (/^□/.test(t)) { const m = /^□\s*(.*?)(?:\s\(Due ([^()]*)\))?(\s⚠ OVERDUE|\sNEW)?$/.exec(t); rows.push({ person, title: m ? m[1] : t, due: m && m[2] ? m[2] : "", tag: m && m[3] ? m[3].trim() : "" }); }
+            else if (/:$/.test(t)) person = t.slice(0, -1);
+          });
+          return block(title, (
+            <div className="dt-wrap"><table className="dt" style={{ maxWidth: 900 }}>
+              <thead><tr><th>Person</th><th>To-do</th><th className="r">Due</th><th className="shrink"></th></tr></thead>
+              <tbody>{rows.map((r, i) => <tr key={i}><td className="muted" style={{ whiteSpace: "nowrap" }}>{i === 0 || rows[i - 1].person !== r.person ? r.person : ""}</td><td>{r.title}</td><td className="r num" style={{ whiteSpace: "nowrap", color: r.tag.includes("OVERDUE") ? C.red : C.textMuted }}>{r.due || "—"}</td>
+                <td className="shrink">{r.tag.includes("OVERDUE") ? <span style={{ color: C.red, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}><Icon.warning /> Overdue</span> : r.tag === "NEW" ? <span className="chip">New</span> : null}</td></tr>)}</tbody>
+            </table></div>
+          ), si);
+        }
+        if (sec.key === "INDIVIDUAL RATINGS") return block(title, (
+          <table className="dt" style={{ width: "auto", minWidth: 260 }}><tbody>{raw.map((l, i) => { const m = /^(.*):\s*(.*)$/.exec(l); return <tr key={i}><td style={{ fontWeight: m && m[1] === "Average" ? 600 : 400 }}>{m ? m[1] : l}</td><td className="r num">{m ? m[2] : ""}</td></tr>; })}</tbody></table>
+        ), si);
+        return block(title, <div style={{ whiteSpace: "pre-wrap", maxWidth: "90ch", fontSize: C.fs.base, lineHeight: 1.6 }}>{raw.join("\n")}</div>, si);
+      })}
+    </div>
   );
 }
 
@@ -4792,18 +4961,32 @@ function Settings({ company, onSave, session }) {
   // Team members are read-only here — the roster syncs from Cortex staff on
   // every load (see reconcileMembers). Invites / add / delete / rename are gone.
 
+  // Wide screens: section list on the left, the chosen section on the right.
+  const settingsWide = useViewportWidth() >= 1100;
+  const [settingsSec, setSettingsSec] = useState("company");
+  const SETTINGS_SECTIONS = [["company", "Company name"], ["huddles", "Huddles"], ["navigators", "Navigators"], ["charts", "Responsibility charts"], ["team", "Team members"], ["quarter", "Current quarter"], ["goals", "Annual goals"]];
+  const secCls = (id) => `card set-sec${settingsWide && settingsSec !== id ? " set-hidden" : ""}`;
+
   return (
     <Layout title="Settings" subtitle={company.name}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 20, maxWidth: 900 }}>
+      <div className={settingsWide ? "set-wide" : ""}>
+      {settingsWide && (
+        <div className="panel md-list" role="tablist" aria-label="Settings sections" style={{ alignSelf: "start" }}>
+          {SETTINGS_SECTIONS.map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={settingsSec === id} className={`md-row ${settingsSec === id ? "sel" : ""}`} onClick={() => setSettingsSec(id)}>{label}</button>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: settingsWide ? "minmax(0,1fr)" : "repeat(auto-fill,minmax(320px,1fr))", gap: 12, alignContent: "start" }}>
         <div>
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("company")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Company Name</h3>
             <div className="field">
               <input placeholder="Your Company Name" value={companyName} onChange={e => setCompanyName(e.target.value)} onKeyDown={e => e.key === "Enter" && onSave({ name: companyName })} />
             </div>
             <button className="btn-secondary" onClick={() => onSave({ name: companyName })}>Save Name</button>
           </div>
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("huddles")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 4 }}>Huddles</h3>
             <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginBottom: 16 }}>Assign team members to each huddle. Members only appear in their assigned huddle's attendance & spotlight.</div>
             {huddles.map(h => {
@@ -4850,7 +5033,7 @@ function Settings({ company, onSave, session }) {
             </div>
           </div>
 
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("navigators")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Navigators</h3>
             {navigators.map(n => (
               <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
@@ -4864,7 +5047,7 @@ function Settings({ company, onSave, session }) {
             </div>
           </div>
 
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("charts")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Responsibility Charts</h3>
             {orgCharts.map(o => (
               <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
@@ -4878,7 +5061,7 @@ function Settings({ company, onSave, session }) {
             </div>
           </div>
 
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("team")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 4 }}>Team Members</h3>
             <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginBottom: 16 }}>Your VAST team is your Cortex staff list. Names, emails and roles sync from Cortex each time VAST loads.</div>
             {toArray(company.members).map(m => (
@@ -4901,7 +5084,7 @@ function Settings({ company, onSave, session }) {
         </div>
 
         <div>
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className={secCls("quarter")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Current Quarter</h3>
             <div className="field">
               <label className="label">Quarter Label</label>
@@ -4943,7 +5126,7 @@ function Settings({ company, onSave, session }) {
             </div>
           </div>
 
-          <div className="card">
+          <div className={secCls("goals")} style={{ marginBottom: 12 }}>
             <h3 style={{ fontSize: C.fs.md, marginBottom: 4 }}>Annual Goals</h3>
             <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginBottom: 16 }}>Set goals for each company or division. Each can have its own label, target date, revenue, and profit goal.</div>
 
@@ -5017,6 +5200,7 @@ function Settings({ company, onSave, session }) {
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       {showNewQuarter && (() => {
@@ -5097,119 +5281,92 @@ function QuarterHistory({ company }) {
       </Layout>
     );
   }
+  return <QuarterHistoryView company={company} history={history} expanded={expanded} setExpanded={setExpanded} />;
+}
+
+function QuarterHistoryView({ company, history, expanded, setExpanded }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const sel = history.find(q => q.quarter === expanded) || history[0];
+  const qAvg = (q) => q.meetingRatings?.length ? (q.meetingRatings.reduce((a, r) => a + r.rating, 0) / q.meetingRatings.length).toFixed(1) : "—";
+  const rColor = (v) => v >= 8 ? C.green : v >= 6 ? C.amber : C.red;
+  const statusTag = (st) => <span className={st === "done" ? "tag-done" : st === "on" ? "tag-on" : st === "notdone" ? "tag-notdone" : "tag-off"}>{st === "done" ? "Completed" : st === "on" ? "On Track" : st === "notdone" ? "Not Done" : "Off Track"}</span>;
+  const tasks = sel.tasks || [];
+  const todos = sel.todos || [];
+  const solved = sel.solvedProblems || [];
+  const avgRating = qAvg(sel);
 
   return (
     <Layout title="Historical Quarters" subtitle={`${history.length} quarter${history.length !== 1 ? "s" : ""} archived`}>
-      <div style={{ maxWidth: 900 }}>
-        {history.map(q => {
-          const isOpen = expanded === q.quarter;
-          const avgRating = q.meetingRatings?.length
-            ? (q.meetingRatings.reduce((a, r) => a + r.rating, 0) / q.meetingRatings.length).toFixed(1)
-            : "—";
-          const solved = q.solvedProblems || [];
-          const tasks = q.tasks || [];
-          const todos = q.todos || [];
-
-          return (
-            <div key={q.quarter} className="card" style={{ marginBottom: 16 }}>
-              {/* Quarter header */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
-                onClick={() => setExpanded(isOpen ? null : q.quarter)}>
-                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <div style={{ background: C.surface3, color: C.text, border: `1px solid ${C.border}`, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.base, padding: "6px 12px", borderRadius: C.radius.control }}>{q.quarter}</div>
-                  <div className="mob-wrap" style={{ display: "flex", gap: 20 }}>
-                    <span style={{ fontSize: C.fs.xs, color: C.textMuted }}><span style={{ color: C.text, fontWeight: 600 }}>{tasks.length}</span> Tasks</span>
-                    <span style={{ fontSize: C.fs.xs, color: C.textMuted }}><span style={{ color: C.text, fontWeight: 600 }}>{todos.length}</span> To-Dos</span>
-                    <span style={{ fontSize: C.fs.xs, color: C.textMuted }}><span style={{ color: C.green, fontWeight: 600 }}>{solved.length}</span> Solved</span>
-                    <span style={{ fontSize: C.fs.xs, color: C.textMuted }}>Avg Rating: <span style={{ color: avgRating >= 8 ? C.green : avgRating >= 6 ? C.yellow : C.red, fontWeight: 600 }}>{avgRating}</span></span>
-                  </div>
-                </div>
-                <span style={{ color: C.textMuted, fontSize: C.fs.md, transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}>›</span>
+      <div className={`md ${mobileOpen ? "has-sel" : ""}`}>
+        <div className="md-list-col panel md-list" role="listbox" aria-label="Archived quarters">
+          {history.map((q, i) => {
+            const on = q === sel;
+            const avg = qAvg(q);
+            return (
+              <button key={q.quarter + i} role="option" aria-selected={on} className={`md-row ${on ? "sel" : ""}`} onClick={() => { setExpanded(q.quarter); setMobileOpen(true); }}>
+                <span style={{ fontWeight: 600, minWidth: 80 }}>{q.quarter}</span>
+                <span style={{ flex: 1, color: C.textMuted, fontSize: C.fs.xs }}><span className="num">{(q.tasks || []).length}</span> tasks · <span className="num">{(q.todos || []).length}</span> to-dos · <span className="num">{(q.solvedProblems || []).length}</span> solved</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{avg !== "—" && <span className="dot" style={{ background: rColor(avg) }} aria-hidden="true" />}<span className="num">{avg}</span></span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="md-detail-col panel">
+          <div className="panel-h">
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+              <button className="btn-ghost md-back" onClick={() => setMobileOpen(false)}><Icon.arrowLeft /> Back</button>
+              <h3>{sel.quarter}</h3>
+              {sel.quarterStart && sel.quarterEnd && <span className="num" style={{ color: C.textMuted, fontSize: C.fs.sm }}>{dateStr(new Date(sel.quarterStart + "T00:00:00"))} – {dateStr(new Date(sel.quarterEnd + "T00:00:00"))}</span>}
+            </div>
+            <div className="strip" style={{ padding: 0 }}>
+              <span><b>{tasks.length}</b>tasks</span>
+              <span><b>{todos.length}</b>to-dos</span>
+              <span><b style={{ color: C.green }}>{solved.length}</b>solved</span>
+              <span><b style={{ color: avgRating === "—" ? C.text : rColor(avgRating) }}>{avgRating}</b>avg rating</span>
+            </div>
+          </div>
+          <div className="panel-b">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(420px,100%),1fr))", gap: "16px 24px" }}>
+              <div>
+                <h4 className="sec-title">Quarterly tasks</h4>
+                {tasks.length === 0 ? <div className="lempty" style={{ padding: "4px 0" }}>No tasks recorded.</div> : (
+                  <div className="dt-wrap"><table className="dt">
+                    <thead><tr><th>Task</th><th>Assigned to</th><th>Final status</th></tr></thead>
+                    <tbody>{tasks.map((t, i) => <tr key={i}><td>{t.title}</td><td className="muted">{t.who || "—"}</td><td>{statusTag(t.status)}</td></tr>)}</tbody>
+                  </table></div>
+                )}
               </div>
-
-              {isOpen && (
-                <div className="fade-in" style={{ marginTop: 20 }}>
-
-                  {/* Tasks table */}
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Quarterly Tasks</div>
-                    {tasks.length === 0 ? <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No tasks recorded.</div> : (
-                      <table className="table">
-                        <thead><tr><th>Task</th><th>Assigned To</th><th>Final Status</th></tr></thead>
-                        <tbody>
-                          {tasks.map((t, i) => (
-                            <tr key={i}>
-                              <td>{t.title}</td>
-                              <td style={{ color: C.textMuted }}>{t.who || "—"}</td>
-                              <td><span className={t.status === "done" ? "tag-done" : t.status === "on" ? "tag-on" : t.status === "notdone" ? "tag-notdone" : "tag-off"}>{t.status === "done" ? "Completed" : t.status === "on" ? "On Track" : t.status === "notdone" ? "Not Done" : "Off Track"}</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-
-                  {/* To-Dos table */}
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>To-Dos</div>
-                    {todos.length === 0 ? <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No to-dos recorded.</div> : (
-                      <table className="table">
-                        <thead><tr><th>To-Do</th><th>Assigned To</th><th>Status</th></tr></thead>
-                        <tbody>
-                          {todos.map((t, i) => (
-                            <tr key={i}>
-                              <td>{t.title}</td>
-                              <td style={{ color: C.textMuted }}>{t.assignee || "—"}</td>
-                              <td><span className={t.done ? "tag-done" : "tag-off"}>{t.done ? "Done" : "Incomplete"}</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-
-                  {/* Solved Problems table */}
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Problems Solved</div>
-                    {solved.length === 0 ? <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>No problems marked solved this quarter.</div> : (
-                      <table className="table">
-                        <thead><tr><th>Problem</th><th>Source</th><th>Notes</th><th>Solved</th></tr></thead>
-                        <tbody>
-                          {solved.map((s, i) => (
-                            <tr key={i}>
-                              <td style={{ fontWeight: 600 }}>{s.title}</td>
-                              <td style={{ color: C.textMuted }}>{s.sourceLabel || "—"}</td>
-                              <td style={{ color: C.textMuted, fontSize: C.fs.xs, maxWidth: 280 }}>{s.notes || "—"}</td>
-                              <td className="num" style={{ color: C.textMuted, fontSize: C.fs.xs, whiteSpace: "nowrap" }}>{s.solvedAt ? dateStr(new Date(s.solvedAt)) : "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-
-                  {/* Meeting ratings */}
-                  {q.meetingRatings?.length > 0 && (
-                    <div>
-                      <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Meeting Ratings This Quarter</div>
-                      <table className="table">
-                        <thead><tr><th>Date</th><th>Rating</th></tr></thead>
-                        <tbody>
-                          {q.meetingRatings.map((r, i) => (
-                            <tr key={i}>
-                              <td className="num" style={{ color: C.textMuted }}>{dateStr(new Date(r.date))}</td>
-                              <td><span style={{ fontWeight: 600, color: r.rating >= 8 ? C.green : r.rating >= 6 ? C.yellow : C.red }}>{r.rating}/10</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+              <div>
+                <h4 className="sec-title">To-dos</h4>
+                {todos.length === 0 ? <div className="lempty" style={{ padding: "4px 0" }}>No to-dos recorded.</div> : (
+                  <div className="dt-wrap"><table className="dt">
+                    <thead><tr><th>To-do</th><th>Assigned to</th><th>Status</th></tr></thead>
+                    <tbody>{todos.map((t, i) => <tr key={i}><td>{t.title}</td><td className="muted">{t.assignee || "—"}</td><td><span className={t.done ? "tag-done" : "tag-off"}>{t.done ? "Done" : "Incomplete"}</span></td></tr>)}</tbody>
+                  </table></div>
+                )}
+              </div>
+              <div>
+                <h4 className="sec-title">Problems solved</h4>
+                {solved.length === 0 ? <div className="lempty" style={{ padding: "4px 0" }}>No problems marked solved this quarter.</div> : (
+                  <div className="dt-wrap"><table className="dt">
+                    <thead><tr><th>Problem</th><th>Source</th><th>Notes</th><th className="r">Solved</th></tr></thead>
+                    <tbody>{solved.map((x, i) => <tr key={i}><td style={{ fontWeight: 600 }}>{x.title}</td><td className="muted">{x.sourceLabel || "—"}</td><td className="muted" style={{ fontSize: C.fs.sm }}>{x.notes || "—"}</td><td className="r num muted" style={{ whiteSpace: "nowrap" }}>{x.solvedAt ? dateStr(new Date(x.solvedAt)) : "—"}</td></tr>)}</tbody>
+                  </table></div>
+                )}
+              </div>
+              {sel.meetingRatings?.length > 0 && (
+                <div>
+                  <h4 className="sec-title">Meeting ratings this quarter</h4>
+                  <div className="dt-wrap"><table className="dt" style={{ width: "auto", minWidth: 280 }}>
+                    <thead><tr><th>Date</th><th className="r">Rating</th></tr></thead>
+                    <tbody>{sel.meetingRatings.map((r, i) => <tr key={i}><td className="num muted">{dateStr(new Date(r.date))}</td><td className="r num" style={{ fontWeight: 600, color: rColor(r.rating) }}>{r.rating}/10</td></tr>)}</tbody>
+                  </table></div>
                 </div>
               )}
             </div>
-          );
-        })}
+          </div>
+        </div>
       </div>
     </Layout>
   );
