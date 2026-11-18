@@ -5295,7 +5295,7 @@ function RptBars({ data, goal, title, height = 150, showValues }) {
   let max = Math.max(...vals, goal != null ? goal : -Infinity, 0);
   const min = Math.min(...vals, 0);
   if (max === min) max = min + 1;
-  const n = data.length, bw = n > 20 ? 10 : 18, gap = n > 20 ? 4 : 10, left = 44, top = 18, bottom = 22;
+  const n = data.length, bw = n > 20 ? 10 : n <= 6 ? 36 : 18, gap = n > 20 ? 4 : n <= 6 ? 24 : 10, left = 44, top = 18, bottom = 22;
   const W = left + n * (bw + gap) + 8, H = height;
   const y = (v) => top + (H - top - bottom) * (1 - (v - min) / (max - min));
   const labelsOn = showValues != null ? showValues : n <= 16;
@@ -5593,6 +5593,56 @@ function RptHeadlinesIssues({ r }) {
   );
 }
 
+// Year view: the four quarters side by side. Future quarters show "—".
+function rptYearRows(company, year, yearReport) {
+  const qr = [1, 2, 3, 4].map(q => rptCompute(company, year, q));
+  const v = (fn) => qr.map(x => x.isFuture ? null : fn(x));
+  const Y = yearReport;
+  return {
+    quarters: qr,
+    rows: [
+      { label: "Scorecard weeks on target", pct: true, values: v(x => x.scorecard.pct), total: Y.scorecard.pct },
+      { label: "Quarterly tasks done", pct: true, values: v(x => x.tasks.tracked ? x.tasks.pct : null), total: Y.tasks.pct },
+      { label: "To-dos created", values: v(x => x.todos.created), total: Y.todos.created },
+      { label: "To-dos completed", values: v(x => x.todos.tracked ? x.todos.completed : null), total: Y.todos.tracked ? Y.todos.completed : null },
+      { label: "Huddles held", values: v(x => x.huddles.held), total: Y.huddles.held },
+      { label: "Average meeting rating", dec: true, values: v(x => x.huddles.avgRating), total: Y.huddles.avgRating },
+      { label: "Headlines added", values: v(x => x.headlines.added), total: Y.headlines.added },
+      { label: "Issues created", values: v(x => x.issues.created), total: Y.issues.created },
+      { label: "Issues solved", values: v(x => x.issues.tracked ? x.issues.resolved : null), total: Y.issues.tracked ? Y.issues.resolved : null },
+    ],
+  };
+}
+const rptYearFmt = (row, val) => val == null ? "—" : row.pct ? rptPctText(val) : row.dec ? rptNum1(val) : String(val);
+
+function RptYear({ r, company }) {
+  const yr = React.useMemo(() => rptYearRows(company, r.period.year, r), [company, r]);
+  const charts = yr.rows.filter(row => ["Scorecard weeks on target", "Quarterly tasks done", "To-dos completed", "Huddles held", "Average meeting rating", "Issues solved"].includes(row.label));
+  return (
+    <RptSection id="rpt-year" title="Year view" sub={`${r.period.year}, quarter by quarter`}>
+      <div className="rpt-scroll rpt-keep">
+        <table className="rpt-table">
+          <thead><tr><th>Measure</th>{[1, 2, 3, 4].map(q => <th key={q} className="r">Q{q}</th>)}<th className="r">Year</th></tr></thead>
+          <tbody>{yr.rows.map(row => <tr key={row.label}><td>{row.label}</td>{row.values.map((val, i) => <td key={i} className="r num">{rptYearFmt(row, val)}</td>)}<td className="r num rpt-strong">{rptYearFmt(row, row.total)}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <div className="rpt-ygrid">
+        {charts.map(row => (
+          <div key={row.label} className="rpt-keep">
+            <h3 className="rpt-h3">{row.label}</h3>
+            {row.values.every(x => x == null) ? <RptNote>No data for this year.</RptNote> : (
+              <RptBars title={`${row.label} by quarter`} height={130} showValues
+                data={row.values.map((val, i) => ({ label: `Q${i + 1}`, value: val == null ? null : row.pct ? Math.round(val * 100) : row.dec ? Math.round(val * 10) / 10 : val, status: null }))} />
+            )}
+            {row.pct && <div className="rpt-foot" style={{ marginTop: 0 }}>Shown as %.</div>}
+          </div>
+        ))}
+      </div>
+      <div className="rpt-foot">“—” = quarter not started, or not tracked for that quarter.</div>
+    </RptSection>
+  );
+}
+
 const rptCss = () => `
   .rpt-root{color:var(--c-text);font-family:var(--font-ui)}
   .rpt-root .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
@@ -5635,6 +5685,7 @@ const rptCss = () => `
   .rpt-table .r{text-align:right}
   .rpt-table tr.rpt-total td{font-weight:600;border-top:2px solid var(--c-border)}
   .rpt-group{margin-bottom:8px}
+  .rpt-ygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:0 20px}
   .rpt-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px;margin-top:8px}
   .rpt-chart .rpt-lbl{font-family:var(--font-ui);font-size:11px;fill:var(--c-text)}
   @media(max-width:1024px){.rpt-two{grid-template-columns:minmax(0,1fr)}}
@@ -5675,6 +5726,7 @@ function Reports({ company, session }) {
         <RptTodos r={r} />
         <RptHuddles r={r} />
         <RptHeadlinesIssues r={r} />
+        {!q && <RptYear r={r} company={company} />}
       </div>
     </Layout>
   );
