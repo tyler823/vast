@@ -5340,10 +5340,10 @@ function RptLine({ points, title }) {
   const y = (v) => top + (H - top - bottom) * (1 - v / 10);
   const xEvery = Math.ceil(n / 10);
   return (
-    <svg className="rpt-chart" viewBox={`0 0 ${Math.max(W, 200)} ${H}`} width="100%" style={{ maxWidth: Math.max(W, 200) * 1.25 }} role="img" aria-label={title}>
+    <svg className="rpt-chart" viewBox={`0 0 ${Math.max(W, 360)} ${H}`} width="100%" style={{ maxWidth: Math.max(W, 360) * 1.25 }} role="img" aria-label={title}>
       <title>{title}</title>
       {[0, 5, 10].map(v => (
-        <g key={v}><line x1={left} x2={Math.max(W, 200) - 4} y1={y(v)} y2={y(v)} stroke={rptVar("border")} strokeWidth="1" />
+        <g key={v}><line x1={left} x2={Math.max(W, 360) - 4} y1={y(v)} y2={y(v)} stroke={rptVar("border")} strokeWidth="1" />
           <text x={left - 6} y={y(v) + 4} textAnchor="end" className="rpt-ax">{v}</text></g>
       ))}
       {n > 1 && <polyline fill="none" stroke={rptVar("blue")} strokeWidth="2" points={points.map((p, i) => `${x(i)},${y(p.value)}`).join(" ")} />}
@@ -5643,6 +5643,96 @@ function RptYear({ r, company }) {
   );
 }
 
+// ── Excel export (SheetJS, loaded only when the button is clicked) ──
+function rptLoadSheetJS() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (window._rptXlsxPromise) return window._rptXlsxPromise;
+  window._rptXlsxPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    s.async = true;
+    s.onload = () => window.XLSX ? resolve(window.XLSX) : reject(new Error("The Excel library didn't load."));
+    s.onerror = () => { window._rptXlsxPromise = null; reject(new Error("Couldn't download the Excel library. Check your connection and try again.")); };
+    document.head.appendChild(s);
+  });
+  return window._rptXlsxPromise;
+}
+const rptXPct = (p) => p == null ? null : { v: p, t: "n", z: "0%" };
+const rptXNum = (v) => v == null || isNaN(v) ? null : Math.round(v * 100) / 100;
+const rptXDate = (iso) => { if (!iso) return null; const d = new Date(iso); return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
+
+function rptWorkbook(XLSX, company, r, companyName) {
+  const wb = XLSX.utils.book_new();
+  const add = (name, rows, widths) => {
+    const ws = XLSX.utils.aoa_to_sheet(rows.map(row => row.map(c => c === undefined ? null : c)));
+    if (widths) ws["!cols"] = widths.map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  };
+  const p = r.period, sc = r.scorecard, tk = r.tasks, td = r.todos, hu = r.huddles, hl = r.headlines, is = r.issues;
+  const NT = "Not tracked";
+  add("Summary", [
+    ["VAST report", p.label], ["Company", companyName], ["From", rptXDate(p.start)], ["To", rptXDate(p.end)],
+    ["Status", r.isCurrent ? `In progress — through week ${r.weekNow}` : r.isFuture ? "Not started" : "Complete"], ["Exported", rptXDate(new Date())], [],
+    ["Measure", "Value", "Out of / detail"],
+    ["Scorecard weeks on target", sc.hit + sc.missed ? rptXPct(sc.pct) : NT, sc.hit + sc.missed ? sc.hit + sc.missed : null],
+    ["Scorecard weeks hit", sc.hit, null],
+    ["Quarterly tasks done (%)", tk.tracked && tk.total ? rptXPct(tk.pct) : NT, tk.tracked ? tk.total : null],
+    ["Quarterly tasks done", tk.tracked ? tk.done : NT, null],
+    ["To-dos completed", td.tracked ? td.completed : NT, td.tracked && td.doneWithDate < td.doneUpToEnd ? `Completion dates recorded for ${td.doneWithDate} of ${td.doneUpToEnd}` : null],
+    ["Huddles held", hu.held, null],
+    ["Huddle minutes", hu.minutes, null],
+    ["Average meeting rating", hu.rated ? rptXNum(hu.avgRating) : NT, hu.rated || null],
+    ["Issues solved", is.tracked ? is.resolved : NT, is.tracked && is.resolvedWithDate < is.resolvedUpToEnd ? `Resolution dates recorded for ${is.resolvedWithDate} of ${is.resolvedUpToEnd}` : null],
+  ], [30, 18, 40]);
+  const wkHead = sc.weeks.map(w => `W${rptWeekNum(w)}`);
+  add("Scorecard", [
+    ["Owner", "Measurable", "Goal", "Goal value", "Weeks hit", "Weeks missed", "% hit", "Average", "Best", "Best week", "Worst", "Worst week", ...wkHead],
+    ...sc.rows.map(row => [row.owner, row.m.name || "", row.goal, row.target, row.hit, row.missed, rptXPct(row.pct), rptXNum(row.avg),
+      row.best ? row.best.value : null, row.best ? `W${rptWeekNum(row.best.week)}` : null, row.worst ? row.worst.value : null, row.worst ? `W${rptWeekNum(row.worst.week)}` : null,
+      ...row.pts.map(pt => pt.value)]),
+    [], ["Weeks are judged against each measurable's current goal."],
+    ...(sc.deletedValues ? [[`${sc.deletedValues} value(s) from deleted measurables not shown.`]] : []),
+  ], [18, 26, 10, 10, 10, 12, 8, 10, 8, 10, 8, 11, ...wkHead.map(() => 7)]);
+  const taskRows = [["Quarter", "Source", "Task", "Owner", "Final status", "Weeks off track", "Carried over from"]];
+  tk.quarters.forEach(tq => {
+    if (!tq.rows) { taskRows.push([tq.label, null, tq.note]); return; }
+    if (!tq.rows.length) taskRows.push([tq.label, tq.source, "No quarterly tasks recorded."]);
+    tq.rows.forEach(t => taskRows.push([tq.label, tq.source === "archive" ? "Historical Quarters" : "Current tasks", t.title, t.who, (RPT_TASK_STATUS[t.status] || [null, t.status])[1], t.offWeeks == null ? null : rptXNum(t.offWeeks), t.carriedFrom ? t.carriedFrom.quarter || "" : null]));
+  });
+  taskRows.push([], ["Quarter", "Owner", "Tasks", "Done", "% done"]);
+  tk.quarters.forEach(tq => (tq.owners || []).forEach(o => taskRows.push([tq.label, o.owner, o.total, o.done, rptXPct(rptPct(o.done, o.total))])));
+  add("Tasks", taskRows, [10, 18, 34, 18, 12, 14, 16]);
+  const tdRows = [
+    ["Created in period", td.created], ["Completed in period", td.tracked ? td.completed : NT], ["Average days to complete", td.avgDays == null ? null : rptXNum(td.avgDays)],
+    ["Completed to-dos with a completion date", td.doneWithDate], ["Completed to-dos (created by period end)", td.doneUpToEnd], [],
+    ["Owner", "Created", "Completed", ...(r.isCurrent ? ["Open now"] : [])],
+    ...td.owners.map(o => [o.owner, o.created, td.tracked ? o.completed : null, ...(r.isCurrent ? [o.open] : [])]), [],
+  ];
+  if (td.aging) { tdRows.push(["Open to-do aging (today)"], ["Owner", ...td.aging.buckets, "Total"]); td.aging.rows.forEach(o => tdRows.push([o.owner, ...o.counts, o.counts.reduce((a, b) => a + b, 0)])); }
+  else tdRows.push(["Aging is shown for the current period only."]);
+  add("To-dos", tdRows, [40, 10, 12, 12, 12, 10]);
+  add("Huddles", [
+    ["Huddle", "Meetings", "Total minutes", "Average rating", "Average attendance"],
+    ...hu.rows.map(h => [h.huddle, h.held, h.minutes, rptXNum(h.avgRating), h.avgAttend == null ? NT : rptXNum(h.avgAttend)]),
+    ["All huddles", hu.held, hu.minutes, rptXNum(hu.avgRating), null], [],
+    ["Date", "Huddle", "Minutes", "Rating", "Attendees", "Attendee names"],
+    ...hu.meetings.map(m => [rptXDate(m.date), m.huddleName || ((toArray(company.huddles).find(h => h && h.id === m.huddleId) || {}).name) || "", Number(m.totalMinutes) || 0, Number(m.rating) > 0 ? Number(m.rating) : null,
+      m.attendees != null ? toArray(m.attendees).length : NT, m.attendees != null ? toArray(m.attendees).join(", ") : null]),
+  ], [22, 20, 14, 14, 18, 40]);
+  add("Headlines & Issues", [
+    ["Measure", "Count", "Note"],
+    ["Headlines added", hl.added], ["Headlines reviewed", hl.reviewed, hl.reviewedNoDate ? `${hl.reviewedNoDate} reviewed without a review date` : null],
+    ["Issues created", is.created], ["Issues resolved", is.tracked ? is.resolved : NT, is.tracked && is.resolvedWithDate < is.resolvedUpToEnd ? `Resolution dates recorded for ${is.resolvedWithDate} of ${is.resolvedUpToEnd}` : null],
+    ["Open issues right now", is.openNow, "Current count"],
+  ], [26, 10, 44]);
+  if (!p.q) {
+    const yr = rptYearRows(company, p.year, r);
+    add("Year view", [["Measure", "Q1", "Q2", "Q3", "Q4", "Year"],
+      ...yr.rows.map(row => [row.label, ...[...row.values, row.total].map(v => v == null ? null : row.pct ? rptXPct(v) : row.dec ? rptXNum(v) : v)])], [28, 9, 9, 9, 9, 9]);
+  }
+  return wb;
+}
+
 const rptCss = () => `
   .rpt-root{color:var(--c-text);font-family:var(--font-ui)}
   .rpt-root .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
@@ -5690,6 +5780,27 @@ const rptCss = () => `
   .rpt-chart .rpt-lbl{font-family:var(--font-ui);font-size:11px;fill:var(--c-text)}
   @media(max-width:1024px){.rpt-two{grid-template-columns:minmax(0,1fr)}}
   .rpt-print-footer{display:none}
+  .rpt-print-head{display:none}
+  @media print{
+    @page{margin:14mm 12mm 18mm}
+    html,body{background:#fff!important}
+    .vast-rail,.rpt-noprint{display:none!important}
+    div:has(> .fade-in > .rpt-root){margin-left:0!important;background:#fff!important;min-height:0!important;padding:0!important}
+    div:has(> .fade-in > .rpt-root) > div:first-child{display:none!important}
+    .fade-in:has(> .rpt-root){padding:0!important;animation:none!important}
+    .rpt-root{${tokensToCssVars(LIGHT_THEME)};background:#fff}
+    .rpt-root *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .rpt-print-head{display:block;margin-bottom:8px}
+    .rpt-print-head .rpt-ph-title{font-size:18px;font-weight:600}
+    .rpt-section{break-before:page;border:none;padding:0;margin:0 0 12px;background:#fff}
+    #rpt-summary{break-before:auto}
+    .rpt-keep,.rpt-card,.rpt-tile,.rpt-table tr,.rpt-chart,.rpt-note{break-inside:avoid}
+    .rpt-h2,.rpt-h3{break-after:avoid}
+    .rpt-scroll{overflow:visible}
+    .rpt-mgrid,.rpt-two{grid-template-columns:minmax(0,1fr)!important}
+    .rpt-chart{max-width:440px!important}
+    .rpt-print-footer{display:flex;justify-content:space-between;gap:12px;position:fixed;bottom:0;left:0;right:0;font-size:10px;color:#5B6475;border-top:1px solid #E4E7EC;padding-top:4px;background:#fff}
+  }
   @media(max-width:768px){.rpt-big{font-size:24px}.rpt-section{padding:12px}.rpt-picker select{min-width:0;flex:1}.rpt-picker label{flex:1}}
 `;
 
@@ -5702,10 +5813,33 @@ function Reports({ company, session }) {
   const companyName = company.name || (session && session.companyName) || "Company";
   const p = r.period;
   const through = r.isCurrent ? ` · through week ${r.weekNow} / through today` : r.isFuture ? " · not started yet" : "";
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const exportExcel = async () => {
+    if (exporting) return;
+    setExporting(true); setExportError("");
+    try {
+      const XLSX = await rptLoadSheetJS();
+      const wb = rptWorkbook(XLSX, company, r, companyName);
+      const safe = (x) => String(x).replace(/[^A-Za-z0-9 ._()&,'-]+/g, "-").trim();
+      XLSX.writeFile(wb, `VAST report - ${safe(companyName)} - ${safe(p.label)}.xlsx`);
+    } catch (e) {
+      console.warn("[VAST] Excel export failed:", e);
+      setExportError((e && e.message) || "Excel export failed. Please try again.");
+    } finally { setExporting(false); }
+  };
+  const actions = (
+    <div className="rpt-noprint" style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+      <button className="btn-secondary" onClick={() => window.print()}>Print / Save as PDF</button>
+      <button className="btn-primary" onClick={exportExcel} disabled={exporting}>{exporting ? "Preparing…" : "Export to Excel"}</button>
+    </div>
+  );
   return (
-    <Layout title="Reports" subtitle={`${companyName} · ${p.label}`}>
+    <Layout title="Reports" subtitle={`${companyName} · ${p.label}`} action={actions}>
       <style>{rptCss()}</style>
       <div className="rpt-root">
+        <div className="rpt-print-head"><div className="rpt-ph-title">VAST report — {companyName}</div></div>
+        {exportError && <div className="rpt-note rpt-noprint" role="alert" style={{ color: rptVar("red") }}>{exportError}</div>}
         <div className="rpt-picker rpt-noprint">
           <label>Year
             <select value={year} onChange={e => setYear(Number(e.target.value))} aria-label="Report year">
@@ -5727,6 +5861,7 @@ function Reports({ company, session }) {
         <RptHuddles r={r} />
         <RptHeadlinesIssues r={r} />
         {!q && <RptYear r={r} company={company} />}
+        <div className="rpt-print-footer" aria-hidden="true"><span>{companyName}</span><span>{p.label} report</span><span>Printed {rptFmtDate(new Date())}</span></div>
       </div>
     </Layout>
   );
