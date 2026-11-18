@@ -96,32 +96,86 @@
   <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useCallback } = React;
 
-// ─── VAST Color Palettes ─────────────────────────────────────────────
-// Premium red / black / white system. Canonical brand red = #e43531 (matches
-// Vast Favicon.svg). The green/yellow/blue keys are PRESERVED so every existing
-// reference keeps working, but their VALUES are retuned to on-brand neutrals —
-// positive/"on-track" states read neutral, attention/"off-track" reads red.
+// ─── VAST Design Tokens ──────────────────────────────────────────────
+// ONE place for the whole look. Every screen reads these through the `C`
+// object (inline styles) or the matching CSS variables on :root (stylesheet).
+// Change a value here and it changes everywhere.
+//
+// BASE_TOKENS = the same in both themes (type, spacing, corners, heights).
+// DARK_THEME / LIGHT_THEME = colors, which differ per theme.
+const BASE_TOKENS = {
+  // Fonts. fontMono is used for every number, count, date, ID, % and $ amount.
+  fontUI: "'Google Sans',sans-serif",
+  fontMono: "'Google Sans',sans-serif",
+  // Text sizes (px)
+  fs: { label: 9, xs: 11, sm: 12, base: 13, md: 14, lg: 15, section: 18, title: 26, display: 36, timer: 52 },
+  // Font weights
+  fw: { regular: 400, medium: 500, semibold: 600, bold: 700 },
+  // Spacing scale (px) — padding, margins and gaps come only from this list
+  space: { xxs: 4, xs: 6, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 },
+  // Corner radius (px)
+  radius: { control: 8, card: 12, modal: 16, pill: 20, round: "50%" },
+  // Heights (px). "auto" = not fixed yet. phone = minimum tap height on phones.
+  h: { control: "auto", row: "auto", phone: 44 },
+};
+// Colors by ROLE. Status colors (green / amber / blue / red / neutral) are named
+// tokens; nothing on a screen should type a hex code directly.
 const DARK_THEME = {
+  ...BASE_TOKENS,
   bg: "#0a0a0b", surface: "#121214", surface2: "#17171a", surface3: "#202024",
   border: "rgba(255,255,255,0.10)", red: "#e43531", redDark: "#c42d29", redGlow: "rgba(228,53,49,0.14)",
   text: "#f4f5f6", textMuted: "#9a9aa2", textDim: "#5c5c64",
   green: "#cfcfd6", yellow: "#b9b9c0", blue: "#e43531",
   isDark: true,
+  // brand + status
+  accent: "#e43531",          // brand red: active-nav marker + logo marks only
+  onAccent: "#fff",           // text/icons on a red fill
+  amber: "#f59e0b", amberBg: "rgba(245,158,11,0.14)", amberBorder: "rgba(245,158,11,0.4)",
+  purple: "#71717a",
+  syncSaving: "#888", syncSaved: "#8b8b92",
+  avatarBgs: ["#f6d8d6","#fbeae9","#ededf0","#e6e6ea","#f6d8d6","#ededf0","#e6e6ea","#fbeae9"],
+  avatarFgs: ["#e43531","#c42d29","#3f3f46","#52525b","#e43531","#3f3f46","#52525b","#c42d29"],
+  confetti: ["#e43531","#c42d29","#ffffff","#f1f1f3","#e43531","#b9b9c0","#ffffff"],
   // ── elevation + semantic state-fill tokens ──
   shadow: "0 1px 2px rgba(0,0,0,0.55)", shadowLg: "0 12px 38px rgba(0,0,0,0.50)",
   offBg: "rgba(228,53,49,0.12)", offBorder: "rgba(228,53,49,0.42)",
   okBg: "rgba(255,255,255,0.05)", okBorder: "rgba(255,255,255,0.16)",
 };
 const LIGHT_THEME = {
+  ...BASE_TOKENS,
   bg: "#f2f2f4", surface: "#ffffff", surface2: "#ffffff", surface3: "#eeeef1",
   border: "#e4e4e8", red: "#e43531", redDark: "#c42d29", redGlow: "rgba(228,53,49,0.10)",
   text: "#18181b", textMuted: "#6b6b76", textDim: "#a0a0aa",
   green: "#52525b", yellow: "#52525b", blue: "#e43531",
   isDark: false,
+  // brand + status
+  accent: "#e43531",
+  onAccent: "#fff",
+  amber: "#f59e0b", amberBg: "rgba(245,158,11,0.14)", amberBorder: "rgba(245,158,11,0.4)",
+  purple: "#71717a",
+  syncSaving: "#888", syncSaved: "#8b8b92",
+  avatarBgs: ["#f6d8d6","#fbeae9","#ededf0","#e6e6ea","#f6d8d6","#ededf0","#e6e6ea","#fbeae9"],
+  avatarFgs: ["#e43531","#c42d29","#3f3f46","#52525b","#e43531","#3f3f46","#52525b","#c42d29"],
+  confetti: ["#e43531","#c42d29","#ffffff","#f1f1f3","#e43531","#b9b9c0","#ffffff"],
   // ── elevation + semantic state-fill tokens ──
   shadow: "0 1px 2px rgba(24,24,27,0.06), 0 1px 3px rgba(24,24,27,0.05)", shadowLg: "0 10px 34px rgba(24,24,27,0.12)",
   offBg: "rgba(228,53,49,0.09)", offBorder: "rgba(228,53,49,0.38)",
   okBg: "rgba(24,24,27,0.045)", okBorder: "rgba(24,24,27,0.14)",
+};
+
+// Publishes every token as a CSS variable on :root (rebuilt when the theme
+// switches): colors → --c-<name>, sizes → --fs-*, --space-*, --radius-*, --h-*.
+const tokensToCssVars = (T) => {
+  const kebab = (s) => s.replace(/[A-Z]/g, m => "-" + m.toLowerCase());
+  const px = (v) => typeof v === "number" ? v + "px" : v;
+  const out = [];
+  Object.keys(T).forEach(k => {
+    const v = T[k];
+    if (typeof v === "string" && !k.startsWith("font")) out.push(`--c-${kebab(k)}:${v}`);
+    else if (v && typeof v === "object" && !Array.isArray(v)) Object.keys(v).forEach(s => out.push(`--${k}-${kebab(s)}:${k === "fw" ? v[s] : px(v[s])}`));
+  });
+  out.push(`--font-ui:${T.fontUI}`, `--font-mono:${T.fontMono}`);
+  return out.join(";");
 };
 
 // C is a mutable reference — VASTApp reassigns before each render based on theme
@@ -130,41 +184,41 @@ let C = DARK_THEME;
 // ─── Injected Styles (function so they regenerate with theme) ─────────
 const makeSTYLE = (C) => `
   @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap');
-  :root{--bg:${C.bg};--s1:${C.surface};--s2:${C.surface2};--s3:${C.surface3};--s4:${C.surface3};--acc:${C.red};--acc-lo:${C.redGlow};--acc-glo:${C.offBorder};--t1:${C.text};--t2:${C.textMuted};--t3:${C.textDim};--green:${C.green};--amber:${C.yellow};--red:${C.red};--purple:${C.textMuted};--br:${C.border};--br-hi:${C.okBorder};--ui:'Google Sans',sans-serif;--mono:'Google Sans',sans-serif}
+  :root{--bg:${C.bg};--s1:${C.surface};--s2:${C.surface2};--s3:${C.surface3};--s4:${C.surface3};--acc:${C.red};--acc-lo:${C.redGlow};--acc-glo:${C.offBorder};--t1:${C.text};--t2:${C.textMuted};--t3:${C.textDim};--green:${C.green};--amber:${C.yellow};--red:${C.red};--purple:${C.textMuted};--br:${C.border};--br-hi:${C.okBorder};--ui:${C.fontUI};--mono:${C.fontMono};${tokensToCssVars(C)}}
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:${C.bg};color:${C.text};font-family:'Google Sans',sans-serif;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;font-feature-settings:'tnum' 1,'lnum' 1}
+  body{background:${C.bg};color:${C.text};font-family:${C.fontUI};font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;font-feature-settings:'tnum' 1,'lnum' 1}
   html,body,#root{overflow-x:clip}
   ::-webkit-scrollbar{width:4px;background:transparent}
   ::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.18);border-radius:2px}
-  input,textarea,select{background:${C.surface3};border:1px solid ${C.border};color:${C.text};font-family:'Google Sans',sans-serif;border-radius:8px;padding:8px 11px;width:100%;font-size:12px;outline:none;transition:border-color 0.12s,box-shadow 0.12s;font-feature-settings:'tnum' 1,'lnum' 1}
+  input,textarea,select{background:${C.surface3};border:1px solid ${C.border};color:${C.text};font-family:${C.fontUI};border-radius:${C.radius.control}px;padding:8px 11px;width:100%;font-size:12px;outline:none;transition:border-color 0.12s,box-shadow 0.12s;font-feature-settings:'tnum' 1,'lnum' 1}
   input:focus,textarea:focus,select:focus{border-color:${C.red};box-shadow:0 0 0 3px ${C.redGlow}}
   input::placeholder{color:${C.textDim}}
   textarea{resize:vertical;min-height:80px}
   select option{background:${C.surface2};color:${C.text}}
-  button{cursor:pointer;font-family:'Google Sans',sans-serif;font-weight:600;border:none;border-radius:8px;padding:7px 14px;font-size:11px;display:inline-flex;align-items:center;gap:5px;transition:all 0.15s;white-space:nowrap}
+  button{cursor:pointer;font-family:${C.fontUI};font-weight:600;border:none;border-radius:${C.radius.control}px;padding:7px 14px;font-size:11px;display:inline-flex;align-items:center;gap:5px;transition:all 0.15s;white-space:nowrap}
   button:disabled{opacity:0.45;cursor:not-allowed}
-  .btn-primary{background:${C.red};color:#fff;padding:7px 14px;font-size:11px;box-shadow:0 1px 2px rgba(0,0,0,0.18),0 6px 16px ${C.redGlow}}
+  .btn-primary{background:${C.red};color:${C.onAccent};padding:7px 14px;font-size:11px;box-shadow:0 1px 2px rgba(0,0,0,0.18),0 6px 16px ${C.redGlow}}
   .btn-primary:hover:not(:disabled){background:${C.redDark};box-shadow:0 2px 4px rgba(0,0,0,0.22),0 8px 22px ${C.offBorder}}
   .btn-secondary{background:${C.surface3};border:1px solid ${C.border};color:${C.text};padding:7px 14px;font-size:11px}
   .btn-secondary:hover:not(:disabled){border-color:${C.okBorder};background:${C.okBg}}
   .btn-ghost{background:transparent;border:1px solid ${C.border};color:${C.textMuted};padding:7px 14px;font-size:11px}
   .btn-ghost:hover:not(:disabled){background:${C.surface3};color:${C.text}}
   .btn-danger{background:${C.offBg};border:1px solid ${C.offBorder};color:${C.red};padding:7px 14px;font-size:11px}
-  .btn-danger:hover:not(:disabled){background:${C.offBorder};color:#fff}
-  .card{background:${C.surface2};border:1px solid ${C.border};border-radius:12px;padding:16px;box-shadow:${C.shadow}}
+  .btn-danger:hover:not(:disabled){background:${C.offBorder};color:${C.onAccent}}
+  .card{background:${C.surface2};border:1px solid ${C.border};border-radius:${C.radius.card}px;padding:16px;box-shadow:${C.shadow}}
   .card:hover{border-color:${C.okBorder};box-shadow:${C.shadowLg}}
-  .label{font-family:'Google Sans',sans-serif;font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:${C.textDim};margin-bottom:10px;display:block}
-  h1,h2,h3,h4{font-family:'Google Sans',sans-serif;font-weight:700}
-  .tag-on{background:${C.okBg};color:${C.textMuted};border:1px solid ${C.okBorder};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
-  .tag-off{background:${C.offBg};color:${C.red};border:1px solid ${C.offBorder};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
-  .tag-done{background:${C.okBg};color:${C.textMuted};border:1px solid ${C.okBorder};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
-  .tag-notdone{background:rgba(245,158,11,0.14);color:#f59e0b;border:1px solid rgba(245,158,11,0.4);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
-  .sidebar-link{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:8px;color:${C.textMuted};font-size:14px;font-weight:500;cursor:pointer;transition:all 0.15s;text-decoration:none;border:none;background:none;width:100%;text-align:left}
+  .label{font-family:${C.fontUI};font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:${C.textDim};margin-bottom:10px;display:block}
+  h1,h2,h3,h4{font-family:${C.fontUI};font-weight:700}
+  .tag-on{background:${C.okBg};color:${C.textMuted};border:1px solid ${C.okBorder};padding:3px 10px;border-radius:${C.radius.pill}px;font-size:11px;font-weight:700}
+  .tag-off{background:${C.offBg};color:${C.red};border:1px solid ${C.offBorder};padding:3px 10px;border-radius:${C.radius.pill}px;font-size:11px;font-weight:700}
+  .tag-done{background:${C.okBg};color:${C.textMuted};border:1px solid ${C.okBorder};padding:3px 10px;border-radius:${C.radius.pill}px;font-size:11px;font-weight:700}
+  .tag-notdone{background:${C.amberBg};color:${C.amber};border:1px solid ${C.amberBorder};padding:3px 10px;border-radius:${C.radius.pill}px;font-size:11px;font-weight:700}
+  .sidebar-link{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:${C.radius.control}px;color:${C.textMuted};font-size:14px;font-weight:500;cursor:pointer;transition:all 0.15s;text-decoration:none;border:none;background:none;width:100%;text-align:left}
   .sidebar-link:hover{background:${C.surface3};color:${C.text}}
   .sidebar-link.active{background:${C.redGlow};color:${C.red};border-left:3px solid ${C.red};padding-left:13px}
   .divider{height:1px;background:${C.border};margin:12px 0}
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.15s ease}
-  .modal{background:${C.surface2};border:1px solid ${C.border};border-radius:16px;width:100%;max-width:580px;max-height:90vh;display:flex;flex-direction:column;overflow-y:auto;box-sizing:border-box;box-shadow:${C.shadowLg};padding:24px}
+  .modal{background:${C.surface2};border:1px solid ${C.border};border-radius:${C.radius.modal}px;width:100%;max-width:580px;max-height:90vh;display:flex;flex-direction:column;overflow-y:auto;box-sizing:border-box;box-shadow:${C.shadowLg};padding:24px}
   .field{margin-bottom:16px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
@@ -174,12 +228,12 @@ const makeSTYLE = (C) => `
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
   .progress-fill{height:100%;background:${C.red};border-radius:3px;transition:width 0.5s}
   .rating-btn{width:44px;height:44px;border-radius:10px;border:1px solid ${C.border};background:${C.surface3};color:${C.textMuted};font-size:15px;font-weight:700;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center}
-  .rating-btn:hover,.rating-btn.sel{background:${C.red};border-color:${C.red};color:#fff}
+  .rating-btn:hover,.rating-btn.sel{background:${C.red};border-color:${C.red};color:${C.onAccent}}
   .huddle-item{padding:16px;border-radius:10px;border:1px solid ${C.border};background:${C.surface};margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all 0.2s}
   .huddle-item.active{border-color:${C.red};background:${C.redGlow}}
   .huddle-item.done{opacity:0.5}
-  .timer-display{font-family:'Google Sans',sans-serif;font-feature-settings:'tnum' 1,'lnum' 1;font-size:52px;font-weight:700;color:${C.red}}
-  .badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;background:${C.red};color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:0 6px}
+  .timer-display{font-family:${C.fontUI};font-feature-settings:'tnum' 1,'lnum' 1;font-size:52px;font-weight:700;color:${C.red}}
+  .badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;background:${C.red};color:${C.onAccent};border-radius:10px;font-size:10px;font-weight:700;padding:0 6px}
   .checkbox{width:18px;height:18px;border-radius:5px;border:2px solid ${C.border};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s}
   .checkbox.checked{background:${C.text};border-color:${C.text};color:${C.bg}}
   /* ── Mobile ── */
@@ -219,15 +273,15 @@ const makeSTYLE = (C) => `
     .card{padding:18px!important}
     .modal{max-width:640px!important}
   }
-  .stat-card{background:${C.surface2};border:1px solid ${C.border};border-radius:12px;padding:20px;text-align:center;box-shadow:${C.shadow}}
-  .vast-logo-text{font-family:'Google Sans',sans-serif;font-size:28px;font-weight:800;color:${C.text}}
+  .stat-card{background:${C.surface2};border:1px solid ${C.border};border-radius:${C.radius.card}px;padding:20px;text-align:center;box-shadow:${C.shadow}}
+  .vast-logo-text{font-family:${C.fontUI};font-size:28px;font-weight:800;color:${C.text}}
   .vast-logo-mark{color:${C.red};font-size:22px;margin-left:2px}
   .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
   .empty-state{text-align:center;padding:48px;color:${C.textMuted}}
   .empty-state svg{opacity:0.3;margin-bottom:12px}
   .row{display:flex;align-items:center;gap:12px}
   .row-between{display:flex;align-items:center;justify-content:space-between;gap:12px}
-  .chip{display:inline-flex;align-items:center;gap:6px;background:${C.surface3};border:1px solid ${C.border};border-radius:20px;padding:4px 12px;font-size:12px;color:${C.textMuted}}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:${C.surface3};border:1px solid ${C.border};border-radius:${C.radius.pill}px;padding:4px 12px;font-size:12px;color:${C.textMuted}}
   .table{width:100%;border-collapse:collapse}
   .table th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${C.textMuted};border-bottom:1px solid ${C.border}}
   .table td{padding:12px;font-size:14px;border-bottom:1px solid ${C.border}}
@@ -391,7 +445,7 @@ function setSyncStatus(s) {
   const el = document.getElementById("vast-sync-status");
   if (!el) return;
   const map = { idle: "", saving: "Syncing...", saved: "Saved", error: "Sync failed — retrying. Your changes are NOT saved yet." };
-  const col = { idle: "", saving: "#888", saved: "#8b8b92", error: "#e43531" };
+  const col = { idle: "", saving: C.syncSaving, saved: C.syncSaved, error: C.red };
   el.textContent = map[s] || "";
   el.style.color = col[s] || "";
   // Do NOT auto-clear the error: it must stay visible until a save actually
@@ -730,7 +784,7 @@ const Icon = {
   menu: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
   sun: () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
   moon: () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
-  liveDot: () => <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#e43531", display: "inline-block", flexShrink: 0, animation: "pulse 1.2s infinite" }} />,
+  liveDot: () => <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.red, display: "inline-block", flexShrink: 0, animation: "pulse 1.2s infinite" }} />,
 };
 
 // ─── Logo Component ───────────────────────────────────────────────────
@@ -800,7 +854,7 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
       {!(collapsed && !isMobile) && live && <Icon.liveDot />}
       {!(collapsed && !isMobile) && badge > 0 && <span className="badge">{badge}</span>}
       {(collapsed && !isMobile) && badge > 0 && (
-        <span style={{ position: "absolute", top: 4, right: 4, background: C.red, color: "#fff", borderRadius: "50%", fontSize: 9, width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{badge}</span>
+        <span style={{ position: "absolute", top: 4, right: 4, background: C.red, color: C.onAccent, borderRadius: "50%", fontSize: 9, width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{badge}</span>
       )}
       {(collapsed && !isMobile) && live && (
         <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: C.red, animation: "pulse 1.2s infinite" }} />
@@ -841,7 +895,7 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
           onClick={() => { window.location.href = "mailto:info@job-dox.com?subject=VAST%20Coaching%20Program%20-%20Application&body=Hi%20there%2C%0A%0AI%27m%20interested%20in%20applying%20for%20the%20VAST%20Coaching%20Program.%0A%0AMy%20name%3A%0AMy%20business%3A%0AMy%20trade%20%2F%20industry%3A%0ANumber%20of%20employees%3A%0ABest%20number%20to%20reach%20me%3A%0A%0AA%20little%20about%20what%20I%27m%20hoping%20to%20accomplish%3A%0A%0ALooking%20forward%20to%20connecting!"; }}
           style={{
             display: "flex", alignItems: "center", gap: 8, width: "100%",
-            background: C.red, color: "#fff", border: "none", cursor: "pointer",
+            background: C.red, color: C.onAccent, border: "none", cursor: "pointer",
             borderRadius: 8, padding: "9px 12px", marginBottom: 8,
             fontSize: 13, fontWeight: 700, letterSpacing: "0.01em", lineHeight: 1.2
           }}
@@ -1370,7 +1424,7 @@ function MyMeasurables({ company, onSave, me }) {
 function NavSection({ label, children }) {
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <div style={{ background: C.red, color: "#fff", fontFamily: "'Google Sans',sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 2, textTransform: "uppercase", padding: "8px 16px", borderRadius: 6, marginBottom: 16, display: "inline-block" }}>{label}</div>
+      <div style={{ background: C.red, color: C.onAccent, fontFamily: "'Google Sans',sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 2, textTransform: "uppercase", padding: "8px 16px", borderRadius: 6, marginBottom: 16, display: "inline-block" }}>{label}</div>
       {children}
     </div>
   );
@@ -1497,7 +1551,7 @@ function Confetti({ message, onDone }) {
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    const colors = ["#e43531","#c42d29","#ffffff","#f1f1f3","#e43531","#b9b9c0","#ffffff"];
+    const colors = C.confetti;
     const particles = Array.from({ length: 160 }, (_, i) => ({
       x: Math.random() * canvas.width,
       y: -20 - Math.random() * 200,
@@ -1540,8 +1594,8 @@ function Confetti({ message, onDone }) {
       {message && (
         <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 10000, pointerEvents: "none", textAlign: "center" }} className="fade-in">
           <div style={{ background: "rgba(0,0,0,0.82)", borderRadius: 16, padding: "28px 40px", border: "2px solid rgba(255,255,255,0.15)", backdropFilter: "blur(8px)" }}>
-            <div style={{ color: "#fff", display: "flex", justifyContent: "center" }}>{message.emoji === "celebrate" ? <Icon.celebrate /> : <Icon.trophy />}</div>
-            <div style={{ fontFamily: "'Google Sans',sans-serif", fontWeight: 800, fontSize: 32, color: "#fff", marginTop: 10, letterSpacing: 1 }}>{message.title}</div>
+            <div style={{ color: C.onAccent, display: "flex", justifyContent: "center" }}>{message.emoji === "celebrate" ? <Icon.celebrate /> : <Icon.trophy />}</div>
+            <div style={{ fontFamily: "'Google Sans',sans-serif", fontWeight: 800, fontSize: 32, color: C.onAccent, marginTop: 10, letterSpacing: 1 }}>{message.title}</div>
             <div style={{ fontSize: 15, color: "rgba(255,255,255,0.7)", marginTop: 6 }}>{message.sub}</div>
           </div>
         </div>
@@ -2460,9 +2514,9 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                       {[["on","On Track"],["off","Off Track"],["done","Done"],["notdone","Not Done"]].map(([s, label]) => {
                         const isActive = t.status === s;
-                        const bg = isActive ? (s === "off" ? "rgba(228,53,49,0.2)" : s === "notdone" ? "rgba(245,158,11,0.2)" : "rgba(140,140,148,0.2)") : C.surface2;
-                        const col = isActive ? (s === "off" ? C.red : s === "notdone" ? "#f59e0b" : C.green) : C.textMuted;
-                        const bor = isActive ? (s === "off" ? C.red : s === "notdone" ? "#f59e0b" : C.green) : C.border;
+                        const bg = isActive ? (s === "off" ? "rgba(228,53,49,0.2)" : s === "notdone" ? C.amberBg : "rgba(140,140,148,0.2)") : C.surface2;
+                        const col = isActive ? (s === "off" ? C.red : s === "notdone" ? C.amber : C.green) : C.textMuted;
+                        const bor = isActive ? (s === "off" ? C.red : s === "notdone" ? C.amber : C.green) : C.border;
                         return (
                           <button key={s} onClick={() => onSave(latest => ({ quarterlyTasks: (latest.quarterlyTasks||[]).map(x => x.id === t.id ? { ...x, status: s } : x) }))}
                             style={{ padding: "5px 12px", borderRadius: 5, fontSize: 11, fontWeight: 700, fontFamily: "'Google Sans',sans-serif", cursor: "pointer", border: `1px solid ${bor}`, background: bg, color: col }}>
@@ -2791,7 +2845,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                         <div key={item.id} onClick={() => setActiveIssueId(item.id)}
                           style={{ padding: "10px 12px", borderRadius: 7, border: `1px solid ${activeIssueId === item.id ? C.red : C.border}`, background: activeIssueId === item.id ? C.redGlow : C.surface2, marginBottom: 6, cursor: "pointer", transition: "all 0.15s" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ width: 20, height: 20, borderRadius: "50%", background: activeIssueId === item.id ? C.red : C.surface3, color: activeIssueId === item.id ? "#fff" : C.textMuted, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{idx + 1}</div>
+                            <div style={{ width: 20, height: 20, borderRadius: "50%", background: activeIssueId === item.id ? C.red : C.surface3, color: activeIssueId === item.id  ? C.onAccent : C.textMuted, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{idx + 1}</div>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{item.title}</div>
                               <div style={{ fontSize: 10, color: C.red, fontWeight: 700, letterSpacing: 0.5 }}>{item.sourceLabel}</div>
@@ -2843,7 +2897,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                       </div>
                     ) : (
                       <div className="card fade-in" key={activeItem.id}>
-                        <div style={{ background: C.red, color: "#fff", borderRadius: 6, padding: "8px 14px", marginBottom: 16, display: "inline-block", fontSize: 11, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase" }}>
+                        <div style={{ background: C.red, color: C.onAccent, borderRadius: 6, padding: "8px 14px", marginBottom: 16, display: "inline-block", fontSize: 11, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase" }}>
                           {activeItem.sourceLabel}
                         </div>
                         <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, lineHeight: 1.3 }}>{activeItem.title}</h3>
@@ -2883,7 +2937,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                                   {members.length === 0 && <div style={{ fontSize: 12, color: C.textMuted }}>No members in this huddle.</div>}
                                 </div>
                                 <div style={{ display: "flex", gap: 6 }}>
-                                  <button onClick={commitAddAsTodo} style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "none", background: C.green, color: "#fff", fontFamily: "'Google Sans',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                                  <button onClick={commitAddAsTodo} style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "none", background: C.green, color: C.onAccent, fontFamily: "'Google Sans',sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
                                     Add To-Do
                                   </button>
                                   <button onClick={() => setTodoPickerOpen(false)} style={{ padding: "7px 10px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.surface2, color: C.textMuted, fontFamily: "'Google Sans',sans-serif", fontSize: 12, cursor: "pointer" }}>
@@ -2994,8 +3048,8 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
             const pool = present.filter(m => !alreadySelected.includes(m.id));
             const allDone = present.length > 0 && pool.length === 0;
             // Pastel avatar colors
-            const avatarColors = ["#f6d8d6","#fbeae9","#ededf0","#e6e6ea","#f6d8d6","#ededf0","#e6e6ea","#fbeae9"];
-            const textColors   = ["#e43531","#c42d29","#3f3f46","#52525b","#e43531","#3f3f46","#52525b","#c42d29"];
+            const avatarColors = C.avatarBgs;
+            const textColors   = C.avatarFgs;
             return (
               <div className="fade-in">
                 <div className="card">
@@ -3015,7 +3069,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                         style={{ padding: "10px 22px", borderRadius: 8, border: "none", cursor: (spinning || pool.length === 0) ? "not-allowed" : "pointer",
                           fontFamily: "'Google Sans',sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 1.5, textTransform: "uppercase",
                           background: (spinning || pool.length === 0) ? C.surface2 : `linear-gradient(135deg, ${C.red}, ${C.redDark})`,
-                          color: (spinning || pool.length === 0) ? C.textMuted : "#fff", transition: "all 0.2s",
+                          color: (spinning || pool.length === 0) ? C.textMuted : C.onAccent, transition: "all 0.2s",
                           boxShadow: (spinning || pool.length === 0) ? "none" : "0 4px 16px rgba(228,53,49,0.35)" }}>
                         {spinning ? "Selecting..." : spotlight ? "🎲 Pick Again" : "🎲 Auto Pick Next"}
                       </button>
@@ -3063,7 +3117,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                             {initials}
                             {wasSelected && !isAbsent && (
                               <div style={{ position: "absolute", top: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: C.green, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <svg width="9" height="9" viewBox="0 0 12 12"><polyline points="1,6 4,9 11,2" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
+                                <svg width="9" height="9" viewBox="0 0 12 12"><polyline points="1,6 4,9 11,2" stroke={C.onAccent} strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
                               </div>
                             )}
                           </div>
@@ -3175,7 +3229,7 @@ function Tasks({ company, onSave, onAdd }) {
         <div style={{ display: "flex", gap: 8, flex: 1 }}>
         {["company", "individual"].map(t => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ padding: "8px 20px", borderRadius: 6, border: `1px solid ${C.border}`, cursor: "pointer", fontFamily: "'Google Sans',sans-serif", fontWeight: 600, fontSize: 13, background: tab === t ? C.red : C.surface2, color: tab === t ? "#fff" : C.textMuted }}>
+            style={{ padding: "8px 20px", borderRadius: 6, border: `1px solid ${C.border}`, cursor: "pointer", fontFamily: "'Google Sans',sans-serif", fontWeight: 600, fontSize: 13, background: tab === t ? C.red : C.surface2, color: tab === t  ? C.onAccent : C.textMuted }}>
             {t === "company" ? "Company Tasks" : "Individual Tasks"}
           </button>
         ))}
@@ -3190,7 +3244,7 @@ function Tasks({ company, onSave, onAdd }) {
       {tab === "company" && (
         <div className="card">
           <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-            {[["on", C.green, "On Track"], ["off", C.red, "Off Track"], ["done", C.blue, "Done"], ["notdone", "#f59e0b", "Not Done"]].map(([s, c, l]) => (
+            {[["on", C.green, "On Track"], ["off", C.red, "Off Track"], ["done", C.blue, "Done"], ["notdone", C.amber, "Not Done"]].map(([s, c, l]) => (
               <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: C.textMuted }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />{visibleTasks.filter(t => t.status === s).length} {l}
               </div>
@@ -3253,7 +3307,7 @@ function Tasks({ company, onSave, onAdd }) {
                           on: { bg: "rgba(140,140,148,0.12)", color: C.green, border: "rgba(140,140,148,0.3)" },
                           off: { bg: "rgba(228,53,49,0.12)", color: C.red, border: "rgba(228,53,49,0.3)" },
                           done: { bg: "rgba(228,53,49,0.12)", color: C.blue, border: "rgba(228,53,49,0.3)" },
-                          notdone: { bg: "rgba(245,158,11,0.14)", color: "#f59e0b", border: "rgba(245,158,11,0.4)" },
+                          notdone: { bg: C.amberBg, color: C.amber, border: C.amberBorder },
                         };
                         const effectiveColor = met === true ? colors.done : met === false ? colors.off : colors[t.status] || colors.on;
                         return (
@@ -3292,7 +3346,7 @@ function Tasks({ company, onSave, onAdd }) {
                 <div style={{ fontFamily: "'Google Sans',sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>{member.name}</div>
                 {allTasks.map(t => {
                   const met = meetsTarget(t);
-                  const statusColor = t.status === "notdone" ? "#f59e0b" : t.status === "off" || met === false ? C.red : t.status === "done" || met === true ? C.green : C.yellow;
+                  const statusColor = t.status === "notdone" ? C.amber : t.status === "off" || met === false ? C.red : t.status === "done" || met === true ? C.green : C.yellow;
                   const statusLabel = t.status === "notdone" ? "Not Done" : t.status === "done" ? "Done" : t.status === "off" ? "Off Track" : "On Track";
                   return (
                     <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}`, gap: 12 }}>
@@ -4170,7 +4224,7 @@ const DEFAULT_CHART_DEPTS = [
   { id: "d3", label: "Finance",           color: "green",  staff: [] },
 ];
 const DEPT_COLORS = ["blue","yellow","green","red","purple"];
-const deptColor = (c) => ({ blue: C.blue, yellow: C.yellow, green: C.green, red: C.red, purple: "#71717a" })[c] || C.blue;
+const deptColor = (c) => ({ blue: C.blue, yellow: C.yellow, green: C.green, red: C.red, purple: C.purple })[c] || C.blue;
 
 function migrateChart(raw) {
   // Migrate old dreamer/doer/salesRoles etc. format to new leaders/departments format
@@ -4921,7 +4975,7 @@ function QuarterHistory({ company }) {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
                 onClick={() => setExpanded(isOpen ? null : q.quarter)}>
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <div style={{ background: C.red, color: "#fff", fontFamily: "'Google Sans',sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 2, padding: "6px 14px", borderRadius: 6 }}>{q.quarter}</div>
+                  <div style={{ background: C.red, color: C.onAccent, fontFamily: "'Google Sans',sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 2, padding: "6px 14px", borderRadius: 6 }}>{q.quarter}</div>
                   <div className="mob-wrap" style={{ display: "flex", gap: 20 }}>
                     <span style={{ fontSize: 12, color: C.textMuted }}><span style={{ color: C.text, fontWeight: 700 }}>{tasks.length}</span> Tasks</span>
                     <span style={{ fontSize: 12, color: C.textMuted }}><span style={{ color: C.text, fontWeight: 700 }}>{todos.length}</span> To-Dos</span>
@@ -5333,7 +5387,7 @@ function VASTApp() {
       <form onSubmit={e => { e.preventDefault(); if (!authLoading) handleLogin(loginEmail, loginPassword); }}>
         <input type="email" autoComplete="username" placeholder="Email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} autoFocus style={fieldStyle} />
         <input type="password" autoComplete="current-password" placeholder="Password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} style={fieldStyle} />
-        {authError && <div style={{ color: "#e43531", fontSize: 13, marginBottom: 12 }}>{authError}</div>}
+        {authError && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{authError}</div>}
         <button type="submit" className="btn-primary" style={{ width: "100%", padding: 14, fontSize: 15, marginBottom: 16, justifyContent: "center" }} disabled={authLoading || !loginEmail.trim() || !loginPassword}>
           {authLoading ? "Signing in..." : "Sign in →"}
         </button>
@@ -5363,7 +5417,7 @@ function VASTApp() {
   if (appState === "error") return (
     <AuthCard theme={theme}>
       <div style={{ marginTop: 24, marginBottom: 8, fontFamily: "'Google Sans',sans-serif", fontSize: 24, fontWeight: 800 }}>Couldn't load VAST</div>
-      <div style={{ color: "#e43531", fontSize: 13, marginBottom: 24 }}>{authError || "Something went wrong."}</div>
+      <div style={{ color: C.red, fontSize: 13, marginBottom: 24 }}>{authError || "Something went wrong."}</div>
       <button className="btn-primary" style={{ width: "100%", padding: 14, fontSize: 15, marginBottom: 12, justifyContent: "center" }} onClick={retryBootstrap}>Try again</button>
       <button onClick={() => logoutAndClear()} style={linkStyle}>Sign out</button>
     </AuthCard>
@@ -5386,7 +5440,7 @@ function VASTApp() {
     <div style={{ minHeight: "100vh", background: C.bg }}>
       <GlobalStyles theme={theme} />
       {loadError && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 10000, background: C.red, color: "#fff", padding: "10px 16px", fontSize: 13, fontWeight: 600, textAlign: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.3)" }}>
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 10000, background: C.red, color: C.onAccent, padding: "10px 16px", fontSize: 13, fontWeight: 600, textAlign: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.3)" }}>
           Connection problem — showing the last data we loaded. Recent changes may not be saved. Please reload or sign in again.
         </div>
       )}
