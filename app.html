@@ -2071,7 +2071,9 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
       completedTodos: (latestData.todos || []).filter(t => t.done).slice(-20),
       todos: (latestData.todos || []).filter(t => !t.done).slice(-5),
       solvedProblems: solvedThisSession,
-      recapText: builtRecap
+      recapText: builtRecap,
+      // Names of members marked present (same list the recap's ATTENDEES line uses)
+      attendees: members.filter(m => attendance[m.id] !== false).map(m => m.name)
     };
     // Archive quarter snapshot (once per quarter, keyed by currentQuarter)
     const qh = latestData.quarterHistory || [];
@@ -2088,7 +2090,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
       ],
       meetingRatings: [
         ...(existingIdx >= 0 ? (qh[existingIdx].meetingRatings || []) : []),
-        { date: now(), rating }
+        { date: now(), rating: avgRating }
       ]
     };
     const newQH = existingIdx >= 0
