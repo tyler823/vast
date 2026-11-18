@@ -53,10 +53,10 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg, #0a0a0b); color: var(--t1, #f4f5f6); font-family: 'Google Sans', sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; font-feature-settings: 'tnum' 1, 'lnum' 1; }
+    body { background: var(--bg, #0a0a0b); color: var(--t1, #f4f5f6); font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; font-feature-settings: 'tnum' 1, 'lnum' 1; }
     ::-webkit-scrollbar{width:10px;height:10px;background:#EEF0F3} ::-webkit-scrollbar-thumb{background:#B8BEC8;border-radius:6px;border:2px solid #EEF0F3}
     #root { min-height: 100vh; }
     #vast-loading {
@@ -70,7 +70,7 @@
     html.vast-theme-light #vast-loading .boot-logo-dark { display: none; }
     html.vast-theme-light #vast-loading .boot-logo-light { display: block; }
     html.vast-theme-light #vast-loading p { color: #5B6475; }
-    #vast-loading p { margin-top: 16px; color: #8e8e98; font-size: 14px; font-family: 'Google Sans', sans-serif; }
+    #vast-loading p { margin-top: 16px; color: #8e8e98; font-size: 14px; font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; }
   </style>
 </head>
 <body>
@@ -106,7 +106,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 // DARK_THEME / LIGHT_THEME = colors, which differ per theme.
 const BASE_TOKENS = {
   // Fonts. fontMono is used for every number, count, date, ID, % and $ amount.
-  fontUI: "'Google Sans',sans-serif",
+  fontUI: "'Inter','Segoe UI',system-ui,-apple-system,sans-serif",
   fontMono: "'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace",
   // Text sizes (px)
   // xs = labels/small, sm = secondary, base = body, md = section titles,
@@ -229,7 +229,7 @@ let C = LIGHT_THEME;
 
 // ─── Injected Styles (function so they regenerate with theme) ─────────
 const makeSTYLE = (C) => `
-  @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
   :root{--bg:${C.bg};--s1:${C.surface};--s2:${C.surface2};--s3:${C.surface3};--s4:${C.surface3};--acc:${C.accent};--acc-lo:${C.redGlow};--acc-glo:${C.offBorder};--t1:${C.text};--t2:${C.textMuted};--t3:${C.textDim};--green:${C.green};--amber:${C.amber};--red:${C.red};--purple:${C.textMuted};--br:${C.border};--br-hi:${C.okBorder};--ui:${C.fontUI};--mono:${C.fontMono};${tokensToCssVars(C)}}
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:${C.bg};color:${C.text};font-family:${C.fontUI};font-size:${C.fs.base}px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;font-feature-settings:'tnum' 1,'lnum' 1}
@@ -252,7 +252,7 @@ const makeSTYLE = (C) => `
   input:not([type=checkbox]):not([type=radio]),select{min-height:${C.h.control}px}
   textarea{resize:vertical;min-height:80px}
   select option{background:${C.surface2};color:${C.text}}
-  button{cursor:pointer;font-family:${C.fontUI};font-weight:600;border:none;border-radius:${C.radius.control}px;padding:6px 12px;font-size:${C.fs.sm}px;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;white-space:nowrap}
+  button{cursor:pointer;font-family:${C.fontUI};font-weight:500;border:none;border-radius:${C.radius.control}px;padding:6px 12px;font-size:${C.fs.sm}px;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;white-space:nowrap}
   button:disabled{opacity:0.45;cursor:not-allowed}
   .btn-primary,.btn-secondary,.btn-ghost,.btn-danger{min-height:${C.h.control}px;justify-content:center}
   .btn-primary{background:${C.primary};color:${C.onAccent};padding:6px 12px;font-size:${C.fs.sm}px;box-shadow:none}
@@ -346,7 +346,7 @@ const makeSTYLE = (C) => `
   .row-between{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .chip{display:inline-flex;align-items:center;gap:6px;background:${C.surface3};border:1px solid ${C.border};border-radius:${C.radius.pill}px;padding:4px 12px;font-size:${C.fs.xs}px;color:${C.textMuted}}
   .table{width:100%;border-collapse:collapse}
-  .table th{text-align:left;height:${C.h.row}px;padding:6px 12px;font-size:${C.fs.xs}px;font-weight:600;color:${C.textMuted};border-bottom:1px solid ${C.border}}
+  .table th{text-align:left;height:${C.h.row}px;padding:6px 12px;font-size:${C.fs.xs}px;font-weight:500;color:${C.textMuted};border-bottom:1px solid ${C.border}}
   .table td{height:${C.h.row}px;padding:4px 12px;font-size:${C.fs.base}px;border-bottom:1px solid ${C.border}}
   .table tr:last-child td{border-bottom:none}
   .table tr:hover td{background:${C.okBg}}
