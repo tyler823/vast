@@ -391,6 +391,16 @@ const makeSTYLE = (C) => `
   .priority-3{color:${C.textMuted};font-weight:600}
   .row,[class*="-row"],[class*="-item"]{transition:border-color 0.12s,background 0.12s}
   button:not([class]),[role="button"]{transition:all 0.12s}
+  /* ── Scorecard grid ── */
+  .sc-wrap{max-height:calc(100vh - 150px)}
+  .sc-table td,.sc-table th{white-space:nowrap}
+  .sc-table th.sc-name,.sc-table td.sc-name{position:sticky;left:0;z-index:1;background:${C.surface2};min-width:200px;max-width:340px;box-shadow:inset -1px 0 0 ${C.border}}
+  .sc-table th.sc-name{z-index:3}
+  .sc-table tbody tr:hover td.sc-name{background:${C.tableHover}}
+  .sc-table td.sc-cell{padding:2px 4px;text-align:right}
+  .sc-input{width:88px;height:30px;min-height:30px!important;text-align:right;padding:2px 8px;font-family:${C.fontMono};font-variant-numeric:tabular-nums;font-size:${C.fs.sm}px;border:1px solid transparent!important;border-radius:${C.radius.control}px;box-shadow:none!important}
+  .sc-input:hover{border-color:${C.inputBorder}!important}
+  .sc-input:focus{border-color:${C.focus}!important;background:${C.inputBg}!important;color:${C.text}!important}
   /* ── Layout & density (shared) ── */
   .panel{background:${C.surface2};border:1px solid ${C.border};border-radius:${C.radius.card}px;min-width:0}
   .panel-h{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 12px;min-height:44px;border-bottom:1px solid ${C.border}}
@@ -1338,8 +1348,22 @@ function Dashboard({ company, onSave, setView, me, companyCode }) {
 // silently overwrite the user mid-typing. While the input is focused, prop
 // changes (Firestore listener echoes) are ignored; on blur we sync. Every
 // keystroke also writes through to Firestore so progress is durable.
-function ScorecardCell({ value, onCommit, placeholder, style }) {
+// Display-only number formatting: "130000" + "$" → "$130,000". Anything that
+// isn't a plain number is shown exactly as typed. Never used for saving.
+const fmtMeasure = (raw, unit, cell) => {
+  const str = String(raw ?? "").trim();
+  if (!/^-?\d+(\.\d+)?$/.test(str)) return raw ?? "";
+  const n = Number(str);
+  const body = Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 6 });
+  const sign = n < 0 ? "-" : "";
+  const u = String(unit || "").trim();
+  if (u === "$") return `${sign}$${body}`;
+  if (u === "%") return `${sign}${body}%`;
+  return `${sign}${body}${u && !cell ? " " + u : ""}`;
+};
+function ScorecardCell({ value, onCommit, placeholder, style, format, className }) {
   const [local, setLocal] = useState(value ?? "");
+  const [focused, setFocused] = useState(false);
   const focusedRef = useRef(false);
   useEffect(() => {
     if (!focusedRef.current) setLocal(value ?? "");
@@ -1347,12 +1371,14 @@ function ScorecardCell({ value, onCommit, placeholder, style }) {
   return (
     <input
       type="text"
-      value={local}
+      value={format && !focused ? format(local) : local}
       placeholder={placeholder}
       style={style}
-      onFocus={() => { focusedRef.current = true; }}
+      className={className}
+      onFocus={() => { focusedRef.current = true; setFocused(true); }}
       onBlur={() => {
         focusedRef.current = false;
+        setFocused(false);
         if (local !== (value ?? "")) onCommit(local);
         else setLocal(value ?? "");
       }}
@@ -3595,6 +3621,24 @@ function Tasks({ company, onSave, onAdd }) {
 }
 
 // ─── SCORECARD ────────────────────────────────────────────────────────
+function QuietFmtInput({ value, onChange, unit, placeholder, ariaLabel }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <input className="quiet-input num" value={focused ? value : fmtMeasure(value, unit)} onChange={onChange} placeholder={placeholder} aria-label={ariaLabel}
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={{ width: 96, textAlign: "right" }} />
+  );
+}
+// Viewport width (resize-aware) — used only to decide how many weeks fit.
+function useViewportWidth() {
+  const [w, setW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const on = () => setW(window.innerWidth);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  return w;
+}
+
 function Scorecard({ company, onSave }) {
   // Default new measurables to the team's first/active huddle (no orphans).
   const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
@@ -3608,6 +3652,7 @@ function Scorecard({ company, onSave }) {
   const members = activeMembers(company);
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const isMobile = useMobile();
+  const viewportW = useViewportWidth();
   const [huddleFilter, setHuddleFilter] = useState("all");
   const filtered = huddleFilter === "all" ? measurables : measurables.filter(m => m.huddleId === huddleFilter);
 
@@ -3665,9 +3710,10 @@ function Scorecard({ company, onSave }) {
   // current week (rightmost). Display-only — `weeks` itself is never mutated and
   // cells stay keyed by their own week, so saving is unaffected.
   const curIdx = weeks.indexOf(wk);
+  const weekWindow = viewportW >= 1440 ? 13 : 9;
   const visibleWeeks = curIdx >= 0
-    ? weeks.slice(Math.max(0, curIdx - 8), curIdx + 1)
-    : weeks.slice(-9);
+    ? weeks.slice(Math.max(0, curIdx - (weekWindow - 1)), curIdx + 1)
+    : weeks.slice(-weekWindow);
 
   return (
     <Layout title="Scorecard" subtitle="Track your most important numbers"
@@ -3675,7 +3721,8 @@ function Scorecard({ company, onSave }) {
 
       {scorecardError && <div style={{ color: C.red, background: C.redTint1, border: `1px solid ${C.redTint3}`, borderRadius: C.radius.control, padding: "8px 12px", marginBottom: 12, fontSize: C.fs.sm }}>{scorecardError}</div>}
 
-      <div className="toolbar" style={{ justifyContent: "flex-end" }}>
+      <div className="toolbar" style={{ justifyContent: "space-between", border: `1px solid ${C.border}`, borderRadius: C.radius.card }}>
+        <span style={{ fontSize: C.fs.sm, color: C.textMuted }}><span className="num" style={{ color: C.text }}>{filtered.length}</span> measurable{filtered.length === 1 ? "" : "s"}{!isMobile && <> · last <span className="num" style={{ color: C.text }}>{visibleWeeks.length}</span> weeks</>}</span>
         <select value={huddleFilter} onChange={e => setHuddleFilter(e.target.value)}
           style={{ fontSize: C.fs.sm }}>
           <option value="all">All Huddles</option>
@@ -3693,32 +3740,35 @@ function Scorecard({ company, onSave }) {
       ) : (
         <>
           {!isMobile && (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
-            <table className="table" style={{ minWidth: 700 }}>
+        <div className="panel" style={{ overflow: "hidden" }}>
+          <div className="dt-wrap sc-wrap">
+            <table className="dt sc-table">
               <thead>
                 <tr>
-                  <th>Measurable</th>
+                  <th className="sc-name">Measurable</th>
                   <th>Responsible</th>
-                  <th style={{ textAlign: "right" }}>Target</th>
-                  {visibleWeeks.map(w => <th key={w} className="num" style={{ textAlign: "right", paddingRight: 16, background: w === wk ? C.selBg : undefined, boxShadow: w === wk ? `inset 2px 0 0 ${C.selBorder}` : undefined, color: w === wk ? C.link : undefined }}>{w.split("-W")[1] ? `W${w.split("-W")[1]}` : w}</th>)}
+                  <th className="r">Goal</th>
+                  {visibleWeeks.map(w => <th key={w} className="num r" style={{ paddingRight: 12, background: w === wk ? C.selBg : undefined, boxShadow: w === wk ? `inset 2px 0 0 ${C.selBorder}` : undefined, color: w === wk ? C.link : undefined }}>{w.split("-W")[1] ? `W${w.split("-W")[1]}` : w}</th>)}
                   <th>Huddle</th>
+                  <th className="r">Qtr goal</th>
+                  <th>Calc</th>
+                  <th className="shrink" aria-label="Actions"></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(m => (
                   <tr key={m.id}>
-                    <td style={{ fontWeight: 600 }}><div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}><button className="btn-secondary" style={{ padding: "4px 8px", fontSize: C.fs.xs }} onClick={() => editMeasurable(m)}>Edit</button><span>{m.name}{m.unit && <span style={{ color: C.textMuted, fontSize: C.fs.xs, marginLeft: 4 }}>({m.unit})</span>}</span></div></td>
+                    <td className="sc-name" title={m.name}><span style={{ fontWeight: 600, display: "block", whiteSpace: (m.name || "").length > 40 ? "normal" : "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</span></td>
                     <td>
-                      <select value={m.owner || ""} onChange={e => {
+                      <select className="quiet-select" aria-label={`Responsible for ${m.name}`} value={m.owner || ""} onChange={e => {
                         writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, owner: e.target.value } : x));
-                      }} style={{ width: 130, padding: "4px 8px", fontSize: C.fs.xs }}>
+                      }}>
                         <option value="">Unassigned</option>
                         {members.map(mem => <option key={mem.id} value={mem.name}>{mem.name}</option>)}
                       </select>
                     </td>
-                    <td style={{ color: C.textMuted, whiteSpace: "nowrap", textAlign: "right" }}>
-                      {m.operator && m.operator !== "gte" ? {gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="}[m.operator] : "≥"} <span className="num">{m.target}</span>{m.unit ? ` ${m.unit}` : ""}
+                    <td className="r num muted" style={{ whiteSpace: "nowrap" }}>
+                      {m.operator && m.operator !== "gte" ? {gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="}[m.operator] : "≥"} {fmtMeasure(m.target, m.unit)}
                     </td>
                     {visibleWeeks.map(w => {
                       const val = entries[w]?.[m.id] ?? "";
@@ -3737,37 +3787,43 @@ function Scorecard({ company, onSave }) {
                     };
                     const onTarget = checkTarget(val, m);
                       return (
-                        <td key={w} style={{ textAlign: "right", background: isCurrentWeek ? C.selBg : "transparent", boxShadow: isCurrentWeek ? `inset 2px 0 0 ${C.selBorder}` : undefined }}>
+                        <td key={w} className="sc-cell" style={{ background: isCurrentWeek ? C.selBg : "transparent", boxShadow: isCurrentWeek ? `inset 2px 0 0 ${C.selBorder}` : undefined }}>
                           <ScorecardCell
                             value={val}
                             onCommit={(v) => setEntry(m.id, v, w)}
                             placeholder="—"
-                            style={{ width: 70, textAlign: "right", padding: "6px 8px", fontSize: C.fs.sm, fontWeight: val ? 600 : 400,
-                              border: `1px solid ${isCurrentWeek ? C.borderStrong : C.border}`,
-                              borderRadius: C.radius.control, background: onTarget === true ? C.greenTint : onTarget === false ? C.redTint1 : C.surface2,
-                              color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.text) : C.textDim,
-                              fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
+                            format={(v) => fmtMeasure(v, m.unit, true)}
+                            className="sc-input"
+                            style={{ fontWeight: val ? 600 : 400,
+                              background: onTarget === true ? C.greenTint : onTarget === false ? C.redTint1 : "transparent",
+                              color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.text) : C.textDim }}
                           />
                         </td>
                       );
                     })}
                     <td>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <select value={m.rollup || "sum"} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, rollup: e.target.value } : x))}
-                          style={{ fontSize: C.fs.xs, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.textMuted, maxWidth: 110 }}>
-                          <option value="sum">Sum</option>
-                          <option value="avg">Average</option>
-                          <option value="latest">Latest</option>
-                        </select>
-                        <input value={m.quarterlyGoal || ""} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, quarterlyGoal: e.target.value } : x))}
-                          placeholder="Qtr goal"
-                          style={{ fontSize: C.fs.xs, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.textMuted, width: 80 }} />
-                        <select value={m.huddleId || ""} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, huddleId: e.target.value } : x))}
-                          style={{ fontSize: C.fs.xs, padding: "4px 8px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.textMuted, maxWidth: 130 }}>
-                          <option value="">No Huddle</option>
-                          {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-                        </select>
-                        <button className="btn-danger" style={{ padding: "6px 8px" }} onClick={() => deleteMeasurable(m.id)}><Icon.trash /></button>
+                      <select className="quiet-select" aria-label={`Huddle for ${m.name}`} value={m.huddleId || ""} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, huddleId: e.target.value } : x))}
+                        style={{ color: C.textMuted, maxWidth: 170 }}>
+                        <option value="">No Huddle</option>
+                        {huddles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                      </select>
+                    </td>
+                    <td className="r">
+                      <QuietFmtInput value={m.quarterlyGoal || ""} unit={m.unit} placeholder="—" ariaLabel={`Quarterly goal for ${m.name}`}
+                        onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, quarterlyGoal: e.target.value } : x))} />
+                    </td>
+                    <td>
+                      <select className="quiet-select" aria-label={`Calculation for ${m.name}`} value={m.rollup || "sum"} onChange={e => writeMeasurables(measurables.map(x => x.id === m.id ? { ...x, rollup: e.target.value } : x))}
+                        style={{ color: C.textMuted }}>
+                        <option value="sum">Sum</option>
+                        <option value="avg">Average</option>
+                        <option value="latest">Latest</option>
+                      </select>
+                    </td>
+                    <td className="shrink">
+                      <div style={{ display: "flex", gap: 2 }}>
+                        <button className="icon-btn" title="Edit" aria-label={`Edit ${m.name}`} onClick={() => editMeasurable(m)}><Icon.edit /></button>
+                        <button className="icon-btn danger" title="Delete" aria-label={`Delete ${m.name}`} onClick={() => deleteMeasurable(m.id)}><Icon.trash /></button>
                       </div>
                     </td>
                   </tr>
