@@ -57,7 +57,7 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg, #0a0a0b); color: var(--t1, #f4f5f6); font-family: 'Google Sans', sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; font-feature-settings: 'tnum' 1, 'lnum' 1; }
-    ::-webkit-scrollbar{width:4px;background:transparent} ::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.15);border-radius:2px}
+    ::-webkit-scrollbar{width:10px;height:10px;background:#EEF0F3} ::-webkit-scrollbar-thumb{background:#B8BEC8;border-radius:6px;border:2px solid #EEF0F3}
     #root { min-height: 100vh; }
     #vast-loading {
       position: fixed; inset: 0; background: #0a0a0b;
@@ -157,6 +157,7 @@ const DARK_THEME = {
   // selected (neutral) state + keyboard focus
   selBg: "rgba(255,255,255,0.08)", selBorder: "#f4f5f6",
   focus: "#7aa2ff",
+  scrollTrack: "#17171a", scrollThumb: "#3f3f47", scrollThumbHover: "#62626c",
   syncSaving: "#9a9aa2", syncSaved: "#9a9aa2",
   avatarBgs: ["#2a2a30"], avatarFgs: ["#f4f5f6"],
   confetti: ["#4cc178","#7aa2ff","#e9a23b","#e43531","#f4f5f6"],
@@ -197,6 +198,7 @@ const LIGHT_THEME = {
   purple: "#6D28D9",
   selBg: "rgba(20,23,31,0.06)", selBorder: "#14171F",
   focus: "#1D4ED8",
+  scrollTrack: "#EEF0F3", scrollThumb: "#B8BEC8", scrollThumbHover: "#8D95A3",
   syncSaving: "#667085", syncSaved: "#667085",
   avatarBgs: ["#E4E7EC"], avatarFgs: ["#14171F"],
   confetti: ["#15803D","#1D4ED8","#B45309","#e43531","#5B6475"],
@@ -232,10 +234,20 @@ const makeSTYLE = (C) => `
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:${C.bg};color:${C.text};font-family:${C.fontUI};font-size:${C.fs.base}px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;font-feature-settings:'tnum' 1,'lnum' 1}
   html,body,#root{overflow-x:clip}
-  ::-webkit-scrollbar{width:4px;background:transparent}
-  ::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.18);border-radius:2px}
+  /* Visible scrollbars wherever content can overflow (both themes) */
+  ::-webkit-scrollbar{width:10px;height:10px;background:${C.scrollTrack}}
+  ::-webkit-scrollbar-track{background:${C.scrollTrack}}
+  ::-webkit-scrollbar-thumb{background:${C.scrollThumb};border-radius:6px;border:2px solid ${C.scrollTrack}}
+  ::-webkit-scrollbar-thumb:hover{background:${C.scrollThumbHover}}
+  ::-webkit-scrollbar-corner{background:${C.scrollTrack}}
+  @supports not selector(::-webkit-scrollbar){*{scrollbar-width:thin;scrollbar-color:${C.scrollThumb} ${C.scrollTrack}}}
+  /* Keyboard focus: clear 2px outline, offset 2px, on everything you can tab to */
+  :focus{outline:none}
+  :focus-visible{outline:2px solid ${C.focus};outline-offset:2px}
+  a:focus-visible,button:focus-visible,[role="button"]:focus-visible,[tabindex]:focus-visible,summary:focus-visible{outline:2px solid ${C.focus};outline-offset:2px}
   input,textarea,select{background:${C.surface3};border:1px solid ${C.border};color:${C.text};font-family:${C.fontUI};border-radius:${C.radius.control}px;padding:6px 12px;line-height:20px;width:100%;font-size:${C.fs.base}px;outline:none;transition:border-color 0.12s,box-shadow 0.12s;font-feature-settings:'tnum' 1,'lnum' 1}
-  input:focus,textarea:focus,select:focus{border-color:${C.focus};box-shadow:0 0 0 3px ${C.blueTint}}
+  input:focus,textarea:focus,select:focus{border-color:${C.focus}}
+  input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid ${C.focus};outline-offset:2px}
   input::placeholder{color:${C.textDim}}
   input:not([type=checkbox]):not([type=radio]),select{min-height:${C.h.control}px}
   textarea{resize:vertical;min-height:80px}
@@ -295,7 +307,7 @@ const makeSTYLE = (C) => `
     .modal{padding:16px!important;max-height:88vh!important;width:100%!important;max-width:520px!important;margin:0 auto!important;border-radius:${C.radius.modal}px!important}
     .modal-overlay{padding:12px!important;align-items:flex-start!important}
     .timer-display{font-size:${C.fs.display}px!important}
-    .mob-stack{flex-direction:column!important}
+    .mob-stack{flex-direction:column!important;grid-template-columns:minmax(0,1fr)!important}
     .mob-hide{display:none!important}
     .mob-full{width:100%!important}
     .mob-wrap{flex-wrap:wrap!important}
@@ -901,7 +913,7 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
       style={{ justifyContent: collapsed && !isMobile ? "center" : undefined, padding: collapsed && !isMobile ? "8px 0" : undefined, position: "relative" }}
     >
       <Ico />
-      {!(collapsed && !isMobile) && <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>}
+      {!(collapsed && !isMobile) && <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{label}</span>}
       {!(collapsed && !isMobile) && live && <Icon.liveDot />}
       {!(collapsed && !isMobile) && badge > 0 && <span className="badge">{badge}</span>}
       {(collapsed && !isMobile) && badge > 0 && (
@@ -1001,7 +1013,7 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
           {!(collapsed && !isMobile) && (
             <div style={{ minWidth: 0 }}>
               <VASTLogo size="md" />
-              <div style={{ marginTop: 6, fontSize: C.fs.xs, color: C.textMuted, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{company.name}</div>
+              <div style={{ marginTop: 6, fontSize: C.fs.xs, color: C.textMuted, fontWeight: 600, overflowWrap: "anywhere" }}>{company.name}</div>
             </div>
           )}
           {isMobile ? (
@@ -1052,8 +1064,8 @@ function Layout({ children, title, subtitle, action }) {
               style={{ background: "none", border: "none", color: C.text, fontSize: C.fs.title, cursor: "pointer", padding: "4px 6px", lineHeight: 1, flexShrink: 0 }}><Icon.menu /></button>
           )}
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ fontSize: C.fs.title, fontWeight: 600, color: C.text, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</h1>
-            {subtitle && <div style={{ fontSize: C.fs.sm, color: C.textMuted, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subtitle}</div>}
+            <h1 style={{ fontSize: C.fs.title, fontWeight: 600, color: C.text, margin: 0, overflowWrap: "anywhere", lineHeight: 1.3 }}>{title}</h1>
+            {subtitle && <div style={{ fontSize: C.fs.sm, color: C.textMuted, marginTop: 4, overflowWrap: "anywhere" }}>{subtitle}</div>}
           </div>
         </div>
         {action && <div style={{ flexShrink: 0 }}>{action}</div>}
@@ -1410,7 +1422,7 @@ function MyMeasurables({ company, onSave, me }) {
                                 borderRadius: C.radius.control,
                                 background: met === true ? C.greenTint : met === false ? C.redTint1 : isCur ? C.surface2 : "transparent",
                                 color: met === true ? C.green : met === false ? C.red : val !== "" ? C.text : C.textDim,
-                                outline: "none", fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
+                                fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
                             />
                           </td>
                         );
@@ -1454,7 +1466,7 @@ function MyMeasurables({ company, onSave, me }) {
                                 borderRadius: C.radius.control,
                                 background: met === true ? C.greenTint : met === false ? C.redTint1 : isCur ? C.surface2 : "transparent",
                                 color: met === true ? C.green : met === false ? C.red : val !== "" ? C.text : C.textDim,
-                                outline: "none", fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
+                                fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
                             />
                           </div>
                         );
@@ -2535,7 +2547,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                                   value={val}
                                   onCommit={(v) => setEntry(m.id, wk, v)}
                                   placeholder="—"
-                                  style={{ width: 60, textAlign: "center", padding: "4px 4px", fontSize: C.fs.sm, fontWeight: val !== "" ? 600 : 400, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: C.radius.control, color: val !== "" ? inputColor : C.textDim, outline: "none", fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums", cursor: "text" }}
+                                  style={{ width: 60, textAlign: "center", padding: "4px 4px", fontSize: C.fs.sm, fontWeight: val !== "" ? 600 : 400, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: C.radius.control, color: val !== "" ? inputColor : C.textDim, fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums", cursor: "text" }}
                                 />
                               </td>
                             );
@@ -2558,9 +2570,9 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                 <div key={t.id} style={{ padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: C.fs.base, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
+                      <div style={{ fontSize: C.fs.base, fontWeight: 600, overflowWrap: "anywhere" }}>{t.title}</div>
                       {t.who && <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{t.who}</div>}
-                      {t.notes && !noteOpen[t.id] && <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:4 }} />{t.notes}</div>}
+                      {t.notes && !noteOpen[t.id] && <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4, fontStyle: "italic", overflowWrap: "anywhere" }}><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:4 }} />{t.notes}</div>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", minWidth: 0 }}>
                       {[["on","On Track"],["off","Off Track"],["done","Done"],["notdone","Not Done"]].map(([s, label]) => {
@@ -3654,7 +3666,7 @@ function Scorecard({ company, onSave }) {
                               border: `1px solid ${isCurrentWeek ? C.borderStrong : C.border}`,
                               borderRadius: C.radius.control, background: onTarget === true ? C.greenTint : onTarget === false ? C.redTint1 : C.surface2,
                               color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.text) : C.textDim,
-                              outline: "none", fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
+                              fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
                           />
                         </td>
                       );
@@ -3729,7 +3741,7 @@ function Scorecard({ company, onSave }) {
                               border: `1px solid ${isCurrentWeek ? C.borderStrong : C.border}`,
                               borderRadius: C.radius.control, background: onTarget === true ? C.greenTint : onTarget === false ? C.redTint1 : C.surface2,
                               color: val ? (onTarget === true ? C.green : onTarget === false ? C.red : C.text) : C.textDim,
-                              outline: "none", fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
+                              fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}
                           />
                         </div>
                       );
@@ -4386,7 +4398,7 @@ function OrgChart({ company, onSave, orgChartId, orgChartName }) {
             {/* Dept name + color + delete */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <input value={dept.label} onChange={e => setDept(dept.id, "label", e.target.value)}
-                style={{ flex: 1, fontFamily: C.fontUI, fontSize: C.fs.md, fontWeight: 600, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, padding: "4px 0", outline: "none" }} />
+                style={{ flex: 1, fontFamily: C.fontUI, fontSize: C.fs.md, fontWeight: 600, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, padding: "4px 0" }} />
               <select value={dept.color} onChange={e => setDept(dept.id, "color", e.target.value)}
                 style={{ width: 80, fontSize: C.fs.xs, padding: "4px 6px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: C.radius.control, color: C.text }}>
                 <option value="blue">Blue</option>
@@ -4735,7 +4747,7 @@ function Settings({ company, onSave, session }) {
               return (
                 <div key={h.id} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: allMembers.length ? 8 : 0 }}>
-                    <input value={h.name} onChange={e => renameHuddle(h.id, e.target.value)} style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, fontSize: C.fs.base, padding: "4px 0", outline: "none" }} />
+                    <input value={h.name} onChange={e => renameHuddle(h.id, e.target.value)} style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, fontSize: C.fs.base, padding: "4px 0" }} />
                     {huddles.length > 1 && <button className="btn-danger" style={{ padding: "4px 8px", fontSize: C.fs.xs }} onClick={() => deleteHuddle(h.id)}><Icon.trash /></button>}
                   </div>
                   {allMembers.length === 0 && (
@@ -4773,7 +4785,7 @@ function Settings({ company, onSave, session }) {
             <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Navigators</h3>
             {navigators.map(n => (
               <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
-                <input value={n.name} onChange={e => renameNavigator(n.id, e.target.value)} style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, fontSize: C.fs.base, padding: "4px 0", outline: "none" }} />
+                <input value={n.name} onChange={e => renameNavigator(n.id, e.target.value)} style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, fontSize: C.fs.base, padding: "4px 0" }} />
                 {navigators.length > 1 && <button className="btn-danger" style={{ padding: "4px 8px", fontSize: C.fs.xs }} onClick={() => deleteNavigator(n.id)}><Icon.trash /></button>}
               </div>
             ))}
@@ -4787,7 +4799,7 @@ function Settings({ company, onSave, session }) {
             <h3 style={{ fontSize: C.fs.md, marginBottom: 16 }}>Responsibility Charts</h3>
             {orgCharts.map(o => (
               <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
-                <input value={o.name} onChange={e => renameOrgChart(o.id, e.target.value)} style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, fontSize: C.fs.base, padding: "4px 0", outline: "none" }} />
+                <input value={o.name} onChange={e => renameOrgChart(o.id, e.target.value)} style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, fontSize: C.fs.base, padding: "4px 0" }} />
                 {orgCharts.length > 1 && <button className="btn-danger" style={{ padding: "4px 8px", fontSize: C.fs.xs }} onClick={() => deleteOrgChart(o.id)}><Icon.trash /></button>}
               </div>
             ))}
@@ -4803,7 +4815,7 @@ function Settings({ company, onSave, session }) {
             {toArray(company.members).map(m => (
               <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: `1px solid ${C.border}`, opacity: m.inactive ? 0.55 : 1 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: C.fs.base, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
+                  <div style={{ fontSize: C.fs.base, fontWeight: 600, color: C.text, overflowWrap: "anywhere" }}>{m.name}</div>
                   <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginTop: 4 }}>{m.email}{m.email && m.role ? " · " : ""}{m.role}</div>
                 </div>
                 {m.inactive && <span className="chip" style={{ flexShrink: 0 }}>Inactive</span>}
@@ -4876,7 +4888,7 @@ function Settings({ company, onSave, session }) {
                       setAnnualGoals(updated);
                       onSave({ annualGoals: updated });
                     }}
-                    style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, fontSize: C.fs.md, fontWeight: 600, padding: "4px 0", outline: "none", fontFamily: C.fontUI}}
+                    style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${C.border}`, color: C.text, fontSize: C.fs.md, fontWeight: 600, padding: "4px 0", fontFamily: C.fontUI}}
                   />
                   {annualGoals.length > 1 && (
                     <button className="btn-danger" style={{ padding: "4px 8px", fontSize: C.fs.xs }} onClick={() => {
@@ -5431,7 +5443,7 @@ function VASTApp() {
   }, []);
 
   // ── Auth / gate screens ──
-  const fieldStyle = { width: "100%", padding: "12px 16px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: C.fs.md, fontFamily: C.fontUI, fontWeight: 500, outline: "none", marginBottom: 12, textAlign: "left" };
+  const fieldStyle = { width: "100%", padding: "12px 16px", borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontSize: C.fs.md, fontFamily: C.fontUI, fontWeight: 500, marginBottom: 12, textAlign: "left" };
   const linkStyle = { background: "none", border: "none", color: C.textMuted, fontSize: C.fs.sm, cursor: "pointer", fontFamily: C.fontUI, textDecoration: "none" };
   const secondaryStyle = { width: "100%", padding: 12, fontSize: C.fs.md, borderRadius: C.radius.control, border: `1px solid ${C.border}`, background: C.surface2, color: C.text, fontFamily: C.fontUI, fontWeight: 600, cursor: "pointer", marginBottom: 12 };
 
