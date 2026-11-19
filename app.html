@@ -1075,15 +1075,17 @@ function VASTLogo({ size = "md", onDark = false }) {
     lg: { h: 52, fs: 48 },
     md: { h: 40, fs: 37 },
     sm: { h: 26, fs: 24 },
+    rail: { h: 36, fs: 34 },   // left menu: tight crop around the wordmark, so it reads larger
   };
   const s = sizes[size] || sizes.md;
+  const viewBox = size === "rail" ? "71 132 266 106" : "66 6 290 256";
   // Real brand wordmark: white logo on dark theme, black logo on light theme.
   // The source SVGs are 375×375 with the wordmark in the upper-center; the
   // outer <svg> viewBox crops to the artwork bounds so sizing/whitespace match
   // the previous text logo. Container height is driven by s.h exactly as before.
   const src = (onDark || C.isDark) ? "VAST%20White.svg" : "Vast%20Black.svg";
   return (
-    <svg height={s.h} viewBox="66 6 290 256" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="VAST" style={{ display: "block" }}>
+    <svg height={s.h} viewBox={viewBox} fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="VAST" style={{ display: "block" }}>
       <image href={src} xlinkHref={src} x="0" y="0" width="375" height="375" />
     </svg>
   );
@@ -1227,10 +1229,14 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
         overflow: "hidden",
       }}>
         {/* Header */}
-        <div style={{ padding: collapsed && !isMobile ? "12px 8px" : "12px 16px", borderBottom: `1px solid ${C.rail.border}`, display: "flex", alignItems: "center", justifyContent: collapsed && !isMobile ? "center" : "space-between", flexShrink: 0 }}>
+        <div style={{ padding: collapsed && !isMobile ? "12px 8px" : "12px 16px", borderBottom: `1px solid ${C.rail.border}`, display: "flex", alignItems: "center", justifyContent: collapsed && !isMobile ? "center" : "space-between", flexShrink: 0, ...(collapsed && !isMobile ? { flexDirection: "column", gap: 8 } : {}) }}>
+          {/* Collapsed desktop menu: the site's favicon stands in for the full VAST logo. */}
+          {collapsed && !isMobile && (
+            <img src="Vast%20Favicon.svg" alt="VAST" width="26" height="26" style={{ display: "block", width: 26, height: 26 }} />
+          )}
           {!(collapsed && !isMobile) && (
             <div style={{ minWidth: 0 }}>
-              <VASTLogo size="md" onDark />
+              <VASTLogo size="rail" onDark />
               <div style={{ marginTop: 6, fontSize: C.fs.xs, color: C.rail.text, fontWeight: 500, overflowWrap: "anywhere" }}>{company.name}</div>
             </div>
           )}
