@@ -536,6 +536,7 @@ const makeSTYLE = (C) => `
   .hd-sc .sc-input.cur{border-color:${C.inputBorder}!important;background:${C.inputBg}}
   .hd-flag.on{color:${C.link};background:${C.selBg}}
   .hd-ids .md-row .hd-step-n{width:20px;height:20px}
+  .lnote{padding:0 12px 10px;border-bottom:1px solid ${C.border}}
   .hd-note{font-size:${C.fs.xs}px;color:${C.textDim};font-style:italic;margin-top:2px;overflow-wrap:anywhere}
   .hd-slot{width:30px;display:inline-flex;justify-content:center;flex-shrink:0}
   .hd-ids{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
@@ -1585,6 +1586,31 @@ function HlAdded({ h, older }) {
     <span className="lmeta num hl-added" title={d ? `Added ${dateStr(d)}` : "No date saved"}>
       {hlAddedLabel(h)}{older && d ? <span className="hl-age"> · {hlAgeLabel(h)}</span> : null}
     </span>
+  );
+}
+
+// Notes on a row: same button, preview and box the Huddle uses. Saves to the
+// item's existing "notes" field, so a note written here shows in the Huddle
+// and the other way round.
+function NoteToggle({ open, hasNote, onClick }) {
+  return (
+    <Tip text={open ? "Hide notes" : "Notes"}>
+      <button onClick={onClick} aria-label="Notes" aria-pressed={!!open}
+        className="icon-btn" style={open ? { background: C.selBg, color: C.link } : hasNote ? { color: C.text } : undefined}>
+        <Icon.note size={13} />
+      </button>
+    </Tip>
+  );
+}
+function NotePreview({ text }) {
+  return text ? <div className="hd-note"><Icon.note size={11} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />{text}</div> : null;
+}
+function NoteBox({ value, placeholder, onChange }) {
+  return (
+    <div className="lnote fade-in">
+      <textarea autoFocus placeholder={placeholder} value={value || ""} onChange={e => onChange(e.target.value)}
+        style={{ width: "100%", minHeight: 72, fontSize: C.fs.sm, padding: "8px 8px", borderRadius: C.radius.control, border: `1px solid ${C.borderStrong}`, background: C.surface2, color: C.text, resize: "vertical", fontFamily: C.fontUI, boxSizing: "border-box" }} />
+    </div>
   );
 }
 
@@ -4304,6 +4330,9 @@ function Headlines({ company, onSave, onAdd }) {
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
   const [showReviewed, setShowReviewed] = useState(false);
+  const [noteOpen, setNoteOpen] = useState({});
+  const toggleNote = (id) => setNoteOpen(o => ({ ...o, [id]: !o[id] }));
+  const saveNote = (id, text) => onSave(latest => ({ headlines: (latest.headlines || []).map(x => x.id === id ? { ...x, notes: text } : x) }));
 
   const add = () => {
     if (!form.text.trim()) return;
@@ -4330,11 +4359,13 @@ function Headlines({ company, onSave, onAdd }) {
   console.debug("[VAST/headlines] Panel filter", { total: headlines.length, active: active.length, reviewed: reviewed.length, allFlags: headlines.map(h => ({ id: h.id, text: h.text, reviewed: !!h.reviewed, huddleId: h.huddleId })) });
 
   const huddleNameOf = (id) => huddles.find(x => x.id === id)?.name || "";
+  // Called as a function (not <HeadlineRow/>) so an open note box keeps focus while typing.
   const HeadlineRow = ({ h, isReviewed, older }) => (
-    <div className="lrow" style={{ opacity: isReviewed ? 0.75 : 1 }}>
+    <React.Fragment key={h.id}>
+    <div className="lrow" style={{ opacity: isReviewed ? 0.75 : 1, borderBottom: noteOpen[h.id] ? "none" : undefined }}>
       <span className="chip lchip" style={{ minWidth: 80, justifyContent: "center" }}>{h.type}</span>
       <span className="lmeta lhuddle" title={huddleNameOf(h.huddleId)}>{huddleNameOf(h.huddleId) || "—"}</span>
-      <span className="grow" style={{ textDecoration: isReviewed ? "line-through" : "none" }}>{h.text}</span>
+      <span className="grow"><span style={{ textDecoration: isReviewed ? "line-through" : "none" }}>{h.text}</span>{!noteOpen[h.id] && <NotePreview text={h.notes} />}</span>
       {isReviewed && <span className="lmeta">{h.reviewedAt ? <>Reviewed <span className="num">{dateStr(new Date(h.reviewedAt))}</span></> : "Reviewed"}</span>}
       <HlAdded h={h} older={older} />
       <span className="lact">
@@ -4344,10 +4375,13 @@ function Headlines({ company, onSave, onAdd }) {
         {isReviewed && (
           <button className="btn-secondary lbtn" onClick={() => unmarkReviewed(h.id)}>Reopen</button>
         )}
+        <NoteToggle open={noteOpen[h.id]} hasNote={!!h.notes} onClick={() => toggleNote(h.id)} />
         <button className="icon-btn danger" title="Delete" aria-label={`Delete headline: ${h.text}`} onClick={() => del(h.id)}><Icon.trash /></button>
         <ProblemFlag company={company} id={h.id} onClick={() => queueProblem(company, onAdd, h.huddleId || null, { id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })} />
       </span>
     </div>
+    {noteOpen[h.id] && <NoteBox value={h.notes} placeholder="Add notes about this headline..." onChange={text => saveNote(h.id, text)} />}
+    </React.Fragment>
   );
 
   return (
@@ -4382,12 +4416,12 @@ function Headlines({ company, onSave, onAdd }) {
             : hlGroups(active, h => hlLastMeeting(company, h.huddleId)).map(g => (
                 <React.Fragment key={g.key}>
                   <HlGroupHead title={g.title} count={g.items.length} />
-                  {g.items.map(h => <HeadlineRow key={h.id} h={h} isReviewed={false} older={g.older} />)}
+                  {g.items.map(h => HeadlineRow({ h, isReviewed: false, older: g.older }))}
                 </React.Fragment>
               )))}
           {showReviewed && (reviewed.length === 0
             ? <div className="lempty">No reviewed headlines yet.</div>
-            : [...hlNewestFirst(reviewed.filter(hlDate)), ...reviewed.filter(h => !hlDate(h))].map(h => <HeadlineRow key={h.id} h={h} isReviewed={true} />))}
+            : [...hlNewestFirst(reviewed.filter(hlDate)), ...reviewed.filter(h => !hlDate(h))].map(h => HeadlineRow({ h, isReviewed: true })))}
         </div>
       </div>
     </Layout>
@@ -4574,6 +4608,9 @@ function Todos({ company, onSave, onAdd }) {
   const pending = huddleFilter === "all" ? allPending : allPending.filter(t => t.huddleId === huddleFilter);
   const done = huddleFilter === "all" ? allDone : allDone.filter(t => t.huddleId === huddleFilter);
   const [todoTab, setTodoTab] = useState("open");
+  const [noteOpen, setNoteOpen] = useState({});
+  const toggleNote = (id) => setNoteOpen(o => ({ ...o, [id]: !o[id] }));
+  const saveNote = (id, text) => onSave(latest => ({ todos: (latest.todos || []).map(x => x.id === id ? { ...x, notes: text } : x) }));
 
   const TodoRow = ({ t }) => {
     const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
@@ -4582,7 +4619,7 @@ function Todos({ company, onSave, onAdd }) {
 
     if (isEditing) {
       return (
-        <div style={{ padding: "12px", borderBottom: `1px solid ${C.border}`, background: C.selBg }}>
+        <div key={t.id} style={{ padding: "12px", borderBottom: `1px solid ${C.border}`, background: C.selBg }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
             <input
               value={editFields.title}
@@ -4639,17 +4676,21 @@ function Todos({ company, onSave, onAdd }) {
     }
 
     return (
-      <div className="lrow keep-order">
+      <React.Fragment key={t.id}>
+      <div className="lrow keep-order" style={noteOpen[t.id] ? { borderBottom: "none" } : undefined}>
         <div className={`checkbox ${t.done ? "checked" : ""}`} role="checkbox" aria-checked={!!t.done} aria-label={`Mark done: ${t.title}`} onClick={() => toggle(t.id)}>{t.done && <Icon.check />}</div>
-        <span className="grow" style={{ fontWeight: 500 }}>{t.title}</span>
+        <span className="grow" style={{ fontWeight: 500 }}>{t.title}{!noteOpen[t.id] && <NotePreview text={t.notes} />}</span>
         <span className="lmeta lowner" title={getAssignees(t).join(", ")}>{getAssignees(t).join(", ") || "—"}</span>
         <span className="lmeta num ldate wide" style={{ color: isOverdue ? C.red : undefined, fontWeight: isOverdue ? 600 : 400 }}>{t.dueDate ? <>{isOverdue ? "Overdue " : ""}{dateStr(new Date(t.dueDate))}</> : "—"}</span>
         <span className="lmeta lhuddle" title={huddleName || ""}>{huddleName || "—"}</span>
         <span className="lact">
+          <NoteToggle open={noteOpen[t.id]} hasNote={!!t.notes} onClick={() => toggleNote(t.id)} />
           <button className="icon-btn" title="Edit" aria-label={`Edit to-do: ${t.title}`} onClick={() => startEdit(t)}><Icon.edit /></button>
           <button className="icon-btn danger" title="Delete" aria-label={`Delete to-do: ${t.title}`} onClick={() => del(t.id)}><Icon.trash /></button>
         </span>
       </div>
+      {noteOpen[t.id] && <NoteBox value={t.notes} placeholder="Add notes about this to-do..." onChange={text => saveNote(t.id, text)} />}
+      </React.Fragment>
     );
   };
 
@@ -4704,17 +4745,21 @@ function Todos({ company, onSave, onAdd }) {
           </div>
           {todoTab === "open" && (pending.length === 0
             ? <div className="lempty">No open to-dos{huddleFilter !== "all" ? " for this huddle" : ""}.</div>
-            : pending.map(t => <TodoRow key={t.id} t={t} />))}
+            : pending.map(t => TodoRow({ t })))}
           {todoTab === "done" && (done.length === 0 ? <div className="lempty">No completed to-dos yet.</div> : [...done].reverse().map(t => (
-            <div key={t.id} className="lrow keep-order" style={{ opacity: 0.75 }}>
+            <React.Fragment key={t.id}>
+            <div className="lrow keep-order" style={{ opacity: 0.75, borderBottom: noteOpen[t.id] ? "none" : undefined }}>
               <div className="checkbox checked" aria-label="Done"><Icon.check /></div>
-              <span className="grow" style={{ textDecoration: "line-through", color: C.textMuted }}>{t.title}</span>
+              <span className="grow" style={{ color: C.textMuted }}><span style={{ textDecoration: "line-through" }}>{t.title}</span>{!noteOpen[t.id] && <NotePreview text={t.notes} />}</span>
               <span className="lmeta lowner">{getAssignees(t).join(", ") || "—"}</span>
               <span className="lmeta lhuddle">{huddles.find(h => h.id === t.huddleId)?.name || "—"}</span>
               <span className="lact">
+                <NoteToggle open={noteOpen[t.id]} hasNote={!!t.notes} onClick={() => toggleNote(t.id)} />
                 <button className="icon-btn danger" title="Delete" aria-label={`Delete to-do: ${t.title}`} onClick={() => del(t.id)}><Icon.trash /></button>
               </span>
             </div>
+            {noteOpen[t.id] && <NoteBox value={t.notes} placeholder="Add notes about this to-do..." onChange={text => saveNote(t.id, text)} />}
+            </React.Fragment>
           )))}
         </div>
       </div>
