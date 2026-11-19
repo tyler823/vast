@@ -5509,7 +5509,7 @@ const rptNum1 = (v) => v == null || isNaN(v) ? "—" : (Math.round(v * 10) / 10)
 // Chart labels: compact for big numbers (152320 → "152k") so labels don't collide.
 const rptShort = (v) => { if (v == null || isNaN(v)) return "—"; const a = Math.abs(v); if (a >= 1e6) return (v / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, "") + "M"; if (a >= 1e4) return (v / 1e3).toFixed(a >= 1e5 ? 0 : 1).replace(/\.0$/, "") + "k"; return rptNum1(v); };
 // Text values in the measurable's unit, same style as the Scorecard ("$136,194.3").
-const rptUnitVal = (v, unit) => v == null || isNaN(v) ? "—" : fmtMeasure(rptNum1(v), unit, true);
+const rptUnitVal = (v, unit) => v == null || isNaN(v) ? "—" : String(unit || "").trim() === "$" ? fmtMeasure(String(Math.round(v)), unit, true) : fmtMeasure(rptNum1(v), unit, true);
 const rptWeekNum = (key) => parseInt(String(key).split("-W")[1], 10);
 // Same rule as the scorecard's target check: blank → no judgement.
 const rptMeets = (val, m) => {
@@ -5731,51 +5731,130 @@ function RptTile({ label, value, status, sub, notTracked }) {
 }
 
 // Vertical bars with optional goal line. data: [{label, value|null, status}]
-function RptBars({ data, goal, title, height = 150, showValues }) {
+// Charts are drawn at the real width of their box (measured), so bars spread
+// across the whole widget and text stays at its normal size. Printing can't
+// be measured ahead of time, so a fixed print width is used while printing
+// (the printed chart is then scaled to the printed widget's width).
+const RPT_PRINT_W = 318;
+function useRptWidth(fallback) {
+  const ref = useRef(null);
+  const [w, setW] = useState(fallback);
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => { const cw = Math.floor(el.getBoundingClientRect().width); if (cw > 40) setW(cw); };
+    measure();
+    let ro = null;
+    if (window.ResizeObserver) { ro = new ResizeObserver(measure); ro.observe(el); } else window.addEventListener("resize", measure);
+    const before = () => { try { ReactDOM.flushSync(() => setPrinting(true)); } catch (e) { setPrinting(true); } };
+    const after = () => setPrinting(false);
+    window.addEventListener("beforeprint", before);
+    window.addEventListener("afterprint", after);
+    return () => {
+      if (ro) ro.disconnect(); else window.removeEventListener("resize", measure);
+      window.removeEventListener("beforeprint", before);
+      window.removeEventListener("afterprint", after);
+    };
+  }, []);
+  return [ref, printing ? RPT_PRINT_W : w];
+}
+// Short value with its unit for chart text: $130k, 38.5%, 25.
+const rptShortUnit = (v, unit) => {
+  if (v == null || isNaN(v)) return "—";
+  const u = String(unit || "").trim();
+  const t = rptShort(v);
+  if (u === "$") return t.startsWith("-") ? "-$" + t.slice(1) : "$" + t;
+  if (u === "%") return t + "%";
+  return t;
+};
+
+// fmt = short label on the chart; tipFmt = full value in the hover tooltip.
+function RptBars({ data, goal, title, height = 190, showValues, unit, tipFmt, goalText }) {
+  const [boxRef, W] = useRptWidth(480);
+  const [hover, setHover] = useState(null);
   if (!data.length || data.every(d => d.value == null)) return <RptNote>No data for this period.</RptNote>;
+  const short = (v) => rptShortUnit(v, unit);
+  const full = tipFmt || short;
   const vals = data.filter(d => d.value != null).map(d => d.value);
   let max = Math.max(...vals, goal != null ? goal : -Infinity, 0);
   const min = Math.min(...vals, 0);
   if (max === min) max = min + 1;
-  const n = data.length, bw = n > 20 ? 10 : n <= 6 ? 36 : 18, gap = n > 20 ? 4 : n <= 6 ? 24 : 10, left = 44, top = 18, bottom = 22;
-  const W = left + n * (bw + gap) + 8, H = height;
+  const n = data.length, H = height, top = 16, bottom = 22;
+  const CH = 6.2;                                  // ~width of one 10px mono character
+  const tw = (t) => String(t).length * CH + 2;
+  const left = Math.max(28, Math.ceil(Math.max(tw(short(max)), tw(short(Math.max(min, 0) === 0 ? 0 : min)))) + 8);
+  const right = goal != null ? Math.ceil(tw(short(goal))) + 10 : 8; // goal value sits at the right end of its line
+  const plotW = Math.max(40, W - left - right);
+  const slot = plotW / n;
+  const bw = Math.max(2, Math.min(56, slot * (n > 20 ? 0.7 : 0.62)));
   const y = (v) => top + (H - top - bottom) * (1 - (v - min) / (max - min));
-  const labelsOn = showValues != null ? showValues : n <= 16;
-  const xEvery = n > 20 ? 4 : 1;
+  const gy = goal != null ? y(goal) : null;
+  const cx = (i) => left + slot * (i + 0.5);
+  // Week labels: thin out so they never touch.
+  const xw = Math.max(...data.map(d => tw(d.label)));
+  const xEvery = Math.max(1, Math.ceil((xw + 6) / slot));
+  // Value labels: shown only where they fit inside their own column (so they
+  // can't touch a neighbour), and moved above the goal line when they would
+  // sit on it. Every bar's value is also in the hover tooltip.
+  const labelsOn = showValues != null ? showValues : true;
+  const labels = data.map((d, i) => {
+    if (!labelsOn || d.value == null) return null;
+    const t = short(d.value);
+    if (tw(t) > slot - 3) return null;
+    let base = Math.min(y(d.value), y(0)) - 4;          // text spans base-9 .. base+1
+    if (gy != null && gy > base - 12 && gy < base + 4) base = gy - 5;
+    if (base - 9 < 0) base = 9;
+    return { t, base };
+  });
+  const tipOf = (d) => `${d.label}: ${d.value == null ? "no number" : full(d.value)}${d.status === "good" ? " · hit" : d.status === "bad" ? " · missed" : ""}`;
+  const hd = hover != null ? data[hover] : null;
   return (
-    <svg className="rpt-chart" viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: Math.max(W, 260) * 1.25 }} role="img" aria-label={title}>
-      <title>{title}</title>
-      <defs><pattern id="rpt-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="5" fill="#fff" /></pattern></defs>
-      <line x1={left} x2={W - 4} y1={y(0)} y2={y(0)} stroke={rptVar("borderStrong")} strokeWidth="1" />
-      <text x={left - 6} y={y(max) + 4} textAnchor="end" className="rpt-ax">{rptShort(max)}</text>
-      <text x={left - 6} y={y(0) + 4} textAnchor="end" className="rpt-ax">{rptShort(Math.max(min, 0) === 0 ? 0 : min)}</text>
-      {data.map((d, i) => {
-        const x = left + i * (bw + gap) + gap / 2;
-        // Hit = accent blue, missed = neutral gray (3:1+ on the card in both
-        // themes). Only a missed week's value label is red. In print, missed
-        // bars also get a hatch so they read in black and white.
-        const miss = d.status === "bad";
-        const fill = miss ? rptVar("inputBottom") : rptVar("blue");
-        return (
-          <g key={i}>
-            {d.value != null ? (
-              <>
-                <rect x={x} y={Math.min(y(d.value), y(0))} width={bw} height={Math.max(1, Math.abs(y(0) - y(d.value)))} rx="2" fill={fill}><title>{`${d.label}: ${d.value}${d.status ? d.status === "good" ? " (hit)" : " (missed)" : ""}`}</title></rect>
-                {miss && <rect className="rpt-hatch" x={x} y={Math.min(y(d.value), y(0))} width={bw} height={Math.max(1, Math.abs(y(0) - y(d.value)))} rx="2" fill="url(#rpt-hatch)" />}
-                {labelsOn && <text x={x + bw / 2} y={Math.min(y(d.value), y(0)) - 4} textAnchor="middle" className={`rpt-val ${miss ? "miss" : ""}`}>{rptShort(d.value)}</text>}
-              </>
-            ) : <text x={x + bw / 2} y={y(0) - 4} textAnchor="middle" className="rpt-ax">–</text>}
-            {i % xEvery === 0 && <text x={x + bw / 2} y={H - 6} textAnchor="middle" className="rpt-ax">{d.label}</text>}
+    <div ref={boxRef} className="rpt-chart-box" onMouseLeave={() => setHover(null)}>
+      <svg className="rpt-chart" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={title}>
+        <title>{title}</title>
+        <defs><pattern id="rpt-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="5" fill="#fff" /></pattern></defs>
+        <line x1={left} x2={left + plotW} y1={y(0)} y2={y(0)} stroke={rptVar("borderStrong")} strokeWidth="1" />
+        <text x={left - 6} y={y(max) + 4} textAnchor="end" className="rpt-ax">{short(max)}</text>
+        <text x={left - 6} y={y(0) + 4} textAnchor="end" className="rpt-ax">{short(Math.max(min, 0) === 0 ? 0 : min)}</text>
+        {data.map((d, i) => {
+          const x = cx(i) - bw / 2;
+          // Hit = accent blue, missed = neutral gray (3:1+ on the card in both
+          // themes). Only a missed week's value label is red. In print, missed
+          // bars also get a hatch so they read in black and white.
+          const miss = d.status === "bad";
+          const fill = miss ? rptVar("inputBottom") : rptVar("blue");
+          const by = d.value != null ? Math.min(y(d.value), y(0)) : 0;
+          const bh = d.value != null ? Math.max(1, Math.abs(y(0) - y(d.value))) : 0;
+          return (
+            <g key={i}>
+              {d.value != null ? (
+                <>
+                  <rect x={x} y={by} width={bw} height={bh} rx="2" fill={fill} fillOpacity={hover === i ? 0.8 : 1} />
+                  {miss && <rect className="rpt-hatch" x={x} y={by} width={bw} height={bh} rx="2" fill="url(#rpt-hatch)" />}
+                  {labels[i] && <text x={cx(i)} y={labels[i].base} textAnchor="middle" className={`rpt-val ${miss ? "miss" : ""}`}>{labels[i].t}</text>}
+                </>
+              ) : <text x={cx(i)} y={y(0) - 4} textAnchor="middle" className="rpt-ax">–</text>}
+              {i % xEvery === 0 && <text x={cx(i)} y={H - 6} textAnchor="middle" className="rpt-ax">{d.label}</text>}
+            </g>
+          );
+        })}
+        {goal != null && (
+          <g>
+            <line className="rpt-goal-line" x1={left} x2={left + plotW} y1={gy} y2={gy} stroke={rptVar("textMuted")} strokeWidth="1.5" strokeDasharray="4 3" />
+            <text x={left + plotW + 5} y={gy + 3.5} textAnchor="start" className="rpt-ax rpt-goal">{short(goal)}<title>{`Goal ${goalText || full(goal)}`}</title></text>
           </g>
-        );
-      })}
-      {goal != null && (
-        <g>
-          <line className="rpt-goal-line" x1={left} x2={W - 4} y1={y(goal)} y2={y(goal)} stroke={rptVar("textMuted")} strokeWidth="1.5" strokeDasharray="4 3" />
-          <text x={left - 6} y={y(goal) + 4} textAnchor="end" className="rpt-ax rpt-goal">{rptShort(goal)}</text>
-        </g>
+        )}
+        {/* Hover targets: one full-height column per bar */}
+        {data.map((d, i) => (
+          <rect key={"h" + i} className="rpt-hit" x={left + slot * i} y={top - 6} width={slot} height={H - top - bottom + 6} fill="transparent"
+            onMouseEnter={() => setHover(i)} onClick={() => setHover(i)} aria-label={tipOf(d)} />
+        ))}
+      </svg>
+      {hd && (
+        <div className="rpt-tip" role="tooltip" style={{ left: `${(cx(hover) / W) * 100}%`, top: `${((hd.value != null ? Math.min(y(hd.value), y(0)) : y(0)) / H) * 100}%` }}>{tipOf(hd)}</div>
       )}
-    </svg>
+    </div>
   );
 }
 
@@ -5840,32 +5919,38 @@ function RptScorecard({ r }) {
   const ownerNames = Object.keys(owners).sort((a, b) => a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : a.localeCompare(b));
   return (
     <RptSection id="rpt-scorecard" title="Scorecard" sub={`${sc.weeks.length} week${sc.weeks.length === 1 ? "" : "s"} in this period${sc.weeks.length ? ` (W${rptWeekNum(sc.weeks[0])}–W${rptWeekNum(sc.weeks[sc.weeks.length - 1])})` : ""}`}>
-      {sc.rows.length === 0 ? <RptNote>No measurables set up.</RptNote> : sc.weeks.length === 0 ? <RptNote>No scorecard weeks in this period yet.</RptNote> : ownerNames.map(owner => (
-        <div key={owner} className="rpt-group">
-          <h3 className="rpt-h3">{owner}</h3>
-          <div className="rpt-mgrid">
-          {owners[owner].map(row => (
+      {sc.rows.length > 0 && sc.weeks.length > 0 && (
+        <div className="rpt-legend rpt-legend-top">
+          <span><i style={{ background: rptVar("blue") }} /> Hit goal</span>
+          <span><i className="rpt-miss-key" style={{ background: rptVar("inputBottom") }} /> Missed</span>
+          <span><i className="rpt-dash" /> Goal</span>
+          <span>– = no number</span>
+          <span className="rpt-noprint">Hover a bar to see its value.</span>
+        </div>
+      )}
+      {sc.rows.length === 0 ? <RptNote>No measurables set up.</RptNote> : sc.weeks.length === 0 ? <RptNote>No scorecard weeks in this period yet.</RptNote> : (
+        <div className="rpt-mgrid">
+          {ownerNames.flatMap(owner => owners[owner]).map(row => (
             <div key={row.m.id} className="rpt-card rpt-keep">
-              <div className="rpt-row-between">
-                <div className="rpt-strong">{row.m.name || "(unnamed)"}</div>
-                <div className="rpt-muted">Goal <span className="num">{row.goal}</span></div>
+              <div className="rpt-card-head">
+                <div className="rpt-card-title"><span className="rpt-strong">{row.m.name || "(unnamed)"}</span> <span className="rpt-muted">· {row.owner}</span></div>
+                <div className="rpt-muted rpt-card-goal">Goal <span className="num">{row.goal}</span></div>
               </div>
               {row.entered === 0 ? <RptNote>No numbers entered for this period.</RptNote> : (<>
-                <div className="rpt-stats">
+                <div className="rpt-stats rpt-stats-compact">
                   <span><RptDot status={rptLevel(row.pct)} label={rptStatusWord[rptLevel(row.pct)]} /> Hit <b className="num">{row.hit}</b> · Missed <b className="num">{row.missed}</b> · <b className="num">{rptPctText(row.pct)}</b></span>
                   <span>Average <b className="num">{rptUnitVal(row.avg, row.m.unit)}</b>{row.avgHit != null && <> ({row.avgHit ? "meets goal" : "misses goal"})</>}</span>
                   <span>Best <b className="num">{rptUnitVal(row.best && row.best.value, row.m.unit)}</b> <span className="rpt-muted num">W{row.best && rptWeekNum(row.best.week)}</span></span>
                   <span>Worst <b className="num">{rptUnitVal(row.worst && row.worst.value, row.m.unit)}</b> <span className="rpt-muted num">W{row.worst && rptWeekNum(row.worst.week)}</span></span>
                 </div>
-                <RptBars title={`${row.m.name}: weekly values${row.target != null ? `, goal ${row.goal}` : ""}`} goal={row.target}
+                <RptBars title={`${row.m.name}: weekly values${row.target != null ? `, goal ${row.goal}` : ""}`} goal={row.target} goalText={row.goal}
+                  unit={row.m.unit} tipFmt={(v) => rptUnitVal(v, row.m.unit)}
                   data={row.pts.map(p => ({ label: `W${rptWeekNum(p.week)}`, value: p.value, status: p.hit === true ? "good" : p.hit === false ? "bad" : null }))} />
-                <div className="rpt-legend"><span><i style={{ background: rptVar("blue") }} /> Hit goal</span><span><i className="rpt-miss-key" style={{ background: rptVar("inputBottom") }} /> Missed</span>{row.target != null && <span><i className="rpt-dash" /> Goal</span>}<span>– = no number</span></div>
               </>)}
             </div>
           ))}
-          </div>
         </div>
-      ))}
+      )}
       {sc.deletedValues > 0 && <RptNote>{sc.deletedValues} value{sc.deletedValues === 1 ? "" : "s"} from deleted measurables not shown.</RptNote>}
       <div className="rpt-foot">Weeks are judged against each measurable's current goal. A week belongs to the quarter that contains its Thursday.</div>
     </RptSection>
@@ -5913,7 +5998,7 @@ function RptSplitBar({ parts, title }) {
   let x = 0;
   return (
     <div className="rpt-keep">
-      <svg className="rpt-chart" viewBox="0 0 300 18" width="100%" style={{ maxWidth: 520 }} preserveAspectRatio="none" role="img" aria-label={title}>
+      <svg className="rpt-chart" viewBox="0 0 300 18" width="100%" height="18" style={{ height: 18 }} preserveAspectRatio="none" role="img" aria-label={title}>
         <title>{title}</title>
         {parts.map((p, i) => { const w = 300 * p.value / total; const el = w > 0 ? <rect key={i} x={x} y="0" width={Math.max(0, w - (i < parts.length - 1 ? 2 : 0))} height="18" rx="2" fill={p.color}><title>{`${p.label}: ${p.value}`}</title></rect> : null; x += w; return el; })}
       </svg>
@@ -6079,7 +6164,7 @@ function RptYear({ r, company }) {
           <div key={row.label} className="rpt-keep">
             <h3 className="rpt-h3">{row.label}</h3>
             {row.values.every(x => x == null) ? <RptNote>No data for this year.</RptNote> : (
-              <RptBars title={`${row.label} by quarter`} height={130} showValues
+              <RptBars title={`${row.label} by quarter`} height={160} showValues unit={row.pct ? "%" : ""}
                 data={row.values.map((val, i) => ({ label: `Q${i + 1}`, value: val == null ? null : row.pct ? Math.round(val * 100) : row.dec ? Math.round(val * 10) / 10 : val, status: null }))} />
             )}
             {row.pct && <div className="rpt-foot" style={{ marginTop: 0 }}>Shown as %.</div>}
@@ -6211,7 +6296,20 @@ const rptCss = () => `
   .rpt-chart{display:block;height:auto;margin-top:4px;overflow:visible}
   .rpt-chart .rpt-ax{font-family:var(--font-mono);font-size:10px;fill:var(--c-text-muted)}
   .rpt-chart .rpt-val{font-family:var(--font-mono);font-size:10px;fill:var(--c-text);paint-order:stroke;stroke:var(--c-surface2);stroke-width:3px;stroke-linejoin:round}
-  .rpt-mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(440px,100%),1fr));gap:0 12px}
+  .rpt-mgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:8px}
+  .rpt-mgrid .rpt-card{margin:0;min-width:0}
+  @media(min-width:1800px){.rpt-mgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media(max-width:768px){.rpt-mgrid{grid-template-columns:minmax(0,1fr)}}
+  .rpt-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .rpt-card-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rpt-card-goal{white-space:nowrap;flex-shrink:0}
+  .rpt-stats-compact{gap:2px 14px;font-size:12px;margin:6px 0 2px}
+  .rpt-stats-compact > span{white-space:nowrap}
+  .rpt-legend-top{margin:0 0 4px}
+  .rpt-chart-box{position:relative;width:100%;min-width:0}
+  .rpt-chart-box .rpt-chart{margin-top:4px}
+  .rpt-chart .rpt-hit{cursor:default}
+  .rpt-tip{position:absolute;transform:translate(-50%,calc(-100% - 6px));background:var(--c-text);color:var(--c-surface2);font-size:12px;line-height:1.3;padding:4px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:5;font-family:var(--font-mono)}
   .rpt-chart .rpt-goal{fill:var(--c-text-muted);font-weight:600}
   .rpt-chart .rpt-val.miss{fill:var(--c-red)}
   .rpt-chart .rpt-hatch{display:none}
@@ -6247,8 +6345,9 @@ const rptCss = () => `
     .rpt-keep,.rpt-card,.rpt-tile,.rpt-table tr,.rpt-chart,.rpt-note{break-inside:avoid}
     .rpt-h2,.rpt-h3{break-after:avoid}
     .rpt-scroll{overflow:visible}
-    .rpt-mgrid,.rpt-two{grid-template-columns:minmax(0,1fr)!important}
-    .rpt-chart{max-width:440px!important}
+    .rpt-two{grid-template-columns:minmax(0,1fr)!important}
+    .rpt-mgrid,.rpt-ygrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .rpt-tip{display:none!important}
     .rpt-chart .rpt-hatch{display:inline}
     .rpt-legend i.rpt-miss-key{background-image:repeating-linear-gradient(45deg,transparent 0 2px,#fff 2px 3.5px)!important}
     .rpt-print-footer{display:flex;justify-content:space-between;gap:12px;position:fixed;bottom:0;left:0;right:0;font-size:10px;color:#5B6475;border-top:1px solid #E4E7EC;padding-top:4px;background:#fff}
