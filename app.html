@@ -1589,6 +1589,82 @@ function HlAdded({ h, older }) {
   );
 }
 
+// ── Goal tracking (shared by the meeting recap and Reports) ──
+// A week belongs to the period that contains its Thursday (same rule as Reports).
+function goalWeeks(start, end) {
+  const out = [];
+  if (!start || !end || isNaN(start) || isNaN(end)) return out;
+  const d = new Date(start); d.setHours(0, 0, 0, 0);
+  const e = new Date(end); e.setHours(23, 59, 59, 999);
+  for (; d <= e; d.setDate(d.getDate() + 1)) if (d.getDay() === 4) out.push(weekKeyFromDate(d));
+  return out;
+}
+// One measurable over a period.
+//   Sum     → total so far vs the period goal, and where it should be by now
+//             (goal × share of the period's weeks gone). Blank goal = weekly
+//             goal × weeks in the period.
+//   Average → average so far vs the goal (blank = weekly goal).
+//   Latest  → latest number vs the goal (blank = weekly goal).
+// periodGoal: a number, or null/NaN to use the automatic goal.
+function goalTrack(m, entries, weeksAll, weeksSoFar, periodGoal) {
+  const rollup = m.rollup || "sum";
+  const op = m.operator || "gte";
+  const lower = op === "lte" || op === "lt";
+  const t = parseFloat(m.target);
+  const auto = periodGoal == null || isNaN(periodGoal);
+  const series = weeksSoFar.map(w => (entries[w] || {})[m.id]).map(v => v === "" || v == null ? NaN : parseFloat(v));
+  const vals = series.filter(v => !isNaN(v));
+  const base = { rollup, lower, auto, weeksAll: weeksAll.length, weeksSoFar: weeksSoFar.length, complete: weeksAll.length > 0 && weeksSoFar.length >= weeksAll.length };
+  if (!vals.length) return { ...base, empty: true };
+  if (rollup === "sum") {
+    const goal = auto ? t * weeksAll.length : periodGoal;
+    const actual = vals.reduce((a, b) => a + b, 0);
+    if (isNaN(goal) || !weeksAll.length) return { ...base, actual, noGoal: true };
+    const expected = goal * Math.min(1, weeksSoFar.length / weeksAll.length);
+    return { ...base, goal, actual, expected, pct: goal ? actual / goal : null, good: lower ? actual <= expected : actual >= expected };
+  }
+  const goal = auto ? t : periodGoal;
+  const actual = rollup === "avg" ? vals.reduce((a, b) => a + b, 0) / vals.length : vals[vals.length - 1];
+  if (isNaN(goal)) return { ...base, actual, noGoal: true };
+  return { ...base, goal, actual, expected: null, pct: null, good: rptMeets(actual, { ...m, target: goal }) === true };
+}
+const goalStatusWord = (g) => g.complete ? (g.good ? "Hit goal" : "Missed goal") : (g.good ? "On pace" : "Behind pace");
+
+// Recap: this huddle's measurables — this week vs the weekly goal, weeks on
+// target so far, and the quarter vs where it should be by now.
+function recapScorecardLines(company, huddleId) {
+  const ms = toArray(company.scorecard && company.scorecard.measurables).filter(m => m && m.id && (m.huddleId === huddleId || !m.huddleId));
+  if (!ms.length) return [];
+  const qs = company.quarterStart ? new Date(company.quarterStart) : null, qe = company.quarterEnd ? new Date(company.quarterEnd) : null;
+  const all = goalWeeks(qs, qe), cur = weekKey();
+  if (!all.length) return [];
+  const sofar = all.filter(w => w <= cur);
+  const entries = (company.scorecard && company.scorecard.entries) || {};
+  const OPS = { gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" };
+  let ahead = 0, behind = 0;
+  const body = [];
+  ms.forEach(m => {
+    const op = m.operator || "gte";
+    const fmt = (v) => fmtMeasure(String(String(m.unit || "").trim() === "$" ? Math.round(v) : Math.round(v * 10) / 10), m.unit);
+    const t = parseFloat(m.target);
+    const judged = sofar.filter(w => rptMeets((entries[w] || {})[m.id], m) != null).length;
+    const hits = sofar.filter(w => rptMeets((entries[w] || {})[m.id], m) === true).length;
+    const thisRaw = (entries[cur] || {})[m.id];
+    const thisHit = rptMeets(thisRaw, m);
+    body.push(`  ${m.name}${m.owner ? ` (${m.owner})` : ""} — weekly goal ${OPS[op] || "≥"} ${isNaN(t) ? "not set" : fmt(t)}`);
+    body.push(`    This week: ${thisHit == null ? "not entered" : `${fmt(parseFloat(thisRaw))} ${thisHit ? "✓ on target" : "✗ off target"}`} · On target ${hits} of ${judged} week${judged === 1 ? "" : "s"} so far`);
+    const g = goalTrack(m, entries, all, sofar, parseFloat(m.quarterlyGoal));
+    if (g.empty) { body.push("    Quarter: no numbers entered yet"); return; }
+    if (g.noGoal) { body.push("    Quarter: no goal set"); return; }
+    g.good ? ahead++ : behind++;
+    const word = g.good ? "ON PACE" : "BEHIND PACE";
+    if (g.rollup === "sum") body.push(`    Quarter so far: ${fmt(g.actual)} of ${fmt(g.goal)} goal${g.auto ? ` (weekly goal × ${g.weeksAll} weeks)` : ""} = ${Math.round(g.pct * 100)}% · Should be ${g.lower ? "at most" : "at"} ${fmt(g.expected)} by now → ${word}`);
+    else body.push(`    Quarter ${g.rollup === "avg" ? "average" : "latest"}: ${fmt(g.actual)} vs ${g.auto ? "weekly" : "quarterly"} goal ${OPS[op] || "≥"} ${fmt(g.goal)} → ${word}`);
+  });
+  const n = sofar.length, total = all.length;
+  return [`  ${company.currentQuarter || "This quarter"} · week ${n} of ${total} (${Math.round(n / total * 100)}% of the quarter) · On pace: ${ahead} · Behind pace: ${behind}`, ...body];
+}
+
 // Notes on a row: same button, preview and box the Huddle uses. Saves to the
 // item's existing "notes" field, so a note written here shows in the Huddle
 // and the other way round.
@@ -2306,11 +2382,26 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
       lines.push("");
     }
 
-    // Headlines
-    const activeHeadlines = (company.headlines || []).filter(h => !h.reviewed && (h.huddleId === huddleId || !h.huddleId));
+    // Notes are written as "Note: …" lines under their item.
+    const pushNote = (text, indent) => { const t = String(text || "").trim(); if (t) lines.push(`${indent}Note: ${t.split(/\s*\n+\s*/).join(" · ")}`); };
+    // Things changed during this meeting (with a minute's slack).
+    const meetingStart = Date.now() - elapsed * 1000 - 60000;
+    const duringMeeting = (iso) => { if (!iso) return false; const d = new Date(iso); return !isNaN(d) && d.getTime() >= meetingStart && d.getTime() <= Date.now() + 60000; };
+    const mine = (x) => x && (x.huddleId === huddleId || !x.huddleId);
+
+    // Scorecard: weekly results and quarter pace
+    const scLines = recapScorecardLines(company, huddleId);
+    if (scLines.length) {
+      lines.push("SCORECARD");
+      scLines.forEach(l => lines.push(l));
+      lines.push("");
+    }
+
+    // Headlines: still open, plus any reviewed during this meeting — with notes
+    const activeHeadlines = (company.headlines || []).filter(h => mine(h) && (!h.reviewed || duringMeeting(h.reviewedAt)));
     if (activeHeadlines.length) {
       lines.push("HEADLINES FROM THE WEEK");
-      activeHeadlines.forEach(h => lines.push(`  [${h.type.toUpperCase()}] ${h.text}`));
+      activeHeadlines.forEach(h => { lines.push(`  [${String(h.type || "Headline").toUpperCase()}] ${h.text}`); pushNote(h.notes, "      "); });
       lines.push("");
     }
 
@@ -2318,7 +2409,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
     const offTrack = (company.quarterlyTasks || []).filter(t => t.status === "off" && (t.huddleId === huddleId || !t.huddleId));
     if (offTrack.length) {
       lines.push("OFF-TRACK QUARTERLY TASKS");
-      offTrack.forEach(t => lines.push(`  ✗ ${t.title}${t.who ? ` (${t.who})` : ""}`));
+      offTrack.forEach(t => { lines.push(`  ✗ ${t.title}${t.who ? ` (${t.who})` : ""}`); pushNote(t.notes, "      "); });
       lines.push("");
     }
 
@@ -2349,15 +2440,30 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
           const isNew = t.createdAt && t.createdAt.slice(0,10) === todayStr;
           const tag = isOverdue ? " ⚠ OVERDUE" : isNew ? " NEW" : "";
           lines.push(`    □ ${t.title}${t.dueDate ? ` (Due ${dateStr(new Date(t.dueDate))})` : ""}${tag}`);
+          pushNote(t.notes, "        ");
         });
       });
+      lines.push("");
+    }
+
+    // To-dos completed during this meeting, with notes
+    const doneNow = (company.todos || []).filter(t => mine(t) && t.done && duringMeeting(t.completedAt));
+    if (doneNow.length) {
+      lines.push("TO-DOS COMPLETED");
+      doneNow.forEach(t => { const who = getAssignees(t).join(", "); lines.push(`  ✓ ${t.title}${who ? ` (${who})` : ""}`); pushNote(t.notes, "      "); });
       lines.push("");
     }
 
     // Problems solved
     if (solvedThisSession.length) {
       lines.push("PROBLEMS SOLVED");
-      solvedThisSession.forEach(s => lines.push(`  ✓ ${s.title}${s.notes ? `: ${s.notes}` : ""}`));
+      solvedThisSession.forEach(s => {
+        lines.push(`  ✓ ${s.title}${s.sourceLabel ? ` (${s.sourceLabel})` : ""}`);
+        pushNote(s.notes, "      ");
+        // The original item's own notes (headline / to-do / task / issue), if different
+        const src = [...toArray(company.headlines), ...toArray(company.todos), ...toArray(company.quarterlyTasks), ...toArray(company.issues)].find(x => x && x.id === s.id);
+        if (src && src.notes && String(src.notes).trim() !== String(s.notes || "").trim()) pushNote(src.notes, "      ");
+      });
       lines.push("");
     }
 
@@ -5121,7 +5227,7 @@ function MeetingHistory({ company }) {
 // recognise is shown as plain text.
 const RECAP_SECTIONS = {
   "ATTENDEES": "Attendees", "HEADLINES FROM THE WEEK": "Headlines", "OFF-TRACK QUARTERLY TASKS": "Off-track quarterly tasks",
-  "OPEN TO-DOS BY TEAM MEMBER": "Open to-dos by person", "PROBLEMS SOLVED": "Problems solved", "MEETING NOTES": "Meeting notes", "INDIVIDUAL RATINGS": "Individual ratings",
+  "OPEN TO-DOS BY TEAM MEMBER": "Open to-dos by person", "PROBLEMS SOLVED": "Problems solved", "SCORECARD": "Scorecard", "TO-DOS COMPLETED": "To-dos completed", "MEETING NOTES": "Meeting notes", "INDIVIDUAL RATINGS": "Individual ratings",
 };
 function parseRecap(text) {
   const lines = String(text || "").split("\n");
@@ -5146,25 +5252,36 @@ function RecapView({ text }) {
       {sections.map((sec, si) => {
         const title = RECAP_SECTIONS[sec.key] || (sec.key ? sec.key.charAt(0) + sec.key.slice(1).toLowerCase() : "Notes");
         const raw = sec.lines.map(l => l.trim());
+        // "Note: …" lines belong to the item above them.
+        const noteOf = (i) => { const out = []; for (let j = i + 1; j < raw.length && /^Note:\s/.test(raw[j]); j++) out.push(raw[j].replace(/^Note:\s*/, "")); return out; };
+        const isNote = (l) => /^Note:\s/.test(l);
+        const NoteLine = ({ list }) => list.length ? <div className="hd-note" style={{ marginTop: 0 }}>{list.join(" · ")}</div> : null;
         if (sec.key === "ATTENDEES") return block(title, <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{raw.join(", ").split(/,\s*/).filter(Boolean).map(n => <span key={n} className="chip" style={{ color: C.text }}>{n}</span>)}</div>, si);
-        if (sec.key === "HEADLINES FROM THE WEEK") return block(title, <div>{raw.map((l, i) => { const m = /^\[([A-Z][A-Z ]*)\]\s*(.*)$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", maxWidth: "90ch" }}>{m && <span className="chip" style={{ flexShrink: 0 }}>{m[1].charAt(0) + m[1].slice(1).toLowerCase()}</span>}<span>{m ? m[2] : l}</span></div>; })}</div>, si);
-        if (sec.key === "OFF-TRACK QUARTERLY TASKS") return block(title, <div>{raw.map((l, i) => { const m = /^✗\s*(.*?)(?:\s\(([^()]*)\))?$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0" }}><span className="dot" style={{ background: C.red }} aria-label="Off track" /><span>{m ? m[1] : l}</span>{m && m[2] && <span style={{ color: C.textMuted }}>{m[2]}</span>}</div>; })}</div>, si);
-        if (sec.key === "PROBLEMS SOLVED") return block(title, <div>{raw.map((l, i) => { const m = /^✓\s*([^:]*)(?::\s*(.*))?$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", maxWidth: "90ch" }}><span className="dot" style={{ background: C.green, alignSelf: "center" }} aria-label="Solved" /><span style={{ fontWeight: 600 }}>{m ? m[1] : l}</span>{m && m[2] && <span style={{ color: C.textMuted }}>{m[2]}</span>}</div>; })}</div>, si);
+        if (sec.key === "HEADLINES FROM THE WEEK") return block(title, <div>{raw.map((l, i) => { if (isNote(l)) return null; const m = /^\[([A-Z][A-Z ]*)\]\s*(.*)$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", maxWidth: "90ch" }}>{m && <span className="chip" style={{ flexShrink: 0 }}>{m[1].charAt(0) + m[1].slice(1).toLowerCase()}</span>}<span>{m ? m[2] : l}<NoteLine list={noteOf(i)} /></span></div>; })}</div>, si);
+        if (sec.key === "OFF-TRACK QUARTERLY TASKS") return block(title, <div>{raw.map((l, i) => { if (isNote(l)) return null; const m = /^✗\s*(.*?)(?:\s\(([^()]*)\))?$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0" }}><span className="dot" style={{ background: C.red }} aria-label="Off track" /><span>{m ? m[1] : l}<NoteLine list={noteOf(i)} /></span>{m && m[2] && <span style={{ color: C.textMuted }}>{m[2]}</span>}</div>; })}</div>, si);
+        if (sec.key === "PROBLEMS SOLVED" || sec.key === "TO-DOS COMPLETED") return block(title, <div>{raw.map((l, i) => { if (isNote(l)) return null; const m = /^✓\s*([^:]*)(?::\s*(.*))?$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", maxWidth: "90ch" }}><span className="dot" style={{ background: C.green, alignSelf: "center" }} aria-label="Done" /><span><span style={{ fontWeight: 600 }}>{m ? m[1] : l}</span>{m && m[2] && <span style={{ color: C.textMuted }}> {m[2]}</span>}<NoteLine list={noteOf(i)} /></span></div>; })}</div>, si);
         if (sec.key === "OPEN TO-DOS BY TEAM MEMBER") {
           const rows = []; let person = "";
           sec.lines.forEach(l => {
             const t = l.trim();
+            if (/^Note:\s/.test(t)) { if (rows.length) rows[rows.length - 1].note = (rows[rows.length - 1].note ? rows[rows.length - 1].note + " · " : "") + t.replace(/^Note:\s*/, ""); return; }
             if (/^□/.test(t)) { const m = /^□\s*(.*?)(?:\s\(Due ([^()]*)\))?(\s⚠ OVERDUE|\sNEW)?$/.exec(t); rows.push({ person, title: m ? m[1] : t, due: m && m[2] ? m[2] : "", tag: m && m[3] ? m[3].trim() : "" }); }
             else if (/:$/.test(t)) person = t.slice(0, -1);
           });
           return block(title, (
             <div className="dt-wrap"><table className="dt" style={{ maxWidth: 900 }}>
               <thead><tr><th>Person</th><th>To-do</th><th className="r">Due</th><th className="shrink"></th></tr></thead>
-              <tbody>{rows.map((r, i) => <tr key={i}><td className="muted" style={{ whiteSpace: "nowrap" }}>{i === 0 || rows[i - 1].person !== r.person ? r.person : ""}</td><td>{r.title}</td><td className="r num" style={{ whiteSpace: "nowrap", color: r.tag.includes("OVERDUE") ? C.red : C.textMuted }}>{r.due || "—"}</td>
+              <tbody>{rows.map((r, i) => <tr key={i}><td className="muted" style={{ whiteSpace: "nowrap" }}>{i === 0 || rows[i - 1].person !== r.person ? r.person : ""}</td><td>{r.title}{r.note && <div className="hd-note" style={{ marginTop: 0 }}>{r.note}</div>}</td><td className="r num" style={{ whiteSpace: "nowrap", color: r.tag.includes("OVERDUE") ? C.red : C.textMuted }}>{r.due || "—"}</td>
                 <td className="shrink">{r.tag.includes("OVERDUE") ? <span style={{ color: C.red, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}><Icon.warning /> Overdue</span> : r.tag === "NEW" ? <span className="chip">New</span> : null}</td></tr>)}</tbody>
             </table></div>
           ), si);
         }
+        if (sec.key === "SCORECARD") return block(title, <div style={{ maxWidth: "110ch" }}>{sec.lines.map((l, i) => {
+          const detail = /^\s{4}/.test(l), t = l.trim(), m = /^(.*?)\s*→\s*(ON PACE|BEHIND PACE)$/.exec(t);
+          return <div key={i} style={{ padding: detail ? "1px 0 1px 16px" : i === 0 ? "0 0 4px" : "8px 0 1px", fontWeight: !detail && i > 0 ? 600 : 400, color: detail || i === 0 ? C.textMuted : C.text, fontSize: detail ? C.fs.sm : C.fs.base }}>
+            {m ? m[1] : t}{m && <span style={{ fontWeight: 600, color: m[2] === "BEHIND PACE" ? C.red : C.text }}> → {m[2] === "ON PACE" ? "On pace" : "Behind pace"}</span>}
+          </div>;
+        })}</div>, si);
         if (sec.key === "INDIVIDUAL RATINGS") return block(title, (
           <table className="dt" style={{ width: "auto", minWidth: 260 }}><tbody>{raw.map((l, i) => { const m = /^(.*):\s*(.*)$/.exec(l); return <tr key={i}><td style={{ fontWeight: m && m[1] === "Average" ? 600 : 400 }}>{m ? m[1] : l}</td><td className="r num">{m ? m[2] : ""}</td></tr>; })}</tbody></table>
         ), si);
@@ -5741,6 +5858,20 @@ function rptCompute(company, year, q) {
       pts, hit, missed, pct: rptPct(hit, hit + missed), avg, avgHit: avg == null ? null : rptMeets(avg, m), best, worst, entered: vals.length };
   });
   const scHit = scRows.reduce((a, r) => a + r.hit, 0), scMissed = scRows.reduce((a, r) => a + r.missed, 0);
+  // Goal tracking for the period (quarter or year), plus each quarter in a year view.
+  const allWeeks = goalWeeks(start, end);
+  const goalRows = isFuture ? [] : measurables.map(m => {
+    const qg = parseFloat(m.quarterlyGoal);
+    const sumRoll = (m.rollup || "sum") === "sum";
+    const periodGoal = isNaN(qg) ? null : q ? qg : sumRoll ? qg * 4 : qg;
+    const track = goalTrack(m, entries, allWeeks, weeks, periodGoal);
+    const byQ = q ? null : [1, 2, 3, 4].map(qq => {
+      const pp = rptPeriod(year, qq);
+      const aw = goalWeeks(pp.start, pp.end), sf = aw.filter(w => w <= curWk);
+      return sf.length ? goalTrack(m, entries, aw, sf, isNaN(qg) ? null : qg) : null;
+    });
+    return { m, owner: m.owner || "Unassigned", track, byQ };
+  });
 
   // ── Quarterly tasks (one source per quarter in the period)
   const qs = q ? [q] : [1, 2, 3, 4];
@@ -5815,7 +5946,7 @@ function rptCompute(company, year, q) {
 
   return {
     period, isCurrent, isFuture, today, weekNow: rptWeekNum(curWk),
-    scorecard: { weeks, rows: scRows, deletedValues, hit: scHit, missed: scMissed, pct: rptPct(scHit, scHit + scMissed) },
+    scorecard: { weeks, rows: scRows, deletedValues, hit: scHit, missed: scMissed, pct: rptPct(scHit, scHit + scMissed), goals: goalRows, allWeeks: allWeeks.length },
     tasks: { quarters: taskQuarters, total: tasksTotal, done: tasksDone, pct: rptPct(tasksDone, tasksTotal), tracked: tqWith.length > 0 },
     todos: { created: tdCreated.length, completed: tdCompleted.length, avgDays: durs.length ? durs.reduce((a, b) => a + b, 0) / durs.length : null,
       doneUpToEnd: tdDoneUpToEnd.length, doneWithDate: tdDoneWithDate, tracked: tdTracked, aging, owners: Object.values(tdOwners).sort((a, b) => a.owner.localeCompare(b.owner)) },
@@ -6032,6 +6163,47 @@ function RptSummary({ r }) {
   );
 }
 
+const RPT_CALC = { sum: "Sum", avg: "Average", latest: "Latest" };
+function RptGoalCell({ g, unit }) {
+  if (!g) return <span className="rpt-muted">—</span>;
+  if (g.empty) return <span className="rpt-muted">No numbers</span>;
+  if (g.noGoal) return <span className="rpt-muted">No goal</span>;
+  const word = goalStatusWord(g);
+  return <span style={{ color: g.good ? undefined : rptVar("red"), fontWeight: 600, whiteSpace: "nowrap" }}>{g.rollup === "sum" ? <span className="num">{rptPctText(g.pct)} </span> : <span className="num">{rptUnitVal(g.actual, unit)} </span>}<span style={{ fontWeight: 400 }}>{word}</span></span>;
+}
+// Quarter / year goal tracking table (top of the Scorecard section).
+function RptGoals({ r }) {
+  const sc = r.scorecard, isYear = !r.period.q;
+  if (!sc.goals || !sc.goals.length) return null;
+  const label = isYear ? "Year" : "Quarter";
+  return (
+    <div className="rpt-keep" style={{ marginBottom: 12 }}>
+      <h3 className="rpt-h3" style={{ marginTop: 4 }}>{label} goal tracking</h3>
+      <div className="rpt-scroll">
+        <table className="rpt-table rpt-goal-table">
+          <thead><tr><th>Measurable</th><th>Owner</th><th>Calc</th><th className="r">{label} goal</th><th className="r">So far</th><th className="r">% of goal</th><th className="r">Should be by now</th><th>Status</th>
+            {isYear && [1, 2, 3, 4].map(n => <th key={n}>Q{n}</th>)}</tr></thead>
+          <tbody>{sc.goals.map(({ m, owner, track: g, byQ }) => (
+            <tr key={m.id}>
+              <td>{m.name}</td><td>{owner}</td><td>{RPT_CALC[g.rollup] || "Sum"}</td>
+              <td className="r num">{g.goal == null ? "—" : `${g.rollup === "sum" ? "" : (RPT_OPS[m.operator || "gte"] + " ")}${rptUnitVal(g.goal, m.unit)}`}{g.auto && g.goal != null && <span className="rpt-muted"> *</span>}</td>
+              <td className="r num">{g.actual == null ? "—" : rptUnitVal(g.actual, m.unit)}</td>
+              <td className="r num">{g.pct == null ? "—" : rptPctText(g.pct)}</td>
+              <td className="r num">{g.expected == null || g.complete ? "—" : `${g.lower ? "≤ " : ""}${rptUnitVal(g.expected, m.unit)}`}</td>
+              <td>{g.empty ? <span className="rpt-muted">No numbers</span> : g.noGoal ? <span className="rpt-muted">No goal</span> : <span style={{ color: g.good ? undefined : rptVar("red"), fontWeight: 600 }}>{goalStatusWord(g)}</span>}</td>
+              {isYear && byQ.map((qg, i) => <td key={i}><RptGoalCell g={qg} unit={m.unit} /></td>)}
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <div className="rpt-foot" style={{ marginTop: 6 }}>
+        Sum: total so far vs the goal; "Should be by now" = goal × share of the {label.toLowerCase()}'s weeks gone ({r.scorecard.weeks.length} of {r.scorecard.allWeeks}). Average / Latest: compared with the goal.
+        {" "}* = no quarterly goal entered, so the weekly goal is used (× weeks in the period for Sum).{isYear ? " Year goal for Sum = quarterly goal × 4." : ""} Goals are the measurable's current settings.
+      </div>
+    </div>
+  );
+}
+
 function RptScorecard({ r }) {
   const sc = r.scorecard;
   const owners = {};
@@ -6039,6 +6211,7 @@ function RptScorecard({ r }) {
   const ownerNames = Object.keys(owners).sort((a, b) => a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : a.localeCompare(b));
   return (
     <RptSection id="rpt-scorecard" title="Scorecard" sub={`${sc.weeks.length} week${sc.weeks.length === 1 ? "" : "s"} in this period${sc.weeks.length ? ` (W${rptWeekNum(sc.weeks[0])}–W${rptWeekNum(sc.weeks[sc.weeks.length - 1])})` : ""}`}>
+      {sc.weeks.length > 0 && <RptGoals r={r} />}
       {sc.rows.length > 0 && sc.weeks.length > 0 && (
         <div className="rpt-legend rpt-legend-top">
           <span><i style={{ background: rptVar("blue") }} /> Hit goal</span>
@@ -6346,6 +6519,17 @@ function rptWorkbook(XLSX, company, r, companyName) {
     [], ["Weeks are judged against each measurable's current goal."],
     ...(sc.deletedValues ? [[`${sc.deletedValues} value(s) from deleted measurables not shown.`]] : []),
   ], [18, 26, 10, 10, 10, 12, 8, 10, 8, 10, 8, 11, ...wkHead.map(() => 7)]);
+  if (sc.goals && sc.goals.length) {
+    const isYear = !p.q;
+    const xv = (v) => v == null || isNaN(v) ? null : Math.round(v * 100) / 100;
+    add("Goal tracking", [
+      ["Measurable", "Owner", "Calc", isYear ? "Year goal" : "Quarter goal", "Automatic goal", "So far", "% of goal", "Should be by now", "Status", ...(isYear ? ["Q1", "Q2", "Q3", "Q4"] : [])],
+      ...sc.goals.map(({ m, owner, track: g, byQ }) => [m.name || "", owner, RPT_CALC[g.rollup] || "Sum", xv(g.goal), g.goal == null ? null : g.auto ? "Yes" : "No", xv(g.actual), g.pct == null ? null : rptXPct(g.pct),
+        g.complete ? null : xv(g.expected), g.empty ? "No numbers" : g.noGoal ? "No goal" : goalStatusWord(g),
+        ...(isYear ? byQ.map(x => !x ? null : x.empty ? "No numbers" : x.noGoal ? "No goal" : `${x.rollup === "sum" ? rptPctText(x.pct) + " " : ""}${goalStatusWord(x)}`) : [])]),
+      [], ["Sum: total so far vs the goal; 'Should be by now' = goal × share of the period's weeks gone. Average/Latest: compared with the goal. Automatic goal = weekly goal (× weeks for Sum); year Sum goal = quarterly goal × 4."],
+    ], [26, 18, 9, 14, 10, 14, 10, 16, 14, 16, 16, 16, 16]);
+  }
   const taskRows = [["Quarter", "Source", "Task", "Owner", "Final status", "Weeks off track", "Carried over from"]];
   tk.quarters.forEach(tq => {
     if (!tq.rows) { taskRows.push([tq.label, null, tq.note]); return; }
@@ -6441,6 +6625,8 @@ const rptCss = () => `
   .rpt-table th{text-align:left;font-size:12px;font-weight:600;color:var(--c-text-muted);border-bottom:2px solid var(--c-border);padding:6px 8px;white-space:nowrap}
   .rpt-table td{border-bottom:1px solid var(--c-border);padding:6px 8px;color:var(--c-text);vertical-align:top}
   .rpt-table .r{text-align:right}
+  .rpt-goal-table td{white-space:nowrap}
+  .rpt-goal-table td:first-child{white-space:normal;min-width:140px}
   .rpt-table tr.rpt-total td{font-weight:600;border-top:2px solid var(--c-border)}
   .rpt-group{margin-bottom:8px}
   .rpt-ygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:0 20px}
