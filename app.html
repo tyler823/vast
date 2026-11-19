@@ -481,6 +481,76 @@ const makeSTYLE = (C) => `
     .tabs{flex-wrap:nowrap;overflow-x:auto}
     .toolbar .tabs,.panel-h .tabs{flex:1 1 100%!important}
   }
+  /* ── Tooltip that sits beside its element (see <Tip>) ── */
+  .vtip{position:fixed;z-index:10000;transform:translate(-50%,-100%);background:${C.text};color:${C.surface};font-size:${C.fs.xs}px;font-weight:500;line-height:1.35;padding:4px 8px;border-radius:${C.radius.control}px;white-space:nowrap;max-width:360px;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:${C.shadowLg}}
+  .vtip.below{transform:translate(-50%,0)}
+  /* ── Live Huddle (desktop): meeting bar + agenda rail + scrolling content ── */
+  .hd-bar{display:flex;align-items:center;gap:16px;width:100%;min-width:0;min-height:56px;position:relative}
+  .hd-bar > *{min-width:0}
+  .hd-bar-name{display:flex;flex-direction:column;line-height:1.25;flex:0 1 auto;max-width:200px}
+  .hd-live{display:inline-flex;align-items:center;gap:6px;font-size:${C.fs.xs}px;color:${C.green};font-weight:600;white-space:nowrap}
+  .hd-bar-step{display:flex;flex-direction:column;line-height:1.25;flex:1 1 auto;padding-left:16px;border-left:1px solid ${C.border}}
+  .hd-muted{color:${C.textMuted};font-size:${C.fs.xs}px;white-space:nowrap}
+  .hd-ellip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;display:block}
+  .hd-bar-timer{font-family:${C.fontMono};font-variant-numeric:tabular-nums;font-size:${C.fs.md}px;font-weight:600;white-space:nowrap;flex-shrink:0}
+  .hd-bar-total{white-space:nowrap;flex-shrink:0;font-size:${C.fs.sm}px;color:${C.textMuted}}
+  .hd-bar-total .num{color:${C.text};font-weight:600;margin-left:6px}
+  .hd-bar-actions{display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0}
+  .hd-qa{display:inline-flex;align-items:center;gap:6px;color:${C.textMuted};padding:6px 10px}
+  .hd-qa.on{background:${C.selBg};color:${C.link}}
+  .hd-sep{width:1px;height:24px;background:${C.border};margin:0 4px;flex-shrink:0}
+  .hd-qa-pop{position:absolute;top:calc(100% + 4px);right:0;width:min(600px,90vw);z-index:60}
+  .hd-grid{flex:1;min-height:0;display:grid;grid-template-columns:240px minmax(0,1fr);gap:12px}
+  .hd-agenda{align-self:start;max-height:100%;overflow:auto}
+  .hd-agenda-h{display:flex;justify-content:space-between;align-items:center;height:34px;padding:0 12px;font-size:${C.fs.xs}px;font-weight:600;color:${C.textMuted};border-bottom:1px solid ${C.border}}
+  .hd-step{display:flex;align-items:center;gap:8px;width:100%;height:34px;min-height:34px;padding:0 10px 0 12px;background:transparent;border:none;border-radius:0;border-bottom:1px solid ${C.border};color:${C.text};font-size:${C.fs.sm}px;font-weight:500;text-align:left;cursor:pointer}
+  .hd-step:last-child{border-bottom:none}
+  .hd-step:hover{background:${C.tableHover}}
+  .hd-step.active{background:${C.selBg};box-shadow:inset 3px 0 0 ${C.selBorder};font-weight:600}
+  .hd-step.done{color:${C.textMuted}}
+  .hd-step-n{width:18px;height:18px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;font-family:${C.fontMono};font-size:11px;color:${C.textMuted};border:1px solid ${C.border}}
+  .hd-step.active .hd-step-n{border-color:${C.selBorder};color:${C.link}}
+  .hd-step.done .hd-step-n{background:${C.green};border-color:${C.green};color:${C.onAccent}}
+  .hd-step-t{margin-left:auto;flex-shrink:0;font-family:${C.fontMono};font-size:11px;color:${C.textMuted};font-variant-numeric:tabular-nums}
+  .hd-content{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px}
+  .hd-hint{font-size:${C.fs.sm}px;color:${C.textMuted};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto}
+  .hd-sc{display:flex;flex-direction:column;min-height:0;flex:0 1 auto}
+  .hd-sc .dt-wrap{flex:1 1 auto;min-height:0}
+  .hd-sc .toolbar{margin:0;border-radius:${C.radius.card}px ${C.radius.card}px 0 0;justify-content:space-between;flex-wrap:nowrap}
+  .hd-sc .sc-input{width:78px;padding:2px 6px}
+  .hd-sc .sc-table th.sc-name,.hd-sc .sc-table td.sc-name{width:220px;min-width:220px;max-width:220px}
+  @media(max-width:1399px){ .hd-sc .sc-table th.sc-name,.hd-sc .sc-table td.sc-name{width:186px;min-width:186px;max-width:186px} }
+  @media(min-width:1700px){ .hd-sc .sc-table th.sc-name,.hd-sc .sc-table td.sc-name{width:300px;min-width:300px;max-width:300px} }
+  @media(max-width:768px){ .hd-sc .sc-table th.sc-name,.hd-sc .sc-table td.sc-name{width:170px;min-width:170px;max-width:170px} }
+  .hd-thiswk{margin-left:6px;font-size:11px;font-weight:600}
+  .hd-sc .sc-input.cur{border-color:${C.inputBorder}!important;background:${C.inputBg}}
+  .hd-flag.on{color:${C.link};background:${C.selBg}}
+  .hd-ids .md-row .hd-step-n{width:20px;height:20px}
+  .hd-note{font-size:${C.fs.xs}px;color:${C.textDim};font-style:italic;margin-top:2px;overflow-wrap:anywhere}
+  .hd-slot{width:30px;display:inline-flex;justify-content:center;flex-shrink:0}
+  .hd-ids{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+  .hd-conclude{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);gap:12px;align-items:start}
+  .hd-rate .rating-btn{width:30px;height:30px;font-size:13px;flex-shrink:0}
+  .hd-rate-row{display:flex;gap:3px;flex-wrap:nowrap}
+  .hd-rate .lowner{width:140px}
+  .hd-done-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;width:100%;padding:8px 0;min-width:0}
+  .hd-done-h h1{font-size:${C.fs.title}px;font-weight:600;margin:0;white-space:nowrap}
+  .hd-tiles{display:flex;gap:8px;flex-wrap:wrap}
+  .hd-tile{display:inline-flex;align-items:baseline;gap:6px;padding:3px 10px;border:1px solid ${C.border};border-radius:${C.radius.control}px;background:${C.surface2};font-size:${C.fs.xs}px;color:${C.textMuted};white-space:nowrap}
+  .hd-tile b{font-family:${C.fontMono};font-variant-numeric:tabular-nums;font-size:${C.fs.md}px;color:${C.text};font-weight:600}
+  .hd-done-btns{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+  @media(max-width:1279px){ .hd-qa-l{display:none} }
+  @media(max-width:1199px){ .hd-conclude{grid-template-columns:minmax(0,1fr)} }
+  @media(max-width:1100px){ .hd-bar-total{display:none} .hd-bar-name{max-width:140px} .hd-grid{grid-template-columns:200px minmax(0,1fr)} }
+  @media(max-width:768px){
+    .hd-ids,.hd-conclude{grid-template-columns:minmax(0,1fr)}
+    .hd-hint{white-space:normal}
+    .hd-done-btns{margin-left:0;width:100%}
+    .hd-done-btns > *{flex:1 1 auto}
+    .hd-rate .rating-btn{width:48px;height:48px}
+    .hd-rate-row{flex-wrap:wrap}
+    .hd-wrap{flex:1 1 100%;flex-shrink:1;justify-content:flex-start!important}
+  }
 `;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -1197,13 +1267,16 @@ function Sidebar({ view, setView, company, theme, toggleTheme, mobileOpen, setMo
 const MobileMenuContext = React.createContext(() => {});
 const SidebarCollapsedContext = React.createContext(false);
 
-function Layout({ children, title, subtitle, action }) {
+// `header` (optional) replaces the title/subtitle block; `fill` (optional, desktop)
+// makes the page exactly one screen tall so only inner areas scroll.
+function Layout({ children, title, subtitle, action, header, fill }) {
   const mobile = useMobile();
   const openMobileMenu = React.useContext(MobileMenuContext);
   const sidebarCollapsed = React.useContext(SidebarCollapsedContext);
   const ml = mobile ? 0 : (sidebarCollapsed ? 56 : 220);
+  const isFill = fill && !mobile;
   return (
-    <div style={{ marginLeft: ml, minHeight: "100vh", background: C.bg, paddingBottom: mobile ? 16 : 0, transition: "margin-left 0.2s ease" }}>
+    <div style={{ marginLeft: ml, minHeight: "100vh", background: C.bg, paddingBottom: mobile ? 16 : 0, transition: "margin-left 0.2s ease", ...(isFill ? { height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" } : {}) }}>
       {/* Header */}
       <div className="page-header" style={{ borderBottom: `1px solid ${C.border}`, padding: mobile ? "6px 12px 6px 8px" : "0 20px", minHeight: 56, background: C.surface, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, position: "sticky", top: 0, zIndex: 40 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
@@ -1211,14 +1284,16 @@ function Layout({ children, title, subtitle, action }) {
             <button onClick={openMobileMenu} aria-label="Open menu"
               style={{ background: "none", border: "none", color: C.text, fontSize: C.fs.title, cursor: "pointer", padding: "4px 6px", lineHeight: 1, flexShrink: 0 }}><Icon.menu /></button>
           )}
+          {header ? header : (
           <div style={{ minWidth: 0, display: "flex", flexDirection: mobile ? "column" : "row", alignItems: mobile ? "flex-start" : "baseline", gap: mobile ? 0 : 12 }}>
             <h1 style={{ fontSize: C.fs.title, fontWeight: 600, color: C.text, margin: 0, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{title}</h1>
             {subtitle && <div title={typeof subtitle === "string" ? subtitle : undefined} style={{ fontSize: mobile ? C.fs.xs : C.fs.sm, color: C.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, maxWidth: "100%" }}>{subtitle}</div>}
           </div>
+          )}
         </div>
         {action && <div style={{ flexShrink: 0 }}>{action}</div>}
       </div>
-      <div style={{ padding: mobile ? "12px 16px 16px" : "16px 20px 20px" }} className="fade-in">{children}</div>
+      <div style={{ padding: mobile ? "12px 16px 16px" : "16px 20px 20px", ...(isFill ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", paddingBottom: 16 } : {}) }} className="fade-in">{children}</div>
     </div>
   );
 }
@@ -1418,6 +1493,30 @@ const fmtMeasure = (raw, unit, cell) => {
   if (u === "%") return `${sign}${body}%`;
   return `${sign}${body}${u && !cell ? " " + u : ""}`;
 };
+// Tooltip shown right beside the element it belongs to (replaces the browser's
+// own title popup, which could appear far from the button). Display only.
+function Tip({ text, children, truncOnly, style, className }) {
+  const ref = useRef(null);
+  const [pos, setPos] = useState(null);
+  const hide = () => setPos(null);
+  const show = () => {
+    const el = ref.current;
+    if (!el || !text) return;
+    if (truncOnly) { const c = el.firstElementChild || el; if (c.scrollWidth <= c.clientWidth) return; }
+    const r = el.getBoundingClientRect();
+    const below = r.top < 48;
+    setPos({ x: Math.min(Math.max(r.left + r.width / 2, 12), window.innerWidth - 12), y: below ? r.bottom + 6 : r.top - 6, below });
+    window.addEventListener("scroll", hide, { capture: true, once: true });
+  };
+  return (
+    <span ref={ref} className={className} style={{ display: "inline-flex", minWidth: 0, ...style }}
+      onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide} onMouseDown={hide}>
+      {children}
+      {pos && ReactDOM.createPortal(<div role="tooltip" className={`vtip ${pos.below ? "below" : ""}`} style={{ left: pos.x, top: pos.y }}>{text}</div>, document.body)}
+    </span>
+  );
+}
+
 function ScorecardCell({ value, onCommit, placeholder, style, format, className }) {
   const [local, setLocal] = useState(value ?? "");
   const [focused, setFocused] = useState(false);
@@ -1876,6 +1975,11 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
   const fireConfetti = (msg) => setConfetti(msg);
   const [meetingSaving, setMeetingSaving] = useState(false);
   const [meetingError, setMeetingError] = useState("");
+  // Phone keeps the original Huddle frame; desktop gets the one-screen layout (L6).
+  const mobile = useMobile();
+  const viewportW = useViewportWidth();
+  // Open the Meeting complete screen at the top so its buttons are in view.
+  useEffect(() => { if (done) window.scrollTo(0, 0); }, [done]);
 
   // ── Live session state ─────────────────────────────────────────────────
   const [isViewer, setIsViewer] = useState(false);   // true = following host
@@ -2270,67 +2374,61 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
   if (done) {
     const recap = recapText || buildRecap({ date: now() }, rating);
     const resetMeeting = () => { setStarted(false); setActiveIdx(0); setElapsed(0); setSegTimes({}); setRating(0); setMemberRatings({}); setDone(false); setShowRecap(false); setNotes({}); setAttendance({}); setSpotlight(null); setAlreadySelected([]); setFocusQueue([]); setActiveIssueId(null); setIssueNotes({}); setSolvedThisSession([]); setIDSAdded({}); setConfetti(null); confettiFired.current = { todos: false, ids: false }; preMeetingTodoIds.current = null; clearTimeout(spinRef.current); setIsViewer(false); endLiveSession(companyCode || _currentCompanyCode, huddleId).catch(e => console.warn("[VAST] Failed to end live session on reset:", e)); };
+    // Recipients + mailto parts for Send Recap (unchanged logic, computed up front
+    // so the buttons can sit in the header row).
+    const doneHuddleObj = (company.huddles || []).find(h => h.id === huddleId);
+    const doneHuddleMemberIds = doneHuddleObj?.memberIds || [];
+    const doneAllMembers = activeMembers(company);
+    const recipientPool = doneHuddleMemberIds.length > 0
+      ? doneAllMembers.filter(m => doneHuddleMemberIds.includes(m.id))
+      : doneAllMembers;
+    const emails = recipientPool.map(m => m.email).filter(Boolean).join(",");
+    const subject = encodeURIComponent(`${huddleName} Recap — ${dateStr(new Date())}`);
+    const body = encodeURIComponent(recap);
+    // Stat tiles — read-only, from this meeting's saved record and session state.
+    const savedMtg = toArray(doneHuddleObj?.meetings).slice(-1)[0];
+    const endT = savedMtg && savedMtg.date ? new Date(savedMtg.date).getTime() : null;
+    const startT = endT != null ? endT - elapsed * 1000 : null;
+    const todosCreated = startT != null
+      ? toArray(company.todos).filter(t => t && (t.huddleId === huddleId || !t.huddleId) && t.createdAt && new Date(t.createdAt).getTime() >= startT - 1000 && new Date(t.createdAt).getTime() <= endT + 1000).length
+      : null;
+    const tiles = (
+      <div className="hd-tiles">
+        <span className="hd-tile"><b>{rating}/10</b>average rating</span>
+        <span className="hd-tile"><b>{fmt(elapsed)}</b>duration</span>
+        {todosCreated != null && <span className="hd-tile"><b>{todosCreated}</b>to-do{todosCreated === 1 ? "" : "s"} created</span>}
+        <span className="hd-tile"><b>{solvedThisSession.length}</b>issue{solvedThisSession.length === 1 ? "" : "s"} solved</span>
+      </div>
+    );
+    const doneButtons = (
+      <div className="hd-done-btns">
+        <button className="btn-secondary" onClick={() => { navigator.clipboard.writeText(recap).catch(e => console.warn("[VAST] Clipboard copy failed:", e)); }}>
+          <Icon.copy /> Copy Recap
+        </button>
+        <button className="btn-secondary" onClick={() => { window.location.href = `mailto:${emails}?subject=${subject}&body=${body}`; }}>
+          <Icon.mail /> Send Recap
+        </button>
+        <button className="btn-primary" onClick={resetMeeting}>
+          End & Return to Dashboard
+        </button>
+      </div>
+    );
     return (
-      <Layout title="Meeting Complete!" subtitle="Great work — keep the momentum going">
-        <div style={{ maxWidth: 680, margin: "0 auto" }} className="fade-in">
-          <div style={{ textAlign: "center", marginBottom: 24 }}>
-            <div style={{ marginBottom: 8, color: C.textMuted, display:"flex", justifyContent:"center" }}><Icon.celebrate /></div>
-            <div style={{ fontSize: C.fs.display, fontWeight: 600, color: rating >= 8 ? C.green : rating >= 6 ? C.yellow : C.red, fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{rating}/10</div>
-            <div style={{ color: C.textMuted, marginTop: 4, fontSize: C.fs.base }}>Average Meeting Rating · <span className="num">{fmt(elapsed)}</span></div>
-          </div>
-
-          {Object.keys(memberRatings).length > 1 && (
-            <div className="card" style={{ marginBottom: 20 }}>
-              <h3 style={{ fontSize: C.fs.md, marginBottom: 12 }}>Individual Ratings</h3>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {Object.entries(memberRatings).map(([mid, score]) => {
-                  const m = toArray(company.members).find(x => x.id === mid);
-                  return (
-                    <div key={mid} style={{ display: "flex", flexDirection: "column", alignItems: "center", background: C.surface2, borderRadius: C.radius.control, padding: "8px 16px", minWidth: 80 }}>
-                      <div style={{ fontSize: C.fs.title, fontWeight: 600, color: score >= 8 ? C.green : score >= 6 ? C.yellow : C.red, fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums" }}>{score}</div>
-                      <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginTop: 4 }}>{m ? m.name : "—"}</div>
-                    </div>
-                  );
-                })}
-              </div>
+      <Layout title="Meeting complete" subtitle={`${huddleName} · ${dateStr(new Date())}`}
+        header={mobile ? null : <div className="hd-done-h"><h1>Meeting complete</h1>{tiles}{doneButtons}</div>}>
+        <div className="fade-in">
+          {mobile && (
+            <div className="panel" style={{ marginBottom: 12, padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+              {tiles}{doneButtons}
             </div>
           )}
-
-          <div className="card" style={{ marginBottom: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <h3 style={{ fontSize: C.fs.md }}>Meeting Recap</h3>
+          <div className="panel">
+            <div className="panel-h">
+              <h3>Meeting recap</h3>
+              <span style={{ fontSize: C.fs.sm, color: C.textMuted }}>{huddleName} · <span className="num">{dateStr(new Date())}</span></span>
             </div>
-            <pre style={{ fontSize: C.fs.xs, lineHeight: 1.7, color: C.textMuted, whiteSpace: "pre-wrap", fontFamily: C.fontUI, background: C.surface2, borderRadius: C.radius.control, padding: "16px", maxHeight: 400, overflowY: "auto" }}>{recap}</pre>
+            <div className="panel-b"><RecapView text={recap} /></div>
           </div>
-
-          {/* Send Recap Email button */}
-          {(() => {
-            const huddleObj = (company.huddles || []).find(h => h.id === huddleId);
-            const huddleMemberIds = huddleObj?.memberIds || [];
-            const allMembers = activeMembers(company);
-            const recipientPool = huddleMemberIds.length > 0
-              ? allMembers.filter(m => huddleMemberIds.includes(m.id))
-              : allMembers;
-            const emails = recipientPool.map(m => m.email).filter(Boolean).join(",");
-            const subject = encodeURIComponent(`${huddleName} Recap — ${dateStr(new Date())}`);
-            const body = encodeURIComponent(recap);
-            return (
-              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                <button onClick={() => { navigator.clipboard.writeText(recap).catch(e => console.warn("[VAST] Clipboard copy failed:", e)); }}
-                  style={{ flex: 1, padding: "12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.textMuted, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.base, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  <Icon.copy /> Copy Recap
-                </button>
-                <button onClick={() => { window.location.href = `mailto:${emails}?subject=${subject}&body=${body}`; }}
-                  style={{ flex: 1, padding: "12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.text, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.base, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  <Icon.mail /> Send Recap
-                </button>
-              </div>
-            );
-          })()}
-
-          <button className="btn-primary" style={{ width: "100%", padding: "12px", fontSize: C.fs.md }} onClick={resetMeeting}>
-            End & Return to Dashboard
-          </button>
         </div>
       </Layout>
     );
@@ -2439,161 +2537,9 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
     );
   }
 
-  return (
-    <Layout title={`${huddleName} — Live`} subtitle={isViewer ? `Following ${liveSession?.hostName || "Host"}` : `Total: ${fmt(elapsed)}`}>
-      {confetti && <Confetti message={confetti} onDone={() => setConfetti(null)} />}
-      {/* Viewer banner — shown when following host */}
-      {isViewer && liveSession?.active && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: C.blueTint, border: `1px solid ${C.blueBorder}`, borderRadius: C.radius.control, padding: "8px 16px", marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.blue, display: "inline-block", animation: "pulse 1.2s infinite" }} />
-            <div>
-              <div style={{ fontWeight: 600, fontSize: C.fs.sm, color: C.blue }}>Following {liveSession.hostName || "Host"} · Live</div>
-              <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>Your view updates automatically. Navigation is controlled by the host.</div>
-            </div>
-          </div>
-          <button onClick={() => { setIsViewer(false); }}
-            style={{ fontSize: C.fs.xs, padding: "4px 12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.textMuted, cursor: "pointer", fontFamily: C.fontUI, fontWeight: 600, flexShrink: 0 }}>
-            Take Control
-          </button>
-        </div>
-      )}
-      <div style={{ display: "grid", gridTemplateColumns: "min(280px,100%) 1fr", gap: 20 }} className="mob-stack">
-        {/* Agenda sidebar */}
-        <div>
-          <div className="card" style={{ marginBottom: 12 }}>
-            <div style={{ textAlign: "center" }}>
-              <div className="timer-display" style={{ color: over ? C.red : C.text }}>{fmt(segElapsed)}</div>
-              <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginTop: 4 }}>/ <span className="num">{seg.minutes}:00</span> allocated</div>
-              {over && <div style={{ color: C.red, fontSize: C.fs.xs, fontWeight: 600, marginTop: 4 }}>⚠ Overtime</div>}
-            </div>
-          </div>
-          {agenda.map((a, i) => {
-            const t = segTimes[i] || 0;
-            const limit = a.minutes * 60;
-            const isOver = t > limit;
-            const isDone = i < activeIdx;
-            const isActive = i === activeIdx;
-            return (
-              <div key={a.id} className={`huddle-item ${isActive ? "active" : ""} ${isDone ? "done" : ""}`}
-                onClick={() => { if (isViewer) return; setActiveIdx(i); persistSessionSnapshot(i); }}
-                style={{ borderLeft: isOver ? `3px solid ${C.red}` : undefined }}>
-                <div style={{ width: 22, height: 22, background: isDone ? C.green : isActive ? C.text : C.surface2, color: isDone ? C.onAccent : isActive ? C.surface2 : C.textMuted, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  {isDone ? <Icon.check /> : <span style={{ fontSize: C.fs.xs, fontWeight: 600 }}>{i + 1}</span>}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: C.fs.sm, fontWeight: 600 }}>{a.label}</div>
-                  <div className="num" style={{ fontSize: C.fs.xs, color: isOver ? C.red : C.textMuted, fontWeight: isOver ? 600 : 400 }}>
-                    {t > 0 ? fmt(t) : a.minutes + ":00"}{isOver ? " !" : ""} / {a.minutes}:00
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button className="btn-secondary" style={{ flex: 1 }} onClick={prev} disabled={activeIdx === 0}><Icon.arrowLeft /> Back</button>
-            <button className="btn-primary" style={{ flex: 1 }} onClick={next} disabled={activeIdx === AGENDA.length - 1}>Next <Icon.arrowRight /></button>
-          </div>
-        </div>
-
-        {/* Content area */}
-        <div style={{ position: "relative" }}>
-          {/* Floating quick-add bar */}
-          {started && !done && !isViewer && (() => {
-            const closeQuickAdd = () => setQuickAdd(null);
-            return (
-              <div style={{ position: "sticky", top: 12, zIndex: 100, marginBottom: 12, pointerEvents: quickAdd ? "auto" : "none" }}>
-                {/* Popover form */}
-                {quickAdd && (
-                  <div className="card fade-in" style={{ marginBottom: 8, padding: "12px 16px", border: `1px solid ${C.borderStrong}`, background: C.surface }}>
-                    {quickAdd === "headline" && (
-                      <div>
-                        <div style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Quick Add Headline</div>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 120, flexShrink: 0 }}>
-                            <option>Customer</option><option>Employee</option>
-                          </select>
-                          <input autoFocus placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))}
-                            onKeyDown={e => { if (e.key === "Enter") { addHeadline(); closeQuickAdd(); } if (e.key === "Escape") closeQuickAdd(); }}
-                            style={{ flex: 1, minWidth: 180 }} />
-                          <button className="btn-secondary" style={{ padding: "8px 16px" }} disabled={quickAddSaving} onClick={() => { addHeadline(); closeQuickAdd(); }}>Add</button>
-                          <button className="btn-ghost" style={{ padding: "8px 12px" }} onClick={closeQuickAdd}>✕</button>
-                        </div>
-                      </div>
-                    )}
-                    {quickAdd === "todo" && (
-                      <div>
-                        <div style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Quick Add To-Do</div>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: members.length ? 8 : 0 }}>
-                          <input autoFocus placeholder="What needs to happen?" value={newTodo.title} onChange={e => setNewTodo(n => ({ ...n, title: e.target.value }))}
-                            onKeyDown={e => { if (e.key === "Enter") { addTodo(); closeQuickAdd(); } if (e.key === "Escape") closeQuickAdd(); }}
-                            style={{ flex: 2, minWidth: 180 }} />
-                          <input type="date" value={newTodo.dueDate} onChange={e => setNewTodo(n => ({ ...n, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 130 }} />
-                          <button className="btn-secondary" style={{ padding: "8px 16px" }} disabled={quickAddSaving} onClick={() => { addTodo(); closeQuickAdd(); }}>Add</button>
-                          <button className="btn-ghost" style={{ padding: "8px 12px" }} onClick={closeQuickAdd}>✕</button>
-                        </div>
-                        {members.length > 0 && (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                            <span style={{ fontSize: C.fs.xs, color: C.textMuted }}>Assign:</span>
-                            {members.map(m => {
-                              const sel = (newTodo.assignees || []).includes(m.name);
-                              return (
-                                <button key={m.id} onClick={() => setNewTodo(n => ({ ...n, assignees: sel ? n.assignees.filter(a => a !== m.name) : [...(n.assignees||[]), m.name] }))}
-                                  style={{ padding: "4px 8px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI,
-                                    background: sel ? C.selBg : C.surface2, color: sel ? C.text : C.textMuted, border: `1px solid ${sel ? C.selBorder : C.border}` }}>
-                                  {sel ? "✓ " : ""}{m.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {quickAdd === "issue" && (
-                      <div>
-                        <div style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Quick Add Issue</div>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          <input autoFocus placeholder="What's the issue?" value={newIssue.title} onChange={e => setNewIssue(n => ({ ...n, title: e.target.value }))}
-                            onKeyDown={e => { if (e.key === "Enter") { addIssue(); closeQuickAdd(); } if (e.key === "Escape") closeQuickAdd(); }}
-                            style={{ flex: 1, minWidth: 180 }} />
-                          <select value={newIssue.priority} onChange={e => setNewIssue(n => ({ ...n, priority: e.target.value }))} style={{ width: 120, flexShrink: 0 }}>
-                            <option value="1">Priority 1</option>
-                            <option value="2">Priority 2</option>
-                            <option value="3">Priority 3</option>
-                          </select>
-                          <button className="btn-secondary" style={{ padding: "8px 16px" }} disabled={quickAddSaving} onClick={() => { addIssue(); closeQuickAdd(); }}>Add</button>
-                          <button className="btn-ghost" style={{ padding: "8px 12px" }} onClick={closeQuickAdd}>✕</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* Floating button bar */}
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", pointerEvents: "auto" }}>
-                  {[
-                    { key: "headline", label: "Headline", color: C.text },
-                    { key: "todo", label: "To-Do", color: C.text },
-                    { key: "issue", label: "Issue", color: C.text },
-                  ].map(btn => (
-                    <button key={btn.key} onClick={() => setQuickAdd(q => q === btn.key ? null : btn.key)}
-                      style={{ padding: "8px 16px", borderRadius: C.radius.control, border: `1px solid ${quickAdd === btn.key ? btn.color : C.border}`,
-                        background: quickAdd === btn.key ? `${btn.color}22` : C.surface2,
-                        color: quickAdd === btn.key ? btn.color : C.textMuted,
-                        fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer",
-                        transition: "all 0.15s", boxShadow: "none" }}>
-                      {btn.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
-          <div className="fade-in" key={activeIdx}>
-          <div className="card" style={{ marginBottom: 16 }}>
-            <h2 style={{ fontSize: C.fs.title, marginBottom: 4 }}>{seg.label}</h2>
-            <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>{seg.minutes} minutes allocated</div>
-          </div>
+  // Step content is shared by the phone frame and the desktop frame below.
+  const stepContent = (
+    <>
 
           {/* SCORING segment */}
           {activeIdx === 1 && (() => {
@@ -2609,7 +2555,8 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
             // including the current week (rightmost), so the current week is
             // visible without horizontal scrolling. "Show all weeks" reveals the
             // full history. Display-only — never changes stored scorecard data.
-            const RECENT_WEEKS = 6;
+            // Desktop shows as many recent weeks as fit beside the agenda (display only).
+            const RECENT_WEEKS = mobile ? 6 : viewportW >= 1800 ? 9 : viewportW >= 1400 ? 6 : 5;
             const curIdx = weeks.indexOf(curWk);
             const windowEnd = curIdx >= 0 ? curIdx + 1 : weeks.length; // current week is last visible
             const displayWeeks = scorecardShowAll
@@ -2639,82 +2586,82 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
             };
 
             if (measurables.length === 0) return (
-              <div className="card">
-                <div style={{ color: C.textMuted, fontSize: C.fs.base }}>No measurables assigned to <strong>{huddleName}</strong>. Add and assign them in the Scorecard section.</div>
+              <div className="panel">
+                <div className="lempty">No measurables assigned to <strong>{huddleName}</strong>. Add and assign them in the Scorecard section.</div>
               </div>
             );
 
             return (
-              <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-                <div style={{ padding: "16px 20px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <h3 style={{ fontSize: C.fs.md, margin: 0 }}>Scorecard — {company.currentQuarter || "This Quarter"}</h3>
-                    <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginTop: 4 }}>
-                      {scorecardShowAll
-                        ? <>Showing all {weeks.length} weeks · enter this week's numbers in the <span style={{ color: C.text, fontWeight: 600 }}>highlighted column</span></>
-                        : <>Showing the latest {displayWeeks.length} week{displayWeeks.length === 1 ? "" : "s"}{hiddenCount > 0 ? ` of ${weeks.length}` : ""} · enter this week's numbers in the <span style={{ color: C.text, fontWeight: 600 }}>highlighted column</span></>}
-                    </div>
-                  </div>
+              <div className="panel hd-sc">
+                <div className="toolbar">
+                  <span className="hd-hint">
+                    <span style={{ color: C.text, fontWeight: 600 }}>Scorecard — {company.currentQuarter || "This Quarter"}</span>
+                    {" · "}
+                    {scorecardShowAll
+                      ? <>Showing all <span className="num">{weeks.length}</span> weeks</>
+                      : <>Showing the latest <span className="num">{displayWeeks.length}</span> week{displayWeeks.length === 1 ? "" : "s"}{hiddenCount > 0 ? <> of <span className="num">{weeks.length}</span></> : ""}</>}
+                    {" · enter this week's numbers in the highlighted column"}
+                  </span>
                   {weeks.length > RECENT_WEEKS && (
-                    <button onClick={() => setScorecardShowAll(s => !s)}
-                      style={{ flexShrink: 0, padding: "6px 12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.textMuted, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    <button className="btn-secondary lbtn" onClick={() => setScorecardShowAll(s => !s)} style={{ flexShrink: 0, whiteSpace: "nowrap" }}>
                       {scorecardShowAll ? `Show recent ${RECENT_WEEKS}` : "Show all weeks"}
                     </button>
                   )}
                 </div>
-                <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: C.fs.sm }}>
+                {/* Opens scrolled to the right so "This week" is in view even when columns overflow. */}
+                <div className="dt-wrap" ref={el => { if (el && el.dataset.sl !== String(displayWeeks.length)) { el.scrollLeft = el.scrollWidth; el.dataset.sl = String(displayWeeks.length); } }}>
+                  <table className="dt sc-table">
                     <thead>
                       <tr>
-                        <th style={{ textAlign: "left", padding: "8px 16px", fontWeight: 600, fontSize: C.fs.xs, color: C.textMuted, background: C.surface2, position: "sticky", left: 0, zIndex: 2, minWidth: 140, borderBottom: `1px solid ${C.border}` }}>Measurable</th>
-                        <th style={{ textAlign: "center", padding: "8px 8px", fontWeight: 600, fontSize: C.fs.xs, color: C.textMuted, background: C.surface2, minWidth: 60, borderBottom: `1px solid ${C.border}` }}>Goal</th>
+                        <th className="sc-name">Measurable <span style={{ fontWeight: 400 }}>· owner</span></th>
+                        <th className="r">Goal</th>
                         {displayWeeks.map(wk => (
-                          <th key={wk} style={{ textAlign: "center", padding: "8px 6px", fontWeight: wk === curWk ? 600 : 600, fontSize: C.fs.xs, color: wk === curWk ? C.text : C.textMuted, background: wk === curWk ? C.selBg : C.surface2, minWidth: 72, borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${wk === curWk ? C.borderStrong : C.border}`, whiteSpace: "nowrap" }}>
-                            <span className="num">{weekLabel(wk)}</span>
-                            {wk === curWk && <div style={{ fontSize: C.fs.xs}}>This week</div>}
+                          <th key={wk} className="r" style={wk === curWk ? { background: C.selBg, color: C.link, boxShadow: `inset 2px 0 0 ${C.selBorder}`, paddingRight: 12 } : { paddingRight: 12 }}>
+                            <span className="num">{weekLabel(wk)}</span>{wk === curWk && <span className="hd-thiswk">This week</span>}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {measurables.map((m, mi) => (
-                        <tr key={m.id} style={{ background: mi % 2 === 0 ? "transparent" : `${C.surface2}55` }}>
-                          <td style={{ padding: "8px 16px", fontWeight: 600, fontSize: C.fs.sm, position: "sticky", left: 0, background: mi % 2 === 0 ? C.surface : C.surface2, zIndex: 1, borderBottom: `1px solid ${C.border}` }}>
+                      {measurables.map((m) => (
+                        <tr key={m.id}>
+                          <td className="sc-name">
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <div style={{ flex: 1 }}>
-                                <div>{m.name}</div>
-                                {m.owner && <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginTop: 4 }}>{m.owner}</div>}
-                              </div>
+                              <Tip text={m.owner ? `${m.name} · ${m.owner}` : m.name} truncOnly style={{ flex: 1 }}>
+                                <span className="hd-ellip"><span style={{ fontWeight: 600 }}>{m.name}</span>{m.owner && <span style={{ color: C.textMuted, fontSize: C.fs.xs, marginLeft: 8 }}>{m.owner}</span>}</span>
+                              </Tip>
                               {(() => {
                                 const curVal = entries[curWk]?.[m.id] ?? "";
                                 const met = meetsGoal(curVal, m);
                                 const alreadyQueued = (company.problemQueue || []).find(p => p.id === m.id);
+                                const tip = alreadyQueued ? "Already in problem queue" : "Send to Problem Solving";
                                 return (
-                                  <button onClick={() => addToProblemQueue({ id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })}
-                                    title={alreadyQueued ? "Already in problem queue" : "Send to Problem Solving"}
-                                    style={{ padding: "4px 8px", borderRadius: C.radius.control, border: `1px solid ${alreadyQueued ? C.selBorder : C.border}`, background: alreadyQueued ? C.selBg : C.surface3, color: alreadyQueued ? C.text : C.textMuted, fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
-                                    {alreadyQueued ? "Queued" : "Flag"}
-                                  </button>
+                                  <Tip text={tip}>
+                                    <button onClick={() => addToProblemQueue({ id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })}
+                                      aria-label={tip} aria-pressed={!!alreadyQueued} className={`icon-btn hd-flag ${alreadyQueued ? "on" : ""}`}>
+                                      <Icon.flag />
+                                    </button>
+                                  </Tip>
                                 );
                               })()}
                             </div>
                           </td>
-                          <td className="num" style={{ textAlign: "center", padding: "8px 8px", color: C.textMuted, fontSize: C.fs.xs, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{({gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="})[m.operator||"gte"]} {m.target}{m.unit ? ` ${m.unit}` : ""}</td>
+                          <td className="r num muted" style={{ whiteSpace: "nowrap" }}>{({gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="})[m.operator||"gte"]} {fmtMeasure(m.target, m.unit)}</td>
                           {displayWeeks.map(wk => {
                             const val = entries[wk]?.[m.id] ?? "";
                             const met = meetsGoal(val, m);
                             const isCur = wk === curWk;
-                            // Current week: red highlight border; past/future: subtle styling
-                            const inputBg = met === true ? C.greenTint : met === false ? C.redTint1 : isCur ? C.surface2 : "transparent";
-                            const inputBorder = isCur ? C.borderStrong : C.border;
-                            const inputColor = met === true ? C.green : met === false ? C.red : C.text;
                             return (
-                              <td key={wk} style={{ textAlign: "center", padding: "6px 4px", borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${isCur ? C.borderStrong : C.border}`, background: isCur ? C.selBg : "transparent" }}>
+                              <td key={wk} className="sc-cell" style={{ background: isCur ? C.selBg : "transparent", boxShadow: isCur ? `inset 2px 0 0 ${C.selBorder}` : undefined }}>
                                 <ScorecardCell
                                   value={val}
                                   onCommit={(v) => setEntry(m.id, wk, v)}
                                   placeholder="—"
-                                  style={{ width: 60, textAlign: "center", padding: "4px 4px", fontSize: C.fs.sm, fontWeight: val !== "" ? 600 : 400, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: C.radius.control, color: val !== "" ? inputColor : C.textDim, fontFamily: C.fontMono, fontVariantNumeric: "tabular-nums", cursor: "text" }}
+                                  format={(v) => fmtMeasure(v, m.unit, true)}
+                                  className={`sc-input ${isCur ? "cur" : ""}`}
+                                  style={{ fontWeight: val !== "" ? 600 : 400,
+                                    background: met === true ? C.greenTint : met === false ? C.redTint1 : undefined,
+                                    color: val !== "" ? (met === true ? C.green : met === false ? C.red : C.text) : C.textDim }}
                                 />
                               </td>
                             );
@@ -2730,18 +2677,17 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
 
           {/* TASK REVIEW */}
           {activeIdx === 2 && (
-            <div className="card">
-              <h3 style={{ fontSize: C.fs.md, marginBottom: 4 }}>Quarterly Task Review</h3>
-              <div style={{ fontSize: C.fs.sm, color: C.textMuted, marginBottom: 16 }}>Showing tasks for <strong>{huddleName}</strong>. Update each task's status for this week.</div>
+            <div className="panel">
+              <div className="panel-h"><span className="hd-hint">Showing tasks for <strong>{huddleName}</strong>. Update each task's status for this week.</span></div>
               {((company.quarterlyTasks || []).filter(t => (t.huddleId === huddleId || !t.huddleId))).map(t => (
-                <div key={t.id} style={{ padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: C.fs.base, fontWeight: 600, overflowWrap: "anywhere" }}>{t.title}</div>
-                      {t.who && <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{t.who}</div>}
-                      {t.notes && !noteOpen[t.id] && <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4, fontStyle: "italic", overflowWrap: "anywhere" }}><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:4 }} />{t.notes}</div>}
+                <div key={t.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <div className="lrow keep-order" style={{ borderBottom: "none" }}>
+                    <div className="grow">
+                      <div style={{ fontWeight: 600 }}>{t.title}</div>
+                      {t.notes && !noteOpen[t.id] && <div className="hd-note"><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:4 }} />{t.notes}</div>}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", minWidth: 0 }}>
+                    <span className="lmeta lowner">{t.who || "—"}</span>
+                    <div className="lact hd-wrap" style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
                       {[["on","On Track"],["off","Off Track"],["done","Done"],["notdone","Not Done"]].map(([s, label]) => {
                         const isActive = t.status === s;
                         const dotCol = s === "off" ? C.red : s === "notdone" ? C.amber : C.green;
@@ -2755,20 +2701,26 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                           </button>
                         );
                       })}
-                      {t.status === "off" && (
-                        <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
-                          style={{ padding: "4px 8px", borderRadius: C.radius.control, border: `1px solid ${(company.problemQueue||[]).find(p=>p.id===t.id) ? C.selBorder : C.border}`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.selBg : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.text : C.textMuted, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer", whiteSpace:"nowrap" }}>
-                          {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "Flag Issue"}
+                      <span className="hd-slot">
+                        {t.status === "off" && (
+                          <Tip text={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"}>
+                            <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
+                              aria-label={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===t.id) ? "on" : ""}`}>
+                              <Icon.flag />
+                            </button>
+                          </Tip>
+                        )}
+                      </span>
+                      <Tip text={noteOpen[t.id] ? "Hide notes" : "Notes"}>
+                        <button onClick={() => toggleNote(t.id)} aria-label="Notes" aria-pressed={!!noteOpen[t.id]}
+                          className="icon-btn" style={noteOpen[t.id] ? { background: C.selBg, color: C.link } : t.notes ? { color: C.text } : undefined}>
+                          <Icon.note size={13} />
                         </button>
-                      )}
-                      <button onClick={() => toggleNote(t.id)}
-                        style={{ padding: "4px 8px", borderRadius: C.radius.control, border: `1px solid ${noteOpen[t.id] || t.notes ? C.selBorder : C.border}`, background: noteOpen[t.id] ? C.selBg : C.surface2, color: noteOpen[t.id] || t.notes ? C.text : C.textMuted, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer" }}>
-                        <Icon.note size={11} />
-                      </button>
+                      </Tip>
                     </div>
                   </div>
                   {noteOpen[t.id] && (
-                    <div style={{ marginTop: 8 }} className="fade-in">
+                    <div style={{ padding: "0 12px 10px" }} className="fade-in">
                       <textarea
                         autoFocus
                         placeholder="Add notes about this task..."
@@ -2780,7 +2732,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                   )}
                 </div>
               ))}
-              {!((company.quarterlyTasks || []).filter(t => (t.huddleId === huddleId || !t.huddleId))).length && <div style={{ color: C.textMuted, padding: "16px 0" }}>No tasks assigned to this huddle. Assign tasks in Quarterly Tasks.</div>}
+              {!((company.quarterlyTasks || []).filter(t => (t.huddleId === huddleId || !t.huddleId))).length && <div className="lempty">No tasks assigned to this huddle. Assign tasks in Quarterly Tasks.</div>}
             </div>
           )}
 
@@ -2795,37 +2747,40 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
               return { headlines: updated };
             });
             return (
-              <div className="card">
-                <h3 style={{ fontSize: C.fs.md, marginBottom: 4 }}>Headlines</h3>
-                <div style={{ fontSize: C.fs.sm, color: C.textMuted, marginBottom: 16 }}>Showing headlines for <strong>{huddleName}</strong>. Mark reviewed to remove from active list.</div>
+              <div className="panel">
+                <div className="panel-h"><span className="hd-hint">Showing headlines for <strong>{huddleName}</strong>. Mark reviewed to remove from active list.</span></div>
                 {unreviewed.length === 0 && (
-                  <div style={{ color: C.textMuted, fontSize: C.fs.sm, padding: "12px 0", marginBottom: 12 }}>No active headlines for this huddle. Add one below.</div>
+                  <div className="lempty">No active headlines for this huddle. Add one below.</div>
                 )}
                 {unreviewed.map(h => (
-                  <div key={h.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                      <div style={{ fontSize: C.fs.base, flex: 1 }}>
-                        <span className="chip" style={{ marginRight: 8, fontSize: C.fs.xs, background: C.surface3, borderColor: C.border, color: C.textMuted }}>{h.type}</span>
+                  <div key={h.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <div className="lrow keep-order" style={{ borderBottom: "none" }}>
+                      <span className="chip lchip" style={{ fontSize: C.fs.xs, background: C.surface3, borderColor: C.border, color: C.textMuted, minWidth: 82, justifyContent: "center" }}>{h.type}</span>
+                      <div className="grow">
                         {h.text}
-                        {h.notes && !noteOpen[h.id] && <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4, fontStyle: "italic" }}><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:4 }} />{h.notes}</div>}
+                        {h.notes && !noteOpen[h.id] && <div className="hd-note"><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:4 }} />{h.notes}</div>}
                       </div>
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <div className="lact">
                         <button onClick={() => markReviewed(h.id)}
                           style={{ padding: "4px 8px", borderRadius: C.radius.control, border: `1px solid ${C.greenBorder}`, background: C.greenTint, color: C.green, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer", whiteSpace:"nowrap" }}>
                           ✓ Reviewed
                         </button>
-                        <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
-                          style={{ padding: "4px 8px", borderRadius: C.radius.control, border: `1px solid ${(company.problemQueue||[]).find(p=>p.id===h.id) ? C.selBorder : C.border}`, background: (company.problemQueue||[]).find(p=>p.id===h.id) ? C.selBg : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===h.id) ? C.text : C.textMuted, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer", whiteSpace:"nowrap" }}>
-                          {(company.problemQueue||[]).find(p=>p.id===h.id) ? "✓ Queued" : "Flag Issue"}
-                        </button>
-                        <button onClick={() => toggleNote(h.id)}
-                          style={{ padding: "4px 8px", borderRadius: C.radius.control, border: `1px solid ${noteOpen[h.id] || h.notes ? C.selBorder : C.border}`, background: noteOpen[h.id] ? C.selBg : C.surface2, color: noteOpen[h.id] || h.notes ? C.text : C.textMuted, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer" }}>
-                          <Icon.note size={11} />
-                        </button>
+                        <Tip text={(company.problemQueue||[]).find(p=>p.id===h.id) ? "Already in problem queue" : "Send to Problem Solving"}>
+                          <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
+                            aria-label={(company.problemQueue||[]).find(p=>p.id===h.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===h.id) ? "on" : ""}`}>
+                            <Icon.flag />
+                          </button>
+                        </Tip>
+                        <Tip text={noteOpen[h.id] ? "Hide notes" : "Notes"}>
+                          <button onClick={() => toggleNote(h.id)} aria-label="Notes" aria-pressed={!!noteOpen[h.id]}
+                            className="icon-btn" style={noteOpen[h.id] ? { background: C.selBg, color: C.link } : h.notes ? { color: C.text } : undefined}>
+                            <Icon.note size={13} />
+                          </button>
+                        </Tip>
                       </div>
                     </div>
                     {noteOpen[h.id] && (
-                      <div style={{ marginTop: 8 }} className="fade-in">
+                      <div style={{ padding: "0 12px 10px" }} className="fade-in">
                         <textarea
                           autoFocus
                           placeholder="Add notes about this headline..."
@@ -2837,15 +2792,12 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                     )}
                   </div>
                 ))}
-                <div style={{ marginTop: 16 }}>
-                  <h4 style={{ fontSize: C.fs.xs, fontWeight: 600, marginBottom: 8, color: C.textMuted}}>Add New Headline</h4>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div className="addbar" style={{ borderTop: unreviewed.length ? "none" : `1px solid ${C.border}` }}>
                     <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 130, flexShrink: 0 }}>
                       <option>Customer</option><option>Employee</option>
                     </select>
-                    <input placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && addHeadline()} style={{ flex: 1, minWidth: 160 }} />
-                    <button className="btn-secondary" style={{ padding: "8px 16px" }} onClick={addHeadline} disabled={quickAddSaving}>{quickAddSaving ? "…" : "Add"}</button>
-                  </div>
+                    <input className="addbar-main" placeholder="Add a headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && addHeadline()} />
+                    <button className="btn-secondary" onClick={addHeadline} disabled={quickAddSaving}>{quickAddSaving ? "…" : "Add"}</button>
                 </div>
               </div>
             );
@@ -2872,43 +2824,45 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
               });
             };
             return (
-              <div className="card">
-                <h3 style={{ fontSize: C.fs.md, marginBottom: 4 }}>To-Do Review</h3>
-                <div style={{ fontSize: C.fs.sm, color: C.textMuted, marginBottom: 16 }}>Showing to-dos for <strong>{huddleName}</strong>. Mark complete to remove from active list.</div>
+              <div className="panel">
+                <div className="panel-h"><span className="hd-hint">Showing to-dos for <strong>{huddleName}</strong>. Mark complete to remove from active list.</span></div>
                 {pending.length === 0 && (
-                  <div style={{ color: C.textMuted, fontSize: C.fs.sm, padding: "12px 0", marginBottom: 12 }}>No pending to-dos for this huddle. Add one below.</div>
+                  <div className="lempty">No pending to-dos for this huddle. Add one below.</div>
                 )}
                 {pending.map(t => {
                   const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
                   return (
-                    <div key={t.id} style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: C.fs.base, fontWeight: 500 }}>{t.title}</div>
-                          <div style={{ fontSize: C.fs.xs, color: isOverdue ? C.red : C.textMuted, marginTop: 4 }}>
-                            {getAssignees(t).length > 0 && <span>{getAssignees(t).join(", ")}</span>}
-                            {getAssignees(t).length > 0 && t.dueDate && <span> · </span>}
-                            {t.dueDate && <span style={{ fontWeight: isOverdue ? 600 : 400 }}>{isOverdue ? "Overdue — " : "Due "}<span className="num">{dateStr(new Date(t.dueDate))}</span></span>}
-                          </div>
-                          {t.notes && !noteOpen[t.id] && <div style={{ fontSize: C.fs.xs, color: C.textDim, marginTop: 4, fontStyle: "italic" }}><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:4 }} />{t.notes}</div>}
+                    <div key={t.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <div className="lrow keep-order" style={{ borderBottom: "none" }}>
+                        <div className="grow">
+                          <div style={{ fontWeight: 500 }}>{t.title}</div>
+                          {t.notes && !noteOpen[t.id] && <div className="hd-note"><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:4 }} />{t.notes}</div>}
                         </div>
-                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <span className="lmeta lowner">{getAssignees(t).length > 0 ? getAssignees(t).join(", ") : "—"}</span>
+                        <span className="lmeta ldate wide" style={{ color: isOverdue ? C.red : C.textMuted, fontWeight: isOverdue ? 600 : 400 }}>
+                          {t.dueDate ? <>{isOverdue ? "Overdue " : "Due "}<span className="num">{dateStr(new Date(t.dueDate))}</span></> : "—"}
+                        </span>
+                        <div className="lact">
                           <button onClick={() => completeTodo(t.id)}
                             style={{ padding: "4px 12px", borderRadius: C.radius.control, border: `1px solid ${C.greenBorder}`, background: C.greenTint, color: C.green, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer", whiteSpace:"nowrap" }}>
                             ✓ Complete
                           </button>
-                          <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
-                            style={{ padding: "4px 8px", borderRadius: C.radius.control, border: `1px solid ${(company.problemQueue||[]).find(p=>p.id===t.id) ? C.selBorder : C.border}`, background: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.selBg : C.surface2, color: (company.problemQueue||[]).find(p=>p.id===t.id) ? C.text : C.textMuted, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer", whiteSpace:"nowrap" }}>
-                            {(company.problemQueue||[]).find(p=>p.id===t.id) ? "✓ Queued" : "Flag Issue"}
-                          </button>
-                          <button onClick={() => toggleNote(t.id)}
-                            style={{ padding: "4px 8px", borderRadius: C.radius.control, border: `1px solid ${noteOpen[t.id] || t.notes ? C.selBorder : C.border}`, background: noteOpen[t.id] ? C.selBg : C.surface2, color: noteOpen[t.id] || t.notes ? C.text : C.textMuted, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer" }}>
-                            <Icon.note size={11} />
-                          </button>
+                          <Tip text={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"}>
+                            <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
+                              aria-label={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===t.id) ? "on" : ""}`}>
+                              <Icon.flag />
+                            </button>
+                          </Tip>
+                          <Tip text={noteOpen[t.id] ? "Hide notes" : "Notes"}>
+                            <button onClick={() => toggleNote(t.id)} aria-label="Notes" aria-pressed={!!noteOpen[t.id]}
+                              className="icon-btn" style={noteOpen[t.id] ? { background: C.selBg, color: C.link } : t.notes ? { color: C.text } : undefined}>
+                              <Icon.note size={13} />
+                            </button>
+                          </Tip>
                         </div>
                       </div>
                       {noteOpen[t.id] && (
-                        <div style={{ marginTop: 8 }} className="fade-in">
+                        <div style={{ padding: "0 12px 10px" }} className="fade-in">
                           <textarea
                             autoFocus
                             placeholder="Add notes about this to-do..."
@@ -2921,13 +2875,12 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                     </div>
                   );
                 })}
-                <div style={{ marginTop: 16 }}>
-                  <h4 style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Add New To-Do</h4>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: members.length ? 8 : 0 }}>
-                    <input placeholder="Task..." value={newTodo.title} onChange={e => setNewTodo(n => ({ ...n, title: e.target.value }))} style={{ flex: 2, minWidth: 160 }} />
-                    <input type="date" value={newTodo.dueDate} onChange={e => setNewTodo(n => ({ ...n, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 130 }} />
-                    <button className="btn-secondary" style={{ padding: "8px 16px" }} onClick={addTodo} disabled={quickAddSaving}>{quickAddSaving ? "…" : "Add"}</button>
-                  </div>
+                <div className="addbar">
+                    <input className="addbar-main" placeholder="Add a to-do..." value={newTodo.title} onChange={e => setNewTodo(n => ({ ...n, title: e.target.value }))} />
+                    <input type="date" value={newTodo.dueDate} onChange={e => setNewTodo(n => ({ ...n, dueDate: e.target.value }))} style={{ width: 150 }} />
+                    <button className="btn-secondary" onClick={addTodo} disabled={quickAddSaving}>{quickAddSaving ? "…" : "Add"}</button>
+                </div>
+                <div style={{ padding: "0 12px 10px" }}>
                   {members.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
                       <span style={{ fontSize: C.fs.xs, color: C.textMuted, marginRight: 4 }}>Assign to:</span>
@@ -3045,72 +2998,64 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
             };
 
             return (
-              <div className="fade-in">
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {/* Add new issue */}
-                <div className="card" style={{ marginBottom: 16 }}>
-                  <h3 style={{ fontSize: C.fs.md, marginBottom: 12 }}>Problem Solving — IDS · <span style={{ fontSize: C.fs.sm, fontWeight: 400, color: C.textMuted }}>{huddleName}</span></h3>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input placeholder="Identify a new issue..." value={newIssue.title} onChange={e => setNewIssue(n => ({ ...n, title: e.target.value }))} style={{ flex: 1 }} onKeyDown={e => e.key === "Enter" && addIssue()} />
-                    <select value={newIssue.priority} onChange={e => setNewIssue(n => ({ ...n, priority: e.target.value }))} style={{ width: 110 }}>
+                <div className="panel">
+                  <div className="addbar">
+                    <input className="addbar-main" placeholder="Identify a new issue..." value={newIssue.title} onChange={e => setNewIssue(n => ({ ...n, title: e.target.value }))} onKeyDown={e => e.key === "Enter" && addIssue()} />
+                    <select value={newIssue.priority} onChange={e => setNewIssue(n => ({ ...n, priority: e.target.value }))} style={{ width: 120 }}>
                       <option value="1">Priority 1</option>
                       <option value="2">Priority 2</option>
                       <option value="3">Priority 3</option>
                     </select>
-                    <button className="btn-secondary" style={{ padding: "8px 16px" }} onClick={addIssue} disabled={quickAddSaving}>{quickAddSaving ? "…" : "Add"}</button>
+                    <button className="btn-secondary" onClick={addIssue} disabled={quickAddSaving}>{quickAddSaving ? "…" : "Add"}</button>
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                  {/* LEFT: Problem queue + selection */}
-                  <div>
-                    {/* Focus queue */}
-                    <div className="card" style={{ marginBottom: 12 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                        <h4 style={{ fontSize: C.fs.md }}>Focus Queue <span style={{ color: C.textMuted, fontSize: C.fs.xs }}>({inFocus.length}/3)</span></h4>
+                <div className="hd-ids">
+                  {/* LEFT: Focus queue + problem queue */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+                    <div className="panel">
+                      <div className="panel-h">
+                        <h3>Focus queue <span className="num" style={{ color: C.textMuted, fontSize: C.fs.xs, fontWeight: 400 }}>{inFocus.length}/3</span></h3>
                         {!canAddMore && <span style={{ fontSize: C.fs.xs, color: C.amber, fontWeight: 600 }}>Max 3 selected</span>}
                       </div>
                       {inFocus.length === 0 && (
-                        <div style={{ fontSize: C.fs.sm, color: C.textMuted, textAlign: "center", padding: "12px 0" }}>Select up to 3 problems below to discuss.</div>
+                        <div className="lempty">Select up to 3 problems below to discuss.</div>
                       )}
                       {inFocus.map((item, idx) => (
-                        <div key={item.id} onClick={() => setActiveIssueId(item.id)}
-                          style={{ padding: "8px 12px", borderRadius: C.radius.control, border: `1px solid ${activeIssueId === item.id ? C.selBorder : C.border}`, background: activeIssueId === item.id ? C.selBg : C.surface2, marginBottom: 6, cursor: "pointer", transition: "all 0.15s" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ width: 20, height: 20, borderRadius: "50%", background: activeIssueId === item.id ? C.text : C.surface3, color: activeIssueId === item.id  ? C.onAccent : C.textMuted, fontSize: C.fs.xs, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>{idx + 1}</div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: C.fs.sm, fontWeight: 600, color: C.text }}>{item.title}</div>
-                              <div style={{ fontSize: C.fs.xs, color: C.textMuted, fontWeight: 600}}>{item.sourceLabel}</div>
-                            </div>
-                            {issueNotes[item.id] && <div style={{ fontSize: C.fs.xs, color: C.textMuted }}><Icon.note size={10} /></div>}
-                          </div>
-                        </div>
+                        <button key={item.id} onClick={() => setActiveIssueId(item.id)} className={`md-row ${activeIssueId === item.id ? "sel" : ""}`} aria-pressed={activeIssueId === item.id}>
+                          <span className="hd-step-n" style={activeIssueId === item.id ? { borderColor: C.selBorder, color: C.link } : undefined}>{idx + 1}</span>
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ display: "block", fontWeight: 600, overflowWrap: "anywhere" }}>{item.title}</span>
+                            <span style={{ display: "block", fontSize: C.fs.xs, color: C.textMuted }}>{item.sourceLabel}</span>
+                          </span>
+                          {issueNotes[item.id] && <span style={{ color: C.textMuted }}><Icon.note size={12} /></span>}
+                        </button>
                       ))}
                     </div>
 
-                    {/* Pending problems */}
-                    <div className="card">
-                      <h4 style={{ fontSize: C.fs.md, marginBottom: 12 }}>Problem Queue <span style={{ color: C.textMuted, fontSize: C.fs.xs }}>({pending.length})</span></h4>
+                    <div className="panel">
+                      <div className="panel-h"><h3>Problem queue <span className="num" style={{ color: C.textMuted, fontSize: C.fs.xs, fontWeight: 400 }}>{pending.length}</span></h3></div>
                       {pending.length === 0 && (
-                        <div style={{ fontSize: C.fs.sm, color: C.textMuted, textAlign: "center", padding: "12px 0" }}>
+                        <div className="lempty">
                           {allItems.length === 0 ? "No problems queued. Use the Flag Issue buttons in earlier segments, or add an issue above." : "All queued problems are in focus."}
                         </div>
                       )}
                       {pending.map(item => (
-                        <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-                          <div>
-                            <div style={{ fontSize: C.fs.sm, fontWeight: 600 }}>{item.title}</div>
-                            <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>{item.sourceLabel}</div>
+                        <div key={item.id} className="lrow keep-order">
+                          <div className="grow" style={{ fontWeight: 500 }}>{item.title}</div>
+                          <span className="lmeta">{item.sourceLabel}</span>
+                          <div className="lact">
+                            <button className="btn-secondary lbtn" onClick={() => selectForFocus(item)} disabled={!canAddMore}>
+                              + Focus
+                            </button>
                           </div>
-                          <button onClick={() => selectForFocus(item)} disabled={!canAddMore}
-                            style={{ padding: "4px 12px", borderRadius: C.radius.control, border: `1px solid ${canAddMore ? C.borderStrong : C.border}`, background: C.surface2, color: canAddMore ? C.text : C.textDim, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor: canAddMore ? "pointer" : "not-allowed" }}>
-                            + Focus
-                          </button>
                         </div>
                       ))}
-                      {/* Solved this session */}
                       {solvedThisSession.length > 0 && (
-                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-                          <div style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted, marginBottom: 6 }}>Solved This Session</div>
+                        <div style={{ padding: "8px 12px", borderTop: `1px solid ${C.border}` }}>
+                          <div style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted, marginBottom: 4 }}>Solved this session</div>
                           {solvedThisSession.map(item => (
                             <div key={item.id} style={{ fontSize: C.fs.sm, color: C.textMuted, textDecoration: "line-through", padding: "4px 0" }}>✓ {item.title}</div>
                           ))}
@@ -3120,18 +3065,21 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                   </div>
 
                   {/* RIGHT: Active discussion */}
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     {!activeItem ? (
-                      <div className="card" style={{ textAlign: "center", padding: "24px 20px" }}>
-                        <div style={{ marginBottom: 12, color: C.textMuted }}><Icon.chat /></div>
-                        <div style={{ fontSize: C.fs.base, color: C.textMuted }}>Select a problem from the focus queue to begin discussion.</div>
+                      <div className="panel">
+                        <div className="lempty" style={{ textAlign: "center", padding: "24px 16px" }}>
+                          <div style={{ marginBottom: 8, color: C.textMuted, display: "flex", justifyContent: "center" }}><Icon.chat /></div>
+                          Select a problem from the focus queue to begin discussion.
+                        </div>
                       </div>
                     ) : (
-                      <div className="card fade-in" key={activeItem.id}>
-                        <div style={{ background: C.surface3, color: C.text, border: `1px solid ${C.border}`, borderRadius: C.radius.control, padding: "8px 12px", marginBottom: 16, display: "inline-block", fontSize: C.fs.xs, fontWeight: 600}}>
-                          {activeItem.sourceLabel}
+                      <div className="panel fade-in" key={activeItem.id}>
+                        <div className="panel-h" style={{ flexWrap: "nowrap", alignItems: "flex-start", paddingTop: 10, paddingBottom: 10 }}>
+                          <h3 style={{ lineHeight: 1.3, overflowWrap: "anywhere" }}>{activeItem.title}</h3>
+                          <span className="chip" style={{ flexShrink: 0 }}>{activeItem.sourceLabel}</span>
                         </div>
-                        <h3 style={{ fontSize: C.fs.title, fontWeight: 600, marginBottom: 16, lineHeight: 1.3 }}>{activeItem.title}</h3>
+                        <div className="panel-b">
                         <div className="field">
                           <label className="label">Discussion Notes</label>
                           <textarea
@@ -3206,6 +3154,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                             </div>
                           </div>
                         )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -3223,52 +3172,53 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
             // For teams with no members set up, fall back to single rating
             const useMulti = present.length > 0;
             return (
-              <div className="card">
-                <h3 style={{ fontSize: C.fs.md, marginBottom: 4 }}>Rate This Meeting</h3>
-                <div style={{ fontSize: C.fs.sm, color: C.textMuted, marginBottom: 20 }}>
-                  {useMulti ? "Each attendee rates the meeting 1–10. The average is saved." : "Rate the meeting on a scale of 1–10."}
-                </div>
-
-                {useMulti ? (
-                  <div style={{ marginBottom: 24 }}>
-                    {present.map(m => (
-                      <div key={m.id} style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: C.fs.sm, fontWeight: 600, marginBottom: 8, color: C.text }}>{m.name}</div>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <div className="hd-conclude">
+                <div className="panel hd-rate">
+                  <div className="panel-h">
+                    <span className="hd-hint">{useMulti ? "Each attendee rates the meeting 1–10. The average is saved." : "Rate the meeting on a scale of 1–10."}</span>
+                    {useMulti && avgPreview && (
+                      <span style={{ fontSize: C.fs.sm, color: C.textMuted, whiteSpace: "nowrap" }}>
+                        Average <strong className="num" style={{ color: parseFloat(avgPreview) >= 8 ? C.green : parseFloat(avgPreview) >= 6 ? C.yellow : C.red }}>{avgPreview}/10</strong>
+                        <span style={{ color: C.textDim, fontSize: C.fs.xs }}> ({scores.length} of {present.length} rated)</span>
+                      </span>
+                    )}
+                  </div>
+                  {useMulti ? (
+                    present.map(m => (
+                      <div key={m.id} className="lrow keep-order">
+                        <span className="lowner" style={{ fontWeight: 600, fontSize: C.fs.sm, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</span>
+                        <div className="hd-rate-row">
                           {[1,2,3,4,5,6,7,8,9,10].map(n => (
                             <button key={n}
                               className={`rating-btn ${memberRatings[m.id] === n ? "sel" : ""}`}
-                              style={{ width: 36, height: 36, fontSize: C.fs.sm }}
                               onClick={() => setMemberRatings(r => ({ ...r, [m.id]: n }))}>
                               {n}
                             </button>
                           ))}
                         </div>
                       </div>
-                    ))}
-                    {avgPreview && (
-                      <div style={{ marginTop: 8, padding: "8px 12px", background: C.surface2, borderRadius: C.radius.control, fontSize: C.fs.base, color: C.text }}>
-                        Current average: <strong style={{ color: parseFloat(avgPreview) >= 8 ? C.green : parseFloat(avgPreview) >= 6 ? C.yellow : C.red }}>{avgPreview}/10</strong>
-                        <span style={{ color: C.textDim, fontSize: C.fs.xs }}> ({scores.length} of {present.length} rated)</span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
-                    {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                      <button key={n} className={`rating-btn ${rating === n ? "sel" : ""}`} onClick={() => setRating(n)}>{n}</button>
-                    ))}
-                  </div>
-                )}
-
-                <div className="field">
-                  <label className="label">Closing notes</label>
-                  <textarea placeholder="Key takeaways, decisions made, action items..." value={notes.conclude || ""} onChange={e => setNotes(n => ({ ...n, conclude: e.target.value }))} />
+                    ))
+                  ) : (
+                    <div className="lrow" style={{ flexWrap: "wrap", gap: 4 }}>
+                      {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                        <button key={n} className={`rating-btn ${rating === n ? "sel" : ""}`} onClick={() => setRating(n)}>{n}</button>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                <div className="panel">
+                  <div className="panel-b">
+                    <div className="field" style={{ marginBottom: 12 }}>
+                      <label className="label">Closing notes</label>
+                  <textarea placeholder="Key takeaways, decisions made, action items..." value={notes.conclude || ""} onChange={e => setNotes(n => ({ ...n, conclude: e.target.value }))} />
+                    </div>
                 {meetingError && <div style={{ color: C.red, background: C.redTint1, border: `1px solid ${C.redTint3}`, borderRadius: C.radius.control, padding: "8px 12px", marginBottom: 12, fontSize: C.fs.sm }}>{meetingError}</div>}
-                <button className="btn-primary" style={{ width: "100%", padding: "12px", fontSize: C.fs.md }} onClick={finishMeeting} disabled={!canFinish || meetingSaving}>
+                <button className="btn-primary" style={{ width: "100%", padding: "10px 12px", fontSize: C.fs.base, whiteSpace: "normal", lineHeight: 1.35 }} onClick={finishMeeting} disabled={!canFinish || meetingSaving}>
                   {meetingSaving ? "Saving…" : canFinish ? `Complete Meeting & Generate Recap${avgPreview ? ` — Avg ${avgPreview}/10` : rating ? ` — ${rating}/10` : ""}` : "Rate the meeting to finish"}
                 </button>
+                  </div>
+                </div>
               </div>
             );
           })()}
@@ -3283,12 +3233,11 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
             const textColors   = C.avatarFgs;
             return (
               <div className="fade-in">
-                <div className="card">
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-                    <div>
-                      <h3 style={{ fontSize: C.fs.md, marginBottom: 4 }}>Segue — Good News</h3>
-                      <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>Tap a circle to mark absent · {present.length} of {members.length} present</div>
-                    </div>
+                <div className="panel">
+                  <div className="panel-h">
+                    <span className="hd-hint">
+                      <span style={{ color: C.text, fontWeight: 600 }}>Segue — good news</span> · Tap a circle to mark absent · <span className="num">{present.length}</span> of <span className="num">{members.length}</span> present
+                    </span>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                       {allDone && (
                         <button onClick={() => { setAlreadySelected([]); setSpotlight(null); }}
@@ -3297,14 +3246,15 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                         </button>
                       )}
                       <button onClick={autoSelect} disabled={spinning || pool.length === 0}
-                        style={{ padding: "8px 20px", borderRadius: C.radius.control, border: `1px solid ${C.borderStrong}`, cursor: (spinning || pool.length === 0) ? "not-allowed" : "pointer",
-                          fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.base, background: C.surface2,
+                        style={{ padding: "6px 14px", borderRadius: C.radius.control, border: `1px solid ${C.borderStrong}`, cursor: (spinning || pool.length === 0) ? "not-allowed" : "pointer",
+                          fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.sm, background: C.surface2,
                           color: (spinning || pool.length === 0) ? C.textMuted : C.text, transition: "all 0.2s",
                           boxShadow: "none" }}>
                         {spinning ? "Selecting..." : spotlight ? "🎲 Pick Again" : "🎲 Auto Pick Next"}
                       </button>
                     </div>
                   </div>
+                  <div className="panel-b">
 
                   {!allDone && alreadySelected.length > 0 && (
                     <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginBottom: 12 }}>
@@ -3376,6 +3326,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                   {present.length === 0 && members.length > 0 && (
                     <div style={{ textAlign: "center", fontSize: C.fs.xs, color: C.amber, marginTop: 12 }}>All members marked absent — tap a circle to mark present.</div>
                   )}
+                  </div>
                 </div>
               </div>
             );
@@ -3388,8 +3339,242 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
               <textarea placeholder="Capture notes here..." value={notes[seg.id] || ""} onChange={e => setNotes(n => ({ ...n, [seg.id]: e.target.value }))} style={{ minHeight: 120 }} />
             </div>
           )}
+    </>
+  );
+
+  // ── Frame ──────────────────────────────────────────────────────────────
+  // Step timer colour (display only): normal → amber in the last minute → red when over.
+  const timerColor = over ? C.red : (segLimit - segElapsed) <= 60 ? C.amber : C.text;
+  const closeQuickAdd = () => setQuickAdd(null);
+  const quickAddCard = quickAdd && (
+  <div className="card fade-in" style={{ marginBottom: 8, padding: "12px 16px", border: `1px solid ${C.borderStrong}`, background: C.surface }}>
+        {quickAdd === "headline" && (
+          <div>
+            <div style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Quick Add Headline</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 120, flexShrink: 0 }}>
+                <option>Customer</option><option>Employee</option>
+              </select>
+              <input autoFocus placeholder="Headline..." value={newHeadline.text} onChange={e => setNewHeadline(n => ({ ...n, text: e.target.value }))}
+                onKeyDown={e => { if (e.key === "Enter") { addHeadline(); closeQuickAdd(); } if (e.key === "Escape") closeQuickAdd(); }}
+                style={{ flex: 1, minWidth: 180 }} />
+              <button className="btn-secondary" style={{ padding: "8px 16px" }} disabled={quickAddSaving} onClick={() => { addHeadline(); closeQuickAdd(); }}>Add</button>
+              <button className="btn-ghost" style={{ padding: "8px 12px" }} onClick={closeQuickAdd}>✕</button>
+            </div>
+          </div>
+        )}
+        {quickAdd === "todo" && (
+          <div>
+            <div style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Quick Add To-Do</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: members.length ? 8 : 0 }}>
+              <input autoFocus placeholder="What needs to happen?" value={newTodo.title} onChange={e => setNewTodo(n => ({ ...n, title: e.target.value }))}
+                onKeyDown={e => { if (e.key === "Enter") { addTodo(); closeQuickAdd(); } if (e.key === "Escape") closeQuickAdd(); }}
+                style={{ flex: 2, minWidth: 180 }} />
+              <input type="date" value={newTodo.dueDate} onChange={e => setNewTodo(n => ({ ...n, dueDate: e.target.value }))} style={{ flex: 1, minWidth: 130 }} />
+              <button className="btn-secondary" style={{ padding: "8px 16px" }} disabled={quickAddSaving} onClick={() => { addTodo(); closeQuickAdd(); }}>Add</button>
+              <button className="btn-ghost" style={{ padding: "8px 12px" }} onClick={closeQuickAdd}>✕</button>
+            </div>
+            {members.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                <span style={{ fontSize: C.fs.xs, color: C.textMuted }}>Assign:</span>
+                {members.map(m => {
+                  const sel = (newTodo.assignees || []).includes(m.name);
+                  return (
+                    <button key={m.id} onClick={() => setNewTodo(n => ({ ...n, assignees: sel ? n.assignees.filter(a => a !== m.name) : [...(n.assignees||[]), m.name] }))}
+                      style={{ padding: "4px 8px", borderRadius: C.radius.control, fontSize: C.fs.xs, fontWeight: 600, cursor: "pointer", fontFamily: C.fontUI,
+                        background: sel ? C.selBg : C.surface2, color: sel ? C.text : C.textMuted, border: `1px solid ${sel ? C.selBorder : C.border}` }}>
+                      {sel ? "✓ " : ""}{m.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        {quickAdd === "issue" && (
+          <div>
+            <div style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Quick Add Issue</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input autoFocus placeholder="What's the issue?" value={newIssue.title} onChange={e => setNewIssue(n => ({ ...n, title: e.target.value }))}
+                onKeyDown={e => { if (e.key === "Enter") { addIssue(); closeQuickAdd(); } if (e.key === "Escape") closeQuickAdd(); }}
+                style={{ flex: 1, minWidth: 180 }} />
+              <select value={newIssue.priority} onChange={e => setNewIssue(n => ({ ...n, priority: e.target.value }))} style={{ width: 120, flexShrink: 0 }}>
+                <option value="1">Priority 1</option>
+                <option value="2">Priority 2</option>
+                <option value="3">Priority 3</option>
+              </select>
+              <button className="btn-secondary" style={{ padding: "8px 16px" }} disabled={quickAddSaving} onClick={() => { addIssue(); closeQuickAdd(); }}>Add</button>
+              <button className="btn-ghost" style={{ padding: "8px 12px" }} onClick={closeQuickAdd}>✕</button>
+            </div>
+          </div>
+        )}
+      </div>
+  );
+  const quickAddButtons = [
+    { key: "headline", label: "Headline", color: C.text, icon: Icon.headlines },
+    { key: "todo", label: "To-Do", color: C.text, icon: Icon.tasks },
+    { key: "issue", label: "Issue", color: C.text, icon: Icon.issues },
+  ];
+  const viewerBanner = (
+    <>
+      {/* Viewer banner — shown when following host */}
+      {isViewer && liveSession?.active && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: C.blueTint, border: `1px solid ${C.blueBorder}`, borderRadius: C.radius.control, padding: "8px 16px", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.blue, display: "inline-block", animation: "pulse 1.2s infinite" }} />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: C.fs.sm, color: C.blue }}>Following {liveSession.hostName || "Host"} · Live</div>
+              <div style={{ fontSize: C.fs.xs, color: C.textMuted }}>Your view updates automatically. Navigation is controlled by the host.</div>
+            </div>
+          </div>
+          <button onClick={() => { setIsViewer(false); }}
+            style={{ fontSize: C.fs.xs, padding: "4px 12px", borderRadius: C.radius.control, border: "1px solid transparent", background: C.btnBg, color: C.textMuted, cursor: "pointer", fontFamily: C.fontUI, fontWeight: 600, flexShrink: 0 }}>
+            Take Control
+          </button>
+        </div>
+      )}
+    </>
+  );
+
+  if (mobile) return (
+    <Layout title={`${huddleName} — Live`} subtitle={isViewer ? `Following ${liveSession?.hostName || "Host"}` : `Total: ${fmt(elapsed)}`}>
+      {confetti && <Confetti message={confetti} onDone={() => setConfetti(null)} />}
+      {viewerBanner}
+      <div style={{ display: "grid", gridTemplateColumns: "min(280px,100%) 1fr", gap: 20 }} className="mob-stack">
+        {/* Agenda sidebar */}
+        <div>
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ textAlign: "center" }}>
+              <div className="timer-display" style={{ color: over ? C.red : C.text }}>{fmt(segElapsed)}</div>
+              <div style={{ fontSize: C.fs.xs, color: C.textMuted, marginTop: 4 }}>/ <span className="num">{seg.minutes}:00</span> allocated</div>
+              {over && <div style={{ color: C.red, fontSize: C.fs.xs, fontWeight: 600, marginTop: 4 }}>⚠ Overtime</div>}
+            </div>
+          </div>
+          {agenda.map((a, i) => {
+            const t = segTimes[i] || 0;
+            const limit = a.minutes * 60;
+            const isOver = t > limit;
+            const isDone = i < activeIdx;
+            const isActive = i === activeIdx;
+            return (
+              <div key={a.id} className={`huddle-item ${isActive ? "active" : ""} ${isDone ? "done" : ""}`}
+                onClick={() => { if (isViewer) return; setActiveIdx(i); persistSessionSnapshot(i); }}
+                style={{ borderLeft: isOver ? `3px solid ${C.red}` : undefined }}>
+                <div style={{ width: 22, height: 22, background: isDone ? C.green : isActive ? C.text : C.surface2, color: isDone ? C.onAccent : isActive ? C.surface2 : C.textMuted, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {isDone ? <Icon.check /> : <span style={{ fontSize: C.fs.xs, fontWeight: 600 }}>{i + 1}</span>}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: C.fs.sm, fontWeight: 600 }}>{a.label}</div>
+                  <div className="num" style={{ fontSize: C.fs.xs, color: isOver ? C.red : C.textMuted, fontWeight: isOver ? 600 : 400 }}>
+                    {t > 0 ? fmt(t) : a.minutes + ":00"}{isOver ? " !" : ""} / {a.minutes}:00
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button className="btn-secondary" style={{ flex: 1 }} onClick={prev} disabled={activeIdx === 0}><Icon.arrowLeft /> Back</button>
+            <button className="btn-primary" style={{ flex: 1 }} onClick={next} disabled={activeIdx === AGENDA.length - 1}>Next <Icon.arrowRight /></button>
+          </div>
+        </div>
+
+        {/* Content area */}
+        <div style={{ position: "relative" }}>
+          {/* Floating quick-add bar */}
+          {started && !done && !isViewer && (() => {
+            return (
+              <div style={{ position: "sticky", top: 12, zIndex: 100, marginBottom: 12, pointerEvents: quickAdd ? "auto" : "none" }}>
+                {/* Popover form */}
+                {quickAddCard}
+                {/* Floating button bar */}
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", pointerEvents: "auto" }}>
+                  {[
+                    { key: "headline", label: "Headline", color: C.text },
+                    { key: "todo", label: "To-Do", color: C.text },
+                    { key: "issue", label: "Issue", color: C.text },
+                  ].map(btn => (
+                    <button key={btn.key} onClick={() => setQuickAdd(q => q === btn.key ? null : btn.key)}
+                      style={{ padding: "8px 16px", borderRadius: C.radius.control, border: `1px solid ${quickAdd === btn.key ? btn.color : C.border}`,
+                        background: quickAdd === btn.key ? `${btn.color}22` : C.surface2,
+                        color: quickAdd === btn.key ? btn.color : C.textMuted,
+                        fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.xs, cursor: "pointer",
+                        transition: "all 0.15s", boxShadow: "none" }}>
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          <div className="fade-in" key={activeIdx}>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h2 style={{ fontSize: C.fs.title, marginBottom: 4 }}>{seg.label}</h2>
+            <div style={{ fontSize: C.fs.sm, color: C.textMuted }}>{seg.minutes} minutes allocated</div>
+          </div>
+
+          {stepContent}
         </div>
         </div>{/* end position:relative content wrapper */}
+      </div>
+    </Layout>
+  );
+
+  const meetingBar = (
+    <div className="hd-bar">
+      <div className="hd-bar-name">
+        <Tip text={huddleName} truncOnly><span className="hd-ellip" style={{ fontWeight: 600, fontSize: C.fs.md }}>{huddleName}</span></Tip>
+        <span className="hd-live">{Icon.liveDot()} {isViewer ? `Following ${liveSession?.hostName || "Host"}` : "Live"}</span>
+      </div>
+      <div className="hd-bar-step">
+        <Tip text={seg.label} truncOnly><span className="hd-ellip" style={{ fontWeight: 600 }}>{seg.label}</span></Tip>
+        <span className="hd-muted">Step <span className="num">{activeIdx + 1}</span> of <span className="num">{agenda.length}</span></span>
+      </div>
+      <div className="hd-bar-timer mb-step-timer" style={{ color: timerColor }} aria-label="Time on this step / allocated">{fmt(segElapsed)} / {seg.minutes}:00</div>
+      <div className="hd-bar-total">Total<span className="num">{fmt(elapsed)}</span></div>
+      <div className="hd-bar-actions">
+        {!isViewer && quickAddButtons.map(btn => (
+          <Tip key={btn.key} text={`Quick add ${btn.label}`}>
+            <button onClick={() => setQuickAdd(q => q === btn.key ? null : btn.key)} aria-label={`Quick add ${btn.label}`} aria-pressed={quickAdd === btn.key}
+              className={`btn-ghost hd-qa ${quickAdd === btn.key ? "on" : ""}`}>
+              <btn.icon /><span className="hd-qa-l">{btn.label}</span>
+            </button>
+          </Tip>
+        ))}
+        {!isViewer && <span className="hd-sep" aria-hidden="true" />}
+        <button className="btn-secondary" onClick={prev} disabled={activeIdx === 0}><Icon.arrowLeft /> Back</button>
+        <button className="btn-primary" onClick={next} disabled={activeIdx === AGENDA.length - 1}>Next <Icon.arrowRight /></button>
+      </div>
+      {quickAddCard && <div className="hd-qa-pop">{quickAddCard}</div>}
+    </div>
+  );
+
+  return (
+    <Layout title={`${huddleName} — Live`} header={meetingBar} fill>
+      {confetti && <Confetti message={confetti} onDone={() => setConfetti(null)} />}
+      {viewerBanner}
+      <div className="hd-grid">
+        <nav className="panel hd-agenda" aria-label="Agenda">
+          <div className="hd-agenda-h"><span>Agenda</span><span className="num">{agenda.reduce((sum, a) => sum + a.minutes, 0)} min</span></div>
+          {agenda.map((a, i) => {
+            const t = segTimes[i] || 0;
+            const limit = a.minutes * 60;
+            const isOver = t > limit;
+            const isDone = i < activeIdx;
+            const isActive = i === activeIdx;
+            return (
+              <button key={a.id} className={`hd-step ${isActive ? "active" : ""} ${isDone ? "done" : ""}`} aria-current={isActive ? "step" : undefined}
+                onClick={() => { if (isViewer) return; setActiveIdx(i); persistSessionSnapshot(i); }}>
+                <span className="hd-step-n">{isDone ? <Icon.check /> : i + 1}</span>
+                <Tip text={a.label} truncOnly style={{ flex: 1 }}><span className="hd-ellip">{a.label}</span></Tip>
+                <span className="hd-step-t" style={isOver ? { color: C.red, fontWeight: 600 } : undefined}>{Math.floor(t / 60)}:{String(t % 60).padStart(2, "0")}/{a.minutes}:00</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="hd-content fade-in" key={activeIdx}>
+          {stepContent}
+        </div>
       </div>
     </Layout>
   );
