@@ -452,6 +452,9 @@ const makeSTYLE = (C) => `
   .lhuddle{width:140px;overflow:hidden;text-overflow:ellipsis}
   .lowner{width:160px;overflow:hidden;text-overflow:ellipsis}
   .ldate{width:96px;text-align:right}
+  .hl-group{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:${C.fs.xs}px;font-weight:600;color:${C.textMuted};background:${C.surface3};border-top:1px solid ${C.border};border-bottom:1px solid ${C.border}}
+  .hl-group-n{font-weight:400}
+  .hl-added{width:118px;text-align:right}
   .ldate.wide{width:156px}
   .lact{display:flex;gap:4px;align-items:center;flex-shrink:0}
   .lbtn{min-height:28px!important;padding:3px 10px!important;font-size:${C.fs.xs}px!important}
@@ -465,7 +468,7 @@ const makeSTYLE = (C) => `
     .lrow .grow{flex-basis:100%;order:-1;font-weight:500}
     .lrow.keep-order .grow{order:0;flex-basis:calc(100% - 40px)}
     .lhuddle,.lowner{width:auto}
-    .ldate,.ldate.wide{width:auto;text-align:left}
+    .ldate,.ldate.wide,.hl-added{width:auto;text-align:left}
     .lact{margin-left:auto}
     .lbtn{min-height:44px!important}
   }
@@ -1526,6 +1529,61 @@ function Tip({ text, children, truncOnly, style, className }) {
       onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide} onMouseDown={hide}>
       {children}
       {pos && ReactDOM.createPortal(<div role="tooltip" className={`vtip ${pos.below ? "below" : ""}`} style={{ left: pos.x, top: pos.y }}>{text}</div>, document.body)}
+    </span>
+  );
+}
+
+// ── Headline "added" dates (display only) ──
+// Date of the most recent completed meeting of a huddle, from the saved
+// meeting records (company.meetings and each huddle's meetings).
+function hlLastMeeting(company, huddleId) {
+  if (!huddleId) return null;
+  let last = null;
+  const take = (m, hid) => {
+    if (!m || (m.huddleId || hid) !== huddleId || !m.date) return;
+    const d = new Date(m.date);
+    if (!isNaN(d) && (!last || d > last)) last = d;
+  };
+  toArray(company.meetings).forEach(m => take(m, null));
+  toArray(company.huddles).forEach(h => h && toArray(h.meetings).forEach(m => take(m, h.id)));
+  return last;
+}
+const hlDate = (h) => { const d = h && h.date ? new Date(h.date) : null; return d && !isNaN(d) ? d : null; };
+const hlDayDiff = (d) => { const a = new Date(d); a.setHours(0, 0, 0, 0); const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((t - a) / 86400000); };
+// "Today", "Yesterday", "Nov 11" (year added when it isn't this year).
+const hlAddedLabel = (h) => {
+  const d = hlDate(h); if (!d) return "—";
+  const n = hlDayDiff(d);
+  if (n === 0) return "Today";
+  if (n === 1) return "Yesterday";
+  return d.toLocaleDateString("en-US", d.getFullYear() === new Date().getFullYear() ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+};
+const hlAgeLabel = (h) => { const d = hlDate(h); if (!d) return ""; const n = Math.max(0, hlDayDiff(d)); return n === 1 ? "1 day" : `${n} days`; };
+const hlNewestFirst = (arr) => [...arr].sort((a, b) => (hlDate(b) || 0) - (hlDate(a) || 0));
+// Split headlines into new since the last meeting / still open from earlier /
+// no saved date. lastOf(h) → that headline's huddle's last meeting date.
+function hlGroups(list, lastOf) {
+  const fresh = [], older = [], unknown = [];
+  list.forEach(h => {
+    const d = hlDate(h);
+    if (!d) { unknown.push(h); return; }
+    const last = lastOf(h);
+    if (!last || d > last) fresh.push(h); else older.push(h);
+  });
+  return [
+    { key: "new", title: "New since last meeting", items: hlNewestFirst(fresh), older: false },
+    { key: "older", title: "Still open from earlier", items: hlNewestFirst(older), older: true },
+    { key: "unknown", title: "Date unknown", items: unknown, older: false },
+  ].filter(g => g.items.length);
+}
+function HlGroupHead({ title, count }) {
+  return <div className="hl-group">{title}<span className="num hl-group-n">{count}</span></div>;
+}
+function HlAdded({ h, older }) {
+  const d = hlDate(h);
+  return (
+    <span className="lmeta num hl-added" title={d ? `Added ${dateStr(d)}` : "No date saved"}>
+      {hlAddedLabel(h)}{older && d ? <span className="hl-age"> · {hlAgeLabel(h)}</span> : null}
     </span>
   );
 }
@@ -2780,7 +2838,11 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                 {unreviewed.length === 0 && (
                   <div className="lempty">No active headlines for this huddle. Add one below.</div>
                 )}
-                {unreviewed.map(h => (
+                {(() => {
+                  // Display only: group by when each headline was added vs this
+                  // huddle's most recent completed meeting.
+                  const lastMtg = hlLastMeeting(company, huddleId);
+                  const renderRow = (h, older) => (
                   <div key={h.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                     <div className="lrow keep-order" style={{ borderBottom: "none" }}>
                       <span className="chip lchip" style={{ fontSize: C.fs.xs, background: C.surface3, borderColor: C.border, color: C.textMuted, minWidth: 82, justifyContent: "center" }}>{h.type}</span>
@@ -2788,6 +2850,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                         {h.text}
                         {h.notes && !noteOpen[h.id] && <div className="hd-note"><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:4 }} />{h.notes}</div>}
                       </div>
+                      <HlAdded h={h} older={older} />
                       <div className="lact">
                         <button onClick={() => markReviewed(h.id)}
                           style={{ padding: "4px 8px", borderRadius: C.radius.control, border: `1px solid ${C.greenBorder}`, background: C.greenTint, color: C.green, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer", whiteSpace:"nowrap" }}>
@@ -2819,7 +2882,14 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                  return hlGroups(unreviewed, () => lastMtg).map(g => (
+                    <React.Fragment key={g.key}>
+                      <HlGroupHead title={g.title} count={g.items.length} />
+                      {g.items.map(h => renderRow(h, g.older))}
+                    </React.Fragment>
+                  ));
+                })()}
                 <div className="addbar" style={{ borderTop: unreviewed.length ? "none" : `1px solid ${C.border}` }}>
                     <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 130, flexShrink: 0 }}>
                       <option>Customer</option><option>Employee</option>
@@ -4260,13 +4330,13 @@ function Headlines({ company, onSave, onAdd }) {
   console.debug("[VAST/headlines] Panel filter", { total: headlines.length, active: active.length, reviewed: reviewed.length, allFlags: headlines.map(h => ({ id: h.id, text: h.text, reviewed: !!h.reviewed, huddleId: h.huddleId })) });
 
   const huddleNameOf = (id) => huddles.find(x => x.id === id)?.name || "";
-  const HeadlineRow = ({ h, isReviewed }) => (
+  const HeadlineRow = ({ h, isReviewed, older }) => (
     <div className="lrow" style={{ opacity: isReviewed ? 0.75 : 1 }}>
       <span className="chip lchip" style={{ minWidth: 80, justifyContent: "center" }}>{h.type}</span>
       <span className="lmeta lhuddle" title={huddleNameOf(h.huddleId)}>{huddleNameOf(h.huddleId) || "—"}</span>
       <span className="grow" style={{ textDecoration: isReviewed ? "line-through" : "none" }}>{h.text}</span>
       {isReviewed && <span className="lmeta">{h.reviewedAt ? <>Reviewed <span className="num">{dateStr(new Date(h.reviewedAt))}</span></> : "Reviewed"}</span>}
-      <span className="lmeta num ldate">{dateStr(new Date(h.date))}</span>
+      <HlAdded h={h} older={older} />
       <span className="lact">
         {!isReviewed && (
           <button className="btn-secondary lbtn" onClick={() => markReviewed(h.id)}><Icon.check /> Reviewed</button>
@@ -4309,10 +4379,15 @@ function Headlines({ company, onSave, onAdd }) {
           </div>
           {!showReviewed && (active.length === 0
             ? <div className="lempty">No active headlines. All caught up!</div>
-            : [...active].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={false} />))}
+            : hlGroups(active, h => hlLastMeeting(company, h.huddleId)).map(g => (
+                <React.Fragment key={g.key}>
+                  <HlGroupHead title={g.title} count={g.items.length} />
+                  {g.items.map(h => <HeadlineRow key={h.id} h={h} isReviewed={false} older={g.older} />)}
+                </React.Fragment>
+              )))}
           {showReviewed && (reviewed.length === 0
             ? <div className="lempty">No reviewed headlines yet.</div>
-            : [...reviewed].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={true} />))}
+            : [...hlNewestFirst(reviewed.filter(hlDate)), ...reviewed.filter(h => !hlDate(h))].map(h => <HeadlineRow key={h.id} h={h} isReviewed={true} />))}
         </div>
       </div>
     </Layout>
