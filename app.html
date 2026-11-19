@@ -452,6 +452,9 @@ const makeSTYLE = (C) => `
   .lhuddle{width:140px;overflow:hidden;text-overflow:ellipsis}
   .lowner{width:160px;overflow:hidden;text-overflow:ellipsis}
   .ldate{width:96px;text-align:right}
+  .hl-group{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:${C.fs.xs}px;font-weight:600;color:${C.textMuted};background:${C.surface3};border-top:1px solid ${C.border};border-bottom:1px solid ${C.border}}
+  .hl-group-n{font-weight:400}
+  .hl-added{width:118px;text-align:right}
   .ldate.wide{width:156px}
   .lact{display:flex;gap:4px;align-items:center;flex-shrink:0}
   .lbtn{min-height:28px!important;padding:3px 10px!important;font-size:${C.fs.xs}px!important}
@@ -465,7 +468,7 @@ const makeSTYLE = (C) => `
     .lrow .grow{flex-basis:100%;order:-1;font-weight:500}
     .lrow.keep-order .grow{order:0;flex-basis:calc(100% - 40px)}
     .lhuddle,.lowner{width:auto}
-    .ldate,.ldate.wide{width:auto;text-align:left}
+    .ldate,.ldate.wide,.hl-added{width:auto;text-align:left}
     .lact{margin-left:auto}
     .lbtn{min-height:44px!important}
   }
@@ -484,6 +487,13 @@ const makeSTYLE = (C) => `
   /* ── Tooltip that sits beside its element (see <Tip>) ── */
   .vtip{position:fixed;z-index:10000;transform:translate(-50%,-100%);background:${C.text};color:${C.surface};font-size:${C.fs.xs}px;font-weight:500;line-height:1.35;padding:4px 8px;border-radius:${C.radius.control}px;white-space:nowrap;max-width:360px;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:${C.shadowLg}}
   .vtip.below{transform:translate(-50%,0)}
+  /* Segue attendee circles: fixed columns, one top-aligned line, one-line names */
+  .seg-row{display:flex;flex-wrap:wrap;gap:8px 4px;justify-content:center;align-items:flex-start;padding:2px 0 0}
+  .seg-col{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;width:136px;min-width:0}
+  .seg-row.one-line{display:grid;gap:4px;justify-content:center}
+  .seg-row.one-line .seg-col{width:auto}
+  .seg-circle-slot{height:96px;display:flex;align-items:center;justify-content:center}
+  .seg-name{font-weight:600;text-align:center;line-height:1.25;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* ── Live Huddle (desktop): meeting bar + agenda rail + scrolling content ── */
   .hd-bar{display:flex;align-items:center;gap:16px;width:100%;min-width:0;min-height:56px;position:relative}
   .hd-bar > *{min-width:0}
@@ -526,6 +536,7 @@ const makeSTYLE = (C) => `
   .hd-sc .sc-input.cur{border-color:${C.inputBorder}!important;background:${C.inputBg}}
   .hd-flag.on{color:${C.link};background:${C.selBg}}
   .hd-ids .md-row .hd-step-n{width:20px;height:20px}
+  .lnote{padding:0 12px 10px;border-bottom:1px solid ${C.border}}
   .hd-note{font-size:${C.fs.xs}px;color:${C.textDim};font-style:italic;margin-top:2px;overflow-wrap:anywhere}
   .hd-slot{width:30px;display:inline-flex;justify-content:center;flex-shrink:0}
   .hd-ids{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
@@ -1523,6 +1534,183 @@ function Tip({ text, children, truncOnly, style, className }) {
   );
 }
 
+// ── Headline "added" dates (display only) ──
+// Date of the most recent completed meeting of a huddle, from the saved
+// meeting records (company.meetings and each huddle's meetings).
+function hlLastMeeting(company, huddleId) {
+  if (!huddleId) return null;
+  let last = null;
+  const take = (m, hid) => {
+    if (!m || (m.huddleId || hid) !== huddleId || !m.date) return;
+    const d = new Date(m.date);
+    if (!isNaN(d) && (!last || d > last)) last = d;
+  };
+  toArray(company.meetings).forEach(m => take(m, null));
+  toArray(company.huddles).forEach(h => h && toArray(h.meetings).forEach(m => take(m, h.id)));
+  return last;
+}
+const hlDate = (h) => { const d = h && h.date ? new Date(h.date) : null; return d && !isNaN(d) ? d : null; };
+const hlDayDiff = (d) => { const a = new Date(d); a.setHours(0, 0, 0, 0); const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((t - a) / 86400000); };
+// "Today", "Yesterday", "Nov 11" (year added when it isn't this year).
+const hlAddedLabel = (h) => {
+  const d = hlDate(h); if (!d) return "—";
+  const n = hlDayDiff(d);
+  if (n === 0) return "Today";
+  if (n === 1) return "Yesterday";
+  return d.toLocaleDateString("en-US", d.getFullYear() === new Date().getFullYear() ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+};
+const hlAgeLabel = (h) => { const d = hlDate(h); if (!d) return ""; const n = Math.max(0, hlDayDiff(d)); return n === 1 ? "1 day" : `${n} days`; };
+const hlNewestFirst = (arr) => [...arr].sort((a, b) => (hlDate(b) || 0) - (hlDate(a) || 0));
+// Split headlines into new since the last meeting / still open from earlier /
+// no saved date. lastOf(h) → that headline's huddle's last meeting date.
+function hlGroups(list, lastOf) {
+  const fresh = [], older = [], unknown = [];
+  list.forEach(h => {
+    const d = hlDate(h);
+    if (!d) { unknown.push(h); return; }
+    const last = lastOf(h);
+    if (!last || d > last) fresh.push(h); else older.push(h);
+  });
+  return [
+    { key: "new", title: "New since last meeting", items: hlNewestFirst(fresh), older: false },
+    { key: "older", title: "Still open from earlier", items: hlNewestFirst(older), older: true },
+    { key: "unknown", title: "Date unknown", items: unknown, older: false },
+  ].filter(g => g.items.length);
+}
+function HlGroupHead({ title, count }) {
+  return <div className="hl-group">{title}<span className="num hl-group-n">{count}</span></div>;
+}
+function HlAdded({ h, older }) {
+  const d = hlDate(h);
+  return (
+    <span className="lmeta num hl-added" title={d ? `Added ${dateStr(d)}` : "No date saved"}>
+      {hlAddedLabel(h)}{older && d ? <span className="hl-age"> · {hlAgeLabel(h)}</span> : null}
+    </span>
+  );
+}
+
+// ── Goal tracking (shared by the meeting recap and Reports) ──
+// A week belongs to the period that contains its Thursday (same rule as Reports).
+function goalWeeks(start, end) {
+  const out = [];
+  if (!start || !end || isNaN(start) || isNaN(end)) return out;
+  const d = new Date(start); d.setHours(0, 0, 0, 0);
+  const e = new Date(end); e.setHours(23, 59, 59, 999);
+  for (; d <= e; d.setDate(d.getDate() + 1)) if (d.getDay() === 4) out.push(weekKeyFromDate(d));
+  return out;
+}
+// One measurable over a period.
+//   Sum     → total so far vs the period goal, and where it should be by now
+//             (goal × share of the period's weeks gone). Blank goal = weekly
+//             goal × weeks in the period.
+//   Average → average so far vs the goal (blank = weekly goal).
+//   Latest  → latest number vs the goal (blank = weekly goal).
+// periodGoal: a number, or null/NaN to use the automatic goal.
+function goalTrack(m, entries, weeksAll, weeksSoFar, periodGoal) {
+  const rollup = m.rollup || "sum";
+  const op = m.operator || "gte";
+  const lower = op === "lte" || op === "lt";
+  const t = parseFloat(m.target);
+  const auto = periodGoal == null || isNaN(periodGoal);
+  const series = weeksSoFar.map(w => (entries[w] || {})[m.id]).map(v => v === "" || v == null ? NaN : parseFloat(v));
+  const vals = series.filter(v => !isNaN(v));
+  const base = { rollup, lower, auto, weeksAll: weeksAll.length, weeksSoFar: weeksSoFar.length, complete: weeksAll.length > 0 && weeksSoFar.length >= weeksAll.length };
+  if (!vals.length) return { ...base, empty: true };
+  if (rollup === "sum") {
+    const goal = auto ? t * weeksAll.length : periodGoal;
+    const actual = vals.reduce((a, b) => a + b, 0);
+    if (isNaN(goal) || !weeksAll.length) return { ...base, actual, noGoal: true };
+    const expected = goal * Math.min(1, weeksSoFar.length / weeksAll.length);
+    return { ...base, goal, actual, expected, pct: goal ? actual / goal : null, good: lower ? actual <= expected : actual >= expected };
+  }
+  const goal = auto ? t : periodGoal;
+  const actual = rollup === "avg" ? vals.reduce((a, b) => a + b, 0) / vals.length : vals[vals.length - 1];
+  if (isNaN(goal)) return { ...base, actual, noGoal: true };
+  return { ...base, goal, actual, expected: null, pct: null, good: rptMeets(actual, { ...m, target: goal }) === true };
+}
+const goalStatusWord = (g) => g.complete ? (g.good ? "Hit goal" : "Missed goal") : (g.good ? "On pace" : "Behind pace");
+
+// Recap: this huddle's measurables — this week vs the weekly goal, weeks on
+// target so far, and the quarter vs where it should be by now.
+function recapScorecardLines(company, huddleId) {
+  const ms = toArray(company.scorecard && company.scorecard.measurables).filter(m => m && m.id && (m.huddleId === huddleId || !m.huddleId));
+  if (!ms.length) return [];
+  const qs = company.quarterStart ? new Date(company.quarterStart) : null, qe = company.quarterEnd ? new Date(company.quarterEnd) : null;
+  const all = goalWeeks(qs, qe), cur = weekKey();
+  if (!all.length) return [];
+  const sofar = all.filter(w => w <= cur);
+  const entries = (company.scorecard && company.scorecard.entries) || {};
+  const OPS = { gte: "≥", lte: "≤", gt: ">", lt: "<", eq: "=" };
+  let ahead = 0, behind = 0;
+  const body = [];
+  ms.forEach(m => {
+    const op = m.operator || "gte";
+    const fmt = (v) => fmtMeasure(String(String(m.unit || "").trim() === "$" ? Math.round(v) : Math.round(v * 10) / 10), m.unit);
+    const t = parseFloat(m.target);
+    const judged = sofar.filter(w => rptMeets((entries[w] || {})[m.id], m) != null).length;
+    const hits = sofar.filter(w => rptMeets((entries[w] || {})[m.id], m) === true).length;
+    const thisRaw = (entries[cur] || {})[m.id];
+    const thisHit = rptMeets(thisRaw, m);
+    body.push(`  ${m.name}${m.owner ? ` (${m.owner})` : ""} — weekly goal ${OPS[op] || "≥"} ${isNaN(t) ? "not set" : fmt(t)}`);
+    body.push(`    This week: ${thisHit == null ? "not entered" : `${fmt(parseFloat(thisRaw))} ${thisHit ? "✓ on target" : "✗ off target"}`} · On target ${hits} of ${judged} week${judged === 1 ? "" : "s"} so far`);
+    const g = goalTrack(m, entries, all, sofar, parseFloat(m.quarterlyGoal));
+    if (g.empty) { body.push("    Quarter: no numbers entered yet"); return; }
+    if (g.noGoal) { body.push("    Quarter: no goal set"); return; }
+    g.good ? ahead++ : behind++;
+    const word = g.good ? "ON PACE" : "BEHIND PACE";
+    if (g.rollup === "sum") body.push(`    Quarter so far: ${fmt(g.actual)} of ${fmt(g.goal)} goal${g.auto ? ` (weekly goal × ${g.weeksAll} weeks)` : ""} = ${Math.round(g.pct * 100)}% · Should be ${g.lower ? "at most" : "at"} ${fmt(g.expected)} by now → ${word}`);
+    else body.push(`    Quarter ${g.rollup === "avg" ? "average" : "latest"}: ${fmt(g.actual)} vs ${g.auto ? "weekly" : "quarterly"} goal ${OPS[op] || "≥"} ${fmt(g.goal)} → ${word}`);
+  });
+  const n = sofar.length, total = all.length;
+  return [`  ${company.currentQuarter || "This quarter"} · week ${n} of ${total} (${Math.round(n / total * 100)}% of the quarter) · On pace: ${ahead} · Behind pace: ${behind}`, ...body];
+}
+
+// Notes on a row: same button, preview and box the Huddle uses. Saves to the
+// item's existing "notes" field, so a note written here shows in the Huddle
+// and the other way round.
+function NoteToggle({ open, hasNote, onClick }) {
+  return (
+    <Tip text={open ? "Hide notes" : "Notes"}>
+      <button onClick={onClick} aria-label="Notes" aria-pressed={!!open}
+        className="icon-btn" style={open ? { background: C.selBg, color: C.link } : hasNote ? { color: C.text } : undefined}>
+        <Icon.note size={13} />
+      </button>
+    </Tip>
+  );
+}
+function NotePreview({ text }) {
+  return text ? <div className="hd-note"><Icon.note size={11} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />{text}</div> : null;
+}
+function NoteBox({ value, placeholder, onChange }) {
+  return (
+    <div className="lnote fade-in">
+      <textarea autoFocus placeholder={placeholder} value={value || ""} onChange={e => onChange(e.target.value)}
+        style={{ width: "100%", minHeight: 72, fontSize: C.fs.sm, padding: "8px 8px", borderRadius: C.radius.control, border: `1px solid ${C.borderStrong}`, background: C.surface2, color: C.text, resize: "vertical", fontFamily: C.fontUI, boxSizing: "border-box" }} />
+    </div>
+  );
+}
+
+// Send an item to Problem Solving. This is the Huddle's existing
+// addToProblemQueue logic, moved here unchanged so every screen can use it:
+// no-op if the item is already queued, otherwise one atomic add to
+// problemQueue tagged with the huddle it belongs to.
+function queueProblem(company, onAdd, huddleId, item) {
+  if ((company.problemQueue || []).find(p => p.id === item.id)) return; // already queued — no-op
+  onAdd("problemQueue", { ...item, huddleId: huddleId, id: item.id });
+}
+// The flag button, same look/tooltip/"sent" state as the Huddle's flag.
+function ProblemFlag({ company, id, onClick }) {
+  const queued = !!(company.problemQueue || []).find(p => p.id === id);
+  const tip = queued ? "Already in problem queue" : "Send to Problem Solving";
+  return (
+    <Tip text={tip}>
+      <button onClick={onClick} aria-label={tip} aria-pressed={queued} className={`icon-btn hd-flag ${queued ? "on" : ""}`}>
+        <Icon.flag />
+      </button>
+    </Tip>
+  );
+}
+
 function ScorecardCell({ value, onCommit, placeholder, style, format, className }) {
   const [local, setLocal] = useState(value ?? "");
   const [focused, setFocused] = useState(false);
@@ -2046,10 +2234,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
     ? allMembers.filter(m => huddleMemberIds.includes(m.id))
     : allMembers;
 
-  const addToProblemQueue = (item) => {
-    if ((company.problemQueue || []).find(p => p.id === item.id)) return; // already queued — no-op
-    onAdd("problemQueue", { ...item, huddleId: huddleId, id: item.id });
-  };
+  const addToProblemQueue = (item) => queueProblem(company, onAdd, huddleId, item);
   const seg = agenda[activeIdx];
   const segLimit = seg.minutes * 60;
   const segElapsed = segTimes[activeIdx] || 0;
@@ -2197,11 +2382,26 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
       lines.push("");
     }
 
-    // Headlines
-    const activeHeadlines = (company.headlines || []).filter(h => !h.reviewed && (h.huddleId === huddleId || !h.huddleId));
+    // Notes are written as "Note: …" lines under their item.
+    const pushNote = (text, indent) => { const t = String(text || "").trim(); if (t) lines.push(`${indent}Note: ${t.split(/\s*\n+\s*/).join(" · ")}`); };
+    // Things changed during this meeting (with a minute's slack).
+    const meetingStart = Date.now() - elapsed * 1000 - 60000;
+    const duringMeeting = (iso) => { if (!iso) return false; const d = new Date(iso); return !isNaN(d) && d.getTime() >= meetingStart && d.getTime() <= Date.now() + 60000; };
+    const mine = (x) => x && (x.huddleId === huddleId || !x.huddleId);
+
+    // Scorecard: weekly results and quarter pace
+    const scLines = recapScorecardLines(company, huddleId);
+    if (scLines.length) {
+      lines.push("SCORECARD");
+      scLines.forEach(l => lines.push(l));
+      lines.push("");
+    }
+
+    // Headlines: still open, plus any reviewed during this meeting — with notes
+    const activeHeadlines = (company.headlines || []).filter(h => mine(h) && (!h.reviewed || duringMeeting(h.reviewedAt)));
     if (activeHeadlines.length) {
       lines.push("HEADLINES FROM THE WEEK");
-      activeHeadlines.forEach(h => lines.push(`  [${h.type.toUpperCase()}] ${h.text}`));
+      activeHeadlines.forEach(h => { lines.push(`  [${String(h.type || "Headline").toUpperCase()}] ${h.text}`); pushNote(h.notes, "      "); });
       lines.push("");
     }
 
@@ -2209,7 +2409,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
     const offTrack = (company.quarterlyTasks || []).filter(t => t.status === "off" && (t.huddleId === huddleId || !t.huddleId));
     if (offTrack.length) {
       lines.push("OFF-TRACK QUARTERLY TASKS");
-      offTrack.forEach(t => lines.push(`  ✗ ${t.title}${t.who ? ` (${t.who})` : ""}`));
+      offTrack.forEach(t => { lines.push(`  ✗ ${t.title}${t.who ? ` (${t.who})` : ""}`); pushNote(t.notes, "      "); });
       lines.push("");
     }
 
@@ -2240,15 +2440,30 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
           const isNew = t.createdAt && t.createdAt.slice(0,10) === todayStr;
           const tag = isOverdue ? " ⚠ OVERDUE" : isNew ? " NEW" : "";
           lines.push(`    □ ${t.title}${t.dueDate ? ` (Due ${dateStr(new Date(t.dueDate))})` : ""}${tag}`);
+          pushNote(t.notes, "        ");
         });
       });
+      lines.push("");
+    }
+
+    // To-dos completed during this meeting, with notes
+    const doneNow = (company.todos || []).filter(t => mine(t) && t.done && duringMeeting(t.completedAt));
+    if (doneNow.length) {
+      lines.push("TO-DOS COMPLETED");
+      doneNow.forEach(t => { const who = getAssignees(t).join(", "); lines.push(`  ✓ ${t.title}${who ? ` (${who})` : ""}`); pushNote(t.notes, "      "); });
       lines.push("");
     }
 
     // Problems solved
     if (solvedThisSession.length) {
       lines.push("PROBLEMS SOLVED");
-      solvedThisSession.forEach(s => lines.push(`  ✓ ${s.title}${s.notes ? `: ${s.notes}` : ""}`));
+      solvedThisSession.forEach(s => {
+        lines.push(`  ✓ ${s.title}${s.sourceLabel ? ` (${s.sourceLabel})` : ""}`);
+        pushNote(s.notes, "      ");
+        // The original item's own notes (headline / to-do / task / issue), if different
+        const src = [...toArray(company.headlines), ...toArray(company.todos), ...toArray(company.quarterlyTasks), ...toArray(company.issues)].find(x => x && x.id === s.id);
+        if (src && src.notes && String(src.notes).trim() !== String(s.notes || "").trim()) pushNote(src.notes, "      ");
+      });
       lines.push("");
     }
 
@@ -2626,6 +2841,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                             <span className="num">{weekLabel(wk)}</span>{wk === curWk && <span className="hd-thiswk">This week</span>}
                           </th>
                         ))}
+                        <th className="shrink" aria-label="Actions"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2636,20 +2852,6 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                               <Tip text={m.owner ? `${m.name} · ${m.owner}` : m.name} truncOnly style={{ flex: 1 }}>
                                 <span className="hd-ellip"><span style={{ fontWeight: 600 }}>{m.name}</span>{m.owner && <span style={{ color: C.textMuted, fontSize: C.fs.xs, marginLeft: 8 }}>{m.owner}</span>}</span>
                               </Tip>
-                              {(() => {
-                                const curVal = entries[curWk]?.[m.id] ?? "";
-                                const met = meetsGoal(curVal, m);
-                                const alreadyQueued = (company.problemQueue || []).find(p => p.id === m.id);
-                                const tip = alreadyQueued ? "Already in problem queue" : "Send to Problem Solving";
-                                return (
-                                  <Tip text={tip}>
-                                    <button onClick={() => addToProblemQueue({ id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })}
-                                      aria-label={tip} aria-pressed={!!alreadyQueued} className={`icon-btn hd-flag ${alreadyQueued ? "on" : ""}`}>
-                                      <Icon.flag />
-                                    </button>
-                                  </Tip>
-                                );
-                              })()}
                             </div>
                           </td>
                           <td className="r num muted" style={{ whiteSpace: "nowrap" }}>{({gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="})[m.operator||"gte"]} {fmtMeasure(m.target, m.unit)}</td>
@@ -2672,6 +2874,20 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                               </td>
                             );
                           })}
+                          <td className="shrink">
+                            {(() => {
+                              const alreadyQueued = (company.problemQueue || []).find(p => p.id === m.id);
+                              const tip = alreadyQueued ? "Already in problem queue" : "Send to Problem Solving";
+                              return (
+                                <Tip text={tip}>
+                                  <button onClick={() => addToProblemQueue({ id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })}
+                                    aria-label={tip} aria-pressed={!!alreadyQueued} className={`icon-btn hd-flag ${alreadyQueued ? "on" : ""}`}>
+                                    <Icon.flag />
+                                  </button>
+                                </Tip>
+                              );
+                            })()}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2707,20 +2923,16 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                           </button>
                         );
                       })}
-                      <span className="hd-slot">
-                        {t.status === "off" && (
-                          <Tip text={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"}>
-                            <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
-                              aria-label={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===t.id) ? "on" : ""}`}>
-                              <Icon.flag />
-                            </button>
-                          </Tip>
-                        )}
-                      </span>
                       <Tip text={noteOpen[t.id] ? "Hide notes" : "Notes"}>
                         <button onClick={() => toggleNote(t.id)} aria-label="Notes" aria-pressed={!!noteOpen[t.id]}
                           className="icon-btn" style={noteOpen[t.id] ? { background: C.selBg, color: C.link } : t.notes ? { color: C.text } : undefined}>
                           <Icon.note size={13} />
+                        </button>
+                      </Tip>
+                      <Tip text={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"}>
+                        <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
+                          aria-label={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===t.id) ? "on" : ""}`}>
+                          <Icon.flag />
                         </button>
                       </Tip>
                     </div>
@@ -2758,7 +2970,11 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                 {unreviewed.length === 0 && (
                   <div className="lempty">No active headlines for this huddle. Add one below.</div>
                 )}
-                {unreviewed.map(h => (
+                {(() => {
+                  // Display only: group by when each headline was added vs this
+                  // huddle's most recent completed meeting.
+                  const lastMtg = hlLastMeeting(company, huddleId);
+                  const renderRow = (h, older) => (
                   <div key={h.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                     <div className="lrow keep-order" style={{ borderBottom: "none" }}>
                       <span className="chip lchip" style={{ fontSize: C.fs.xs, background: C.surface3, borderColor: C.border, color: C.textMuted, minWidth: 82, justifyContent: "center" }}>{h.type}</span>
@@ -2766,21 +2982,22 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                         {h.text}
                         {h.notes && !noteOpen[h.id] && <div className="hd-note"><Icon.note size={11} style={{ display:"inline", verticalAlign:"middle", marginRight:4 }} />{h.notes}</div>}
                       </div>
+                      <HlAdded h={h} older={older} />
                       <div className="lact">
                         <button onClick={() => markReviewed(h.id)}
                           style={{ padding: "4px 8px", borderRadius: C.radius.control, border: `1px solid ${C.greenBorder}`, background: C.greenTint, color: C.green, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer", whiteSpace:"nowrap" }}>
                           ✓ Reviewed
                         </button>
-                        <Tip text={(company.problemQueue||[]).find(p=>p.id===h.id) ? "Already in problem queue" : "Send to Problem Solving"}>
-                          <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
-                            aria-label={(company.problemQueue||[]).find(p=>p.id===h.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===h.id) ? "on" : ""}`}>
-                            <Icon.flag />
-                          </button>
-                        </Tip>
                         <Tip text={noteOpen[h.id] ? "Hide notes" : "Notes"}>
                           <button onClick={() => toggleNote(h.id)} aria-label="Notes" aria-pressed={!!noteOpen[h.id]}
                             className="icon-btn" style={noteOpen[h.id] ? { background: C.selBg, color: C.link } : h.notes ? { color: C.text } : undefined}>
                             <Icon.note size={13} />
+                          </button>
+                        </Tip>
+                        <Tip text={(company.problemQueue||[]).find(p=>p.id===h.id) ? "Already in problem queue" : "Send to Problem Solving"}>
+                          <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
+                            aria-label={(company.problemQueue||[]).find(p=>p.id===h.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===h.id) ? "on" : ""}`}>
+                            <Icon.flag />
                           </button>
                         </Tip>
                       </div>
@@ -2797,7 +3014,14 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                  return hlGroups(unreviewed, () => lastMtg).map(g => (
+                    <React.Fragment key={g.key}>
+                      <HlGroupHead title={g.title} count={g.items.length} />
+                      {g.items.map(h => renderRow(h, g.older))}
+                    </React.Fragment>
+                  ));
+                })()}
                 <div className="addbar" style={{ borderTop: unreviewed.length ? "none" : `1px solid ${C.border}` }}>
                     <select value={newHeadline.type} onChange={e => setNewHeadline(n => ({ ...n, type: e.target.value }))} style={{ width: 130, flexShrink: 0 }}>
                       <option>Customer</option><option>Employee</option>
@@ -2853,16 +3077,16 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                             style={{ padding: "4px 12px", borderRadius: C.radius.control, border: `1px solid ${C.greenBorder}`, background: C.greenTint, color: C.green, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer", whiteSpace:"nowrap" }}>
                             ✓ Complete
                           </button>
-                          <Tip text={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"}>
-                            <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
-                              aria-label={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===t.id) ? "on" : ""}`}>
-                              <Icon.flag />
-                            </button>
-                          </Tip>
                           <Tip text={noteOpen[t.id] ? "Hide notes" : "Notes"}>
                             <button onClick={() => toggleNote(t.id)} aria-label="Notes" aria-pressed={!!noteOpen[t.id]}
                               className="icon-btn" style={noteOpen[t.id] ? { background: C.selBg, color: C.link } : t.notes ? { color: C.text } : undefined}>
                               <Icon.note size={13} />
+                            </button>
+                          </Tip>
+                          <Tip text={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"}>
+                            <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
+                              aria-label={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===t.id) ? "on" : ""}`}>
+                              <Icon.flag />
                             </button>
                           </Tip>
                         </div>
@@ -3255,8 +3479,8 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                         style={{ padding: "6px 14px", borderRadius: C.radius.control, border: `1px solid ${C.borderStrong}`, cursor: (spinning || pool.length === 0) ? "not-allowed" : "pointer",
                           fontFamily: C.fontUI, fontWeight: 600, fontSize: C.fs.sm, background: C.surface2,
                           color: (spinning || pool.length === 0) ? C.textMuted : C.text, transition: "all 0.2s",
-                          boxShadow: "none" }}>
-                        {spinning ? "Selecting..." : spotlight ? "🎲 Pick Again" : "🎲 Auto Pick Next"}
+                          boxShadow: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <Icon.users />{spinning ? "Selecting..." : spotlight ? "Pick Again" : "Auto Pick Next"}
                       </button>
                     </div>
                   </div>
@@ -3272,8 +3496,8 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                     <div style={{ color: C.textMuted, fontSize: C.fs.sm, padding: "16px 0" }}>No team members added yet. Add them in Settings.</div>
                   )}
 
-                  {/* Member circles */}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "center", padding: "8px 0 4px", minHeight: 160, alignItems: "center" }}>
+                  {/* Member circles — fixed-width columns, top-aligned, names on one line */}
+                  <div className={`seg-row ${!mobile && members.length <= 8 ? "one-line" : ""}`} style={!mobile && members.length <= 8 ? { gridTemplateColumns: `repeat(${members.length}, minmax(0, 136px))` } : undefined}>
                     {members.map((m, idx) => {
                       const isAbsent = attendance[m.id] === false;
                       const isSpotlit = spotlight && spotlight.id === m.id;
@@ -3284,9 +3508,9 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                       const initials = m.name.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
                       const size = 68;
                       return (
-                        <div key={m.id} className={isSpotlit ? "fade-in" : ""} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer", transition: "all 0.2s", width: 100, height: 160, justifyContent: "center" }}
+                        <div key={m.id} className={`seg-col ${isSpotlit ? "fade-in" : ""}`}
                           onClick={() => setAttendance(a => ({ ...a, [m.id]: isAbsent ? true : false }))}>
-                          <div style={{
+                          <div className="seg-circle-slot"><div style={{
                             width: size, height: size, borderRadius: "50%",
                             background: isAbsent ? C.surface2 : isSpotlit ? C.selBg : bg,
                             border: isSpotlit ? `3px solid ${C.selBorder}` : isAbsent ? `2px dashed ${C.border}` : `2px solid transparent`,
@@ -3306,17 +3530,14 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                                 <svg width="9" height="9" viewBox="0 0 12 12"><polyline points="1,6 4,9 11,2" stroke={C.onAccent} strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
                               </div>
                             )}
-                          </div>
-                          <div style={{ fontSize: isSpotlit ? C.fs.sm : C.fs.xs, fontWeight: 600, color: isAbsent ? C.textDim : C.text, textAlign: "center", maxWidth: 80, lineHeight: 1.2 }}>{m.name}</div>
+                          </div></div>
+                          <Tip text={m.name} truncOnly style={{ width: "100%", maxWidth: 132, justifyContent: "center" }}>
+                            <div className="seg-name" style={{ fontSize: isSpotlit ? C.fs.sm : C.fs.xs, color: isAbsent ? C.textDim : C.text }}>{m.name}</div>
+                          </Tip>
                           {isSpotlit && !spinning && (
-                            <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-                              <div style={{ textAlign: "center" }}>
-                                <div style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted }}>Personal Best</div>
-                              </div>
-                              <div style={{ fontSize: C.fs.xs, color: C.border }}>|</div>
-                              <div style={{ textAlign: "center" }}>
-                                <div style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted }}>Business Best</div>
-                              </div>
+                            <div style={{ fontSize: C.fs.xs, fontWeight: 600, color: C.textMuted, textAlign: "center", lineHeight: 1.3, marginTop: 2 }}>
+                              <div>Personal Best</div>
+                              <div>Business Best</div>
                             </div>
                           )}
                         </div>
@@ -3745,6 +3966,7 @@ function Tasks({ company, onSave, onAdd }) {
                       <div style={{ display: "flex", gap: 2 }}>
                         <button className="icon-btn" title="Edit" aria-label={`Edit task: ${t.title}`} onClick={() => startEdit(t)}><Icon.edit /></button>
                         <button className="icon-btn danger" title="Delete" aria-label={`Delete task: ${t.title}`} onClick={() => deleteTask(t.id)}><Icon.trash /></button>
+                        <ProblemFlag company={company} id={t.id} onClick={() => queueProblem(company, onAdd, t.huddleId || null, { id: t.id, title: t.title, source: "task", sourceLabel: "Task" })} />
                       </div>
                     </td>
                   </tr>
@@ -3783,6 +4005,7 @@ function Tasks({ company, onSave, onAdd }) {
                           <option value="off">Off Track</option>
                           <option value="done">Done</option>
                         </select>
+                        <ProblemFlag company={company} id={t.id} onClick={() => queueProblem(company, onAdd, t.huddleId || null, { id: t.id, title: t.title, source: "task", sourceLabel: "Task" })} />
                       </div>
                     </div>
                   );
@@ -3883,7 +4106,7 @@ function useViewportWidth() {
   return w;
 }
 
-function Scorecard({ company, onSave }) {
+function Scorecard({ company, onSave, onAdd }) {
   // Default new measurables to the team's first/active huddle (no orphans).
   const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
   const [showAdd, setShowAdd] = useState(false);
@@ -4068,6 +4291,7 @@ function Scorecard({ company, onSave }) {
                       <div style={{ display: "flex", gap: 2 }}>
                         <button className="icon-btn" title="Edit" aria-label={`Edit ${m.name}`} onClick={() => editMeasurable(m)}><Icon.edit /></button>
                         <button className="icon-btn danger" title="Delete" aria-label={`Delete ${m.name}`} onClick={() => deleteMeasurable(m.id)}><Icon.trash /></button>
+                        <ProblemFlag company={company} id={m.id} onClick={() => queueProblem(company, onAdd, m.huddleId || null, { id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })} />
                       </div>
                     </td>
                   </tr>
@@ -4129,6 +4353,7 @@ function Scorecard({ company, onSave }) {
                   </div>
                   <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
                     <button className="btn-secondary" style={{ flex: 1 }} onClick={() => editMeasurable(m)}>Edit</button>
+                    <ProblemFlag company={company} id={m.id} onClick={() => queueProblem(company, onAdd, m.huddleId || null, { id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })} />
                   </div>
                 </div>
               ))}
@@ -4211,6 +4436,9 @@ function Headlines({ company, onSave, onAdd }) {
   const huddles = company.huddles || [{ id: "huddle-1", name: "Weekly Huddle" }];
   const [huddleFilter, setHuddleFilter] = useState("all");
   const [showReviewed, setShowReviewed] = useState(false);
+  const [noteOpen, setNoteOpen] = useState({});
+  const toggleNote = (id) => setNoteOpen(o => ({ ...o, [id]: !o[id] }));
+  const saveNote = (id, text) => onSave(latest => ({ headlines: (latest.headlines || []).map(x => x.id === id ? { ...x, notes: text } : x) }));
 
   const add = () => {
     if (!form.text.trim()) return;
@@ -4237,13 +4465,15 @@ function Headlines({ company, onSave, onAdd }) {
   console.debug("[VAST/headlines] Panel filter", { total: headlines.length, active: active.length, reviewed: reviewed.length, allFlags: headlines.map(h => ({ id: h.id, text: h.text, reviewed: !!h.reviewed, huddleId: h.huddleId })) });
 
   const huddleNameOf = (id) => huddles.find(x => x.id === id)?.name || "";
-  const HeadlineRow = ({ h, isReviewed }) => (
-    <div className="lrow" style={{ opacity: isReviewed ? 0.75 : 1 }}>
+  // Called as a function (not <HeadlineRow/>) so an open note box keeps focus while typing.
+  const HeadlineRow = ({ h, isReviewed, older }) => (
+    <React.Fragment key={h.id}>
+    <div className="lrow" style={{ opacity: isReviewed ? 0.75 : 1, borderBottom: noteOpen[h.id] ? "none" : undefined }}>
       <span className="chip lchip" style={{ minWidth: 80, justifyContent: "center" }}>{h.type}</span>
       <span className="lmeta lhuddle" title={huddleNameOf(h.huddleId)}>{huddleNameOf(h.huddleId) || "—"}</span>
-      <span className="grow" style={{ textDecoration: isReviewed ? "line-through" : "none" }}>{h.text}</span>
+      <span className="grow"><span style={{ textDecoration: isReviewed ? "line-through" : "none" }}>{h.text}</span>{!noteOpen[h.id] && <NotePreview text={h.notes} />}</span>
       {isReviewed && <span className="lmeta">{h.reviewedAt ? <>Reviewed <span className="num">{dateStr(new Date(h.reviewedAt))}</span></> : "Reviewed"}</span>}
-      <span className="lmeta num ldate">{dateStr(new Date(h.date))}</span>
+      <HlAdded h={h} older={older} />
       <span className="lact">
         {!isReviewed && (
           <button className="btn-secondary lbtn" onClick={() => markReviewed(h.id)}><Icon.check /> Reviewed</button>
@@ -4251,9 +4481,13 @@ function Headlines({ company, onSave, onAdd }) {
         {isReviewed && (
           <button className="btn-secondary lbtn" onClick={() => unmarkReviewed(h.id)}>Reopen</button>
         )}
+        <NoteToggle open={noteOpen[h.id]} hasNote={!!h.notes} onClick={() => toggleNote(h.id)} />
         <button className="icon-btn danger" title="Delete" aria-label={`Delete headline: ${h.text}`} onClick={() => del(h.id)}><Icon.trash /></button>
+        <ProblemFlag company={company} id={h.id} onClick={() => queueProblem(company, onAdd, h.huddleId || null, { id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })} />
       </span>
     </div>
+    {noteOpen[h.id] && <NoteBox value={h.notes} placeholder="Add notes about this headline..." onChange={text => saveNote(h.id, text)} />}
+    </React.Fragment>
   );
 
   return (
@@ -4285,10 +4519,15 @@ function Headlines({ company, onSave, onAdd }) {
           </div>
           {!showReviewed && (active.length === 0
             ? <div className="lempty">No active headlines. All caught up!</div>
-            : [...active].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={false} />))}
+            : hlGroups(active, h => hlLastMeeting(company, h.huddleId)).map(g => (
+                <React.Fragment key={g.key}>
+                  <HlGroupHead title={g.title} count={g.items.length} />
+                  {g.items.map(h => HeadlineRow({ h, isReviewed: false, older: g.older }))}
+                </React.Fragment>
+              )))}
           {showReviewed && (reviewed.length === 0
             ? <div className="lempty">No reviewed headlines yet.</div>
-            : [...reviewed].reverse().map(h => <HeadlineRow key={h.id} h={h} isReviewed={true} />))}
+            : [...hlNewestFirst(reviewed.filter(hlDate)), ...reviewed.filter(h => !hlDate(h))].map(h => HeadlineRow({ h, isReviewed: true })))}
         </div>
       </div>
     </Layout>
@@ -4475,6 +4714,9 @@ function Todos({ company, onSave, onAdd }) {
   const pending = huddleFilter === "all" ? allPending : allPending.filter(t => t.huddleId === huddleFilter);
   const done = huddleFilter === "all" ? allDone : allDone.filter(t => t.huddleId === huddleFilter);
   const [todoTab, setTodoTab] = useState("open");
+  const [noteOpen, setNoteOpen] = useState({});
+  const toggleNote = (id) => setNoteOpen(o => ({ ...o, [id]: !o[id] }));
+  const saveNote = (id, text) => onSave(latest => ({ todos: (latest.todos || []).map(x => x.id === id ? { ...x, notes: text } : x) }));
 
   const TodoRow = ({ t }) => {
     const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
@@ -4483,7 +4725,7 @@ function Todos({ company, onSave, onAdd }) {
 
     if (isEditing) {
       return (
-        <div style={{ padding: "12px", borderBottom: `1px solid ${C.border}`, background: C.selBg }}>
+        <div key={t.id} style={{ padding: "12px", borderBottom: `1px solid ${C.border}`, background: C.selBg }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
             <input
               value={editFields.title}
@@ -4540,17 +4782,21 @@ function Todos({ company, onSave, onAdd }) {
     }
 
     return (
-      <div className="lrow keep-order">
+      <React.Fragment key={t.id}>
+      <div className="lrow keep-order" style={noteOpen[t.id] ? { borderBottom: "none" } : undefined}>
         <div className={`checkbox ${t.done ? "checked" : ""}`} role="checkbox" aria-checked={!!t.done} aria-label={`Mark done: ${t.title}`} onClick={() => toggle(t.id)}>{t.done && <Icon.check />}</div>
-        <span className="grow" style={{ fontWeight: 500 }}>{t.title}</span>
+        <span className="grow" style={{ fontWeight: 500 }}>{t.title}{!noteOpen[t.id] && <NotePreview text={t.notes} />}</span>
         <span className="lmeta lowner" title={getAssignees(t).join(", ")}>{getAssignees(t).join(", ") || "—"}</span>
         <span className="lmeta num ldate wide" style={{ color: isOverdue ? C.red : undefined, fontWeight: isOverdue ? 600 : 400 }}>{t.dueDate ? <>{isOverdue ? "Overdue " : ""}{dateStr(new Date(t.dueDate))}</> : "—"}</span>
         <span className="lmeta lhuddle" title={huddleName || ""}>{huddleName || "—"}</span>
         <span className="lact">
+          <NoteToggle open={noteOpen[t.id]} hasNote={!!t.notes} onClick={() => toggleNote(t.id)} />
           <button className="icon-btn" title="Edit" aria-label={`Edit to-do: ${t.title}`} onClick={() => startEdit(t)}><Icon.edit /></button>
           <button className="icon-btn danger" title="Delete" aria-label={`Delete to-do: ${t.title}`} onClick={() => del(t.id)}><Icon.trash /></button>
         </span>
       </div>
+      {noteOpen[t.id] && <NoteBox value={t.notes} placeholder="Add notes about this to-do..." onChange={text => saveNote(t.id, text)} />}
+      </React.Fragment>
     );
   };
 
@@ -4605,17 +4851,21 @@ function Todos({ company, onSave, onAdd }) {
           </div>
           {todoTab === "open" && (pending.length === 0
             ? <div className="lempty">No open to-dos{huddleFilter !== "all" ? " for this huddle" : ""}.</div>
-            : pending.map(t => <TodoRow key={t.id} t={t} />))}
+            : pending.map(t => TodoRow({ t })))}
           {todoTab === "done" && (done.length === 0 ? <div className="lempty">No completed to-dos yet.</div> : [...done].reverse().map(t => (
-            <div key={t.id} className="lrow keep-order" style={{ opacity: 0.75 }}>
+            <React.Fragment key={t.id}>
+            <div className="lrow keep-order" style={{ opacity: 0.75, borderBottom: noteOpen[t.id] ? "none" : undefined }}>
               <div className="checkbox checked" aria-label="Done"><Icon.check /></div>
-              <span className="grow" style={{ textDecoration: "line-through", color: C.textMuted }}>{t.title}</span>
+              <span className="grow" style={{ color: C.textMuted }}><span style={{ textDecoration: "line-through" }}>{t.title}</span>{!noteOpen[t.id] && <NotePreview text={t.notes} />}</span>
               <span className="lmeta lowner">{getAssignees(t).join(", ") || "—"}</span>
               <span className="lmeta lhuddle">{huddles.find(h => h.id === t.huddleId)?.name || "—"}</span>
               <span className="lact">
+                <NoteToggle open={noteOpen[t.id]} hasNote={!!t.notes} onClick={() => toggleNote(t.id)} />
                 <button className="icon-btn danger" title="Delete" aria-label={`Delete to-do: ${t.title}`} onClick={() => del(t.id)}><Icon.trash /></button>
               </span>
             </div>
+            {noteOpen[t.id] && <NoteBox value={t.notes} placeholder="Add notes about this to-do..." onChange={text => saveNote(t.id, text)} />}
+            </React.Fragment>
           )))}
         </div>
       </div>
@@ -4977,7 +5227,7 @@ function MeetingHistory({ company }) {
 // recognise is shown as plain text.
 const RECAP_SECTIONS = {
   "ATTENDEES": "Attendees", "HEADLINES FROM THE WEEK": "Headlines", "OFF-TRACK QUARTERLY TASKS": "Off-track quarterly tasks",
-  "OPEN TO-DOS BY TEAM MEMBER": "Open to-dos by person", "PROBLEMS SOLVED": "Problems solved", "MEETING NOTES": "Meeting notes", "INDIVIDUAL RATINGS": "Individual ratings",
+  "OPEN TO-DOS BY TEAM MEMBER": "Open to-dos by person", "PROBLEMS SOLVED": "Problems solved", "SCORECARD": "Scorecard", "TO-DOS COMPLETED": "To-dos completed", "MEETING NOTES": "Meeting notes", "INDIVIDUAL RATINGS": "Individual ratings",
 };
 function parseRecap(text) {
   const lines = String(text || "").split("\n");
@@ -5002,25 +5252,36 @@ function RecapView({ text }) {
       {sections.map((sec, si) => {
         const title = RECAP_SECTIONS[sec.key] || (sec.key ? sec.key.charAt(0) + sec.key.slice(1).toLowerCase() : "Notes");
         const raw = sec.lines.map(l => l.trim());
+        // "Note: …" lines belong to the item above them.
+        const noteOf = (i) => { const out = []; for (let j = i + 1; j < raw.length && /^Note:\s/.test(raw[j]); j++) out.push(raw[j].replace(/^Note:\s*/, "")); return out; };
+        const isNote = (l) => /^Note:\s/.test(l);
+        const NoteLine = ({ list }) => list.length ? <div className="hd-note" style={{ marginTop: 0 }}>{list.join(" · ")}</div> : null;
         if (sec.key === "ATTENDEES") return block(title, <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{raw.join(", ").split(/,\s*/).filter(Boolean).map(n => <span key={n} className="chip" style={{ color: C.text }}>{n}</span>)}</div>, si);
-        if (sec.key === "HEADLINES FROM THE WEEK") return block(title, <div>{raw.map((l, i) => { const m = /^\[([A-Z][A-Z ]*)\]\s*(.*)$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", maxWidth: "90ch" }}>{m && <span className="chip" style={{ flexShrink: 0 }}>{m[1].charAt(0) + m[1].slice(1).toLowerCase()}</span>}<span>{m ? m[2] : l}</span></div>; })}</div>, si);
-        if (sec.key === "OFF-TRACK QUARTERLY TASKS") return block(title, <div>{raw.map((l, i) => { const m = /^✗\s*(.*?)(?:\s\(([^()]*)\))?$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0" }}><span className="dot" style={{ background: C.red }} aria-label="Off track" /><span>{m ? m[1] : l}</span>{m && m[2] && <span style={{ color: C.textMuted }}>{m[2]}</span>}</div>; })}</div>, si);
-        if (sec.key === "PROBLEMS SOLVED") return block(title, <div>{raw.map((l, i) => { const m = /^✓\s*([^:]*)(?::\s*(.*))?$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", maxWidth: "90ch" }}><span className="dot" style={{ background: C.green, alignSelf: "center" }} aria-label="Solved" /><span style={{ fontWeight: 600 }}>{m ? m[1] : l}</span>{m && m[2] && <span style={{ color: C.textMuted }}>{m[2]}</span>}</div>; })}</div>, si);
+        if (sec.key === "HEADLINES FROM THE WEEK") return block(title, <div>{raw.map((l, i) => { if (isNote(l)) return null; const m = /^\[([A-Z][A-Z ]*)\]\s*(.*)$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", maxWidth: "90ch" }}>{m && <span className="chip" style={{ flexShrink: 0 }}>{m[1].charAt(0) + m[1].slice(1).toLowerCase()}</span>}<span>{m ? m[2] : l}<NoteLine list={noteOf(i)} /></span></div>; })}</div>, si);
+        if (sec.key === "OFF-TRACK QUARTERLY TASKS") return block(title, <div>{raw.map((l, i) => { if (isNote(l)) return null; const m = /^✗\s*(.*?)(?:\s\(([^()]*)\))?$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0" }}><span className="dot" style={{ background: C.red }} aria-label="Off track" /><span>{m ? m[1] : l}<NoteLine list={noteOf(i)} /></span>{m && m[2] && <span style={{ color: C.textMuted }}>{m[2]}</span>}</div>; })}</div>, si);
+        if (sec.key === "PROBLEMS SOLVED" || sec.key === "TO-DOS COMPLETED") return block(title, <div>{raw.map((l, i) => { if (isNote(l)) return null; const m = /^✓\s*([^:]*)(?::\s*(.*))?$/.exec(l); return <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", maxWidth: "90ch" }}><span className="dot" style={{ background: C.green, alignSelf: "center" }} aria-label="Done" /><span><span style={{ fontWeight: 600 }}>{m ? m[1] : l}</span>{m && m[2] && <span style={{ color: C.textMuted }}> {m[2]}</span>}<NoteLine list={noteOf(i)} /></span></div>; })}</div>, si);
         if (sec.key === "OPEN TO-DOS BY TEAM MEMBER") {
           const rows = []; let person = "";
           sec.lines.forEach(l => {
             const t = l.trim();
+            if (/^Note:\s/.test(t)) { if (rows.length) rows[rows.length - 1].note = (rows[rows.length - 1].note ? rows[rows.length - 1].note + " · " : "") + t.replace(/^Note:\s*/, ""); return; }
             if (/^□/.test(t)) { const m = /^□\s*(.*?)(?:\s\(Due ([^()]*)\))?(\s⚠ OVERDUE|\sNEW)?$/.exec(t); rows.push({ person, title: m ? m[1] : t, due: m && m[2] ? m[2] : "", tag: m && m[3] ? m[3].trim() : "" }); }
             else if (/:$/.test(t)) person = t.slice(0, -1);
           });
           return block(title, (
             <div className="dt-wrap"><table className="dt" style={{ maxWidth: 900 }}>
               <thead><tr><th>Person</th><th>To-do</th><th className="r">Due</th><th className="shrink"></th></tr></thead>
-              <tbody>{rows.map((r, i) => <tr key={i}><td className="muted" style={{ whiteSpace: "nowrap" }}>{i === 0 || rows[i - 1].person !== r.person ? r.person : ""}</td><td>{r.title}</td><td className="r num" style={{ whiteSpace: "nowrap", color: r.tag.includes("OVERDUE") ? C.red : C.textMuted }}>{r.due || "—"}</td>
+              <tbody>{rows.map((r, i) => <tr key={i}><td className="muted" style={{ whiteSpace: "nowrap" }}>{i === 0 || rows[i - 1].person !== r.person ? r.person : ""}</td><td>{r.title}{r.note && <div className="hd-note" style={{ marginTop: 0 }}>{r.note}</div>}</td><td className="r num" style={{ whiteSpace: "nowrap", color: r.tag.includes("OVERDUE") ? C.red : C.textMuted }}>{r.due || "—"}</td>
                 <td className="shrink">{r.tag.includes("OVERDUE") ? <span style={{ color: C.red, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}><Icon.warning /> Overdue</span> : r.tag === "NEW" ? <span className="chip">New</span> : null}</td></tr>)}</tbody>
             </table></div>
           ), si);
         }
+        if (sec.key === "SCORECARD") return block(title, <div style={{ maxWidth: "110ch" }}>{sec.lines.map((l, i) => {
+          const detail = /^\s{4}/.test(l), t = l.trim(), m = /^(.*?)\s*→\s*(ON PACE|BEHIND PACE)$/.exec(t);
+          return <div key={i} style={{ padding: detail ? "1px 0 1px 16px" : i === 0 ? "0 0 4px" : "8px 0 1px", fontWeight: !detail && i > 0 ? 600 : 400, color: detail || i === 0 ? C.textMuted : C.text, fontSize: detail ? C.fs.sm : C.fs.base }}>
+            {m ? m[1] : t}{m && <span style={{ fontWeight: 600, color: m[2] === "BEHIND PACE" ? C.red : C.text }}> → {m[2] === "ON PACE" ? "On pace" : "Behind pace"}</span>}
+          </div>;
+        })}</div>, si);
         if (sec.key === "INDIVIDUAL RATINGS") return block(title, (
           <table className="dt" style={{ width: "auto", minWidth: 260 }}><tbody>{raw.map((l, i) => { const m = /^(.*):\s*(.*)$/.exec(l); return <tr key={i}><td style={{ fontWeight: m && m[1] === "Average" ? 600 : 400 }}>{m ? m[1] : l}</td><td className="r num">{m ? m[2] : ""}</td></tr>; })}</tbody></table>
         ), si);
@@ -5485,7 +5746,7 @@ const rptNum1 = (v) => v == null || isNaN(v) ? "—" : (Math.round(v * 10) / 10)
 // Chart labels: compact for big numbers (152320 → "152k") so labels don't collide.
 const rptShort = (v) => { if (v == null || isNaN(v)) return "—"; const a = Math.abs(v); if (a >= 1e6) return (v / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, "") + "M"; if (a >= 1e4) return (v / 1e3).toFixed(a >= 1e5 ? 0 : 1).replace(/\.0$/, "") + "k"; return rptNum1(v); };
 // Text values in the measurable's unit, same style as the Scorecard ("$136,194.3").
-const rptUnitVal = (v, unit) => v == null || isNaN(v) ? "—" : fmtMeasure(rptNum1(v), unit, true);
+const rptUnitVal = (v, unit) => v == null || isNaN(v) ? "—" : String(unit || "").trim() === "$" ? fmtMeasure(String(Math.round(v)), unit, true) : fmtMeasure(rptNum1(v), unit, true);
 const rptWeekNum = (key) => parseInt(String(key).split("-W")[1], 10);
 // Same rule as the scorecard's target check: blank → no judgement.
 const rptMeets = (val, m) => {
@@ -5597,6 +5858,20 @@ function rptCompute(company, year, q) {
       pts, hit, missed, pct: rptPct(hit, hit + missed), avg, avgHit: avg == null ? null : rptMeets(avg, m), best, worst, entered: vals.length };
   });
   const scHit = scRows.reduce((a, r) => a + r.hit, 0), scMissed = scRows.reduce((a, r) => a + r.missed, 0);
+  // Goal tracking for the period (quarter or year), plus each quarter in a year view.
+  const allWeeks = goalWeeks(start, end);
+  const goalRows = isFuture ? [] : measurables.map(m => {
+    const qg = parseFloat(m.quarterlyGoal);
+    const sumRoll = (m.rollup || "sum") === "sum";
+    const periodGoal = isNaN(qg) ? null : q ? qg : sumRoll ? qg * 4 : qg;
+    const track = goalTrack(m, entries, allWeeks, weeks, periodGoal);
+    const byQ = q ? null : [1, 2, 3, 4].map(qq => {
+      const pp = rptPeriod(year, qq);
+      const aw = goalWeeks(pp.start, pp.end), sf = aw.filter(w => w <= curWk);
+      return sf.length ? goalTrack(m, entries, aw, sf, isNaN(qg) ? null : qg) : null;
+    });
+    return { m, owner: m.owner || "Unassigned", track, byQ };
+  });
 
   // ── Quarterly tasks (one source per quarter in the period)
   const qs = q ? [q] : [1, 2, 3, 4];
@@ -5671,7 +5946,7 @@ function rptCompute(company, year, q) {
 
   return {
     period, isCurrent, isFuture, today, weekNow: rptWeekNum(curWk),
-    scorecard: { weeks, rows: scRows, deletedValues, hit: scHit, missed: scMissed, pct: rptPct(scHit, scHit + scMissed) },
+    scorecard: { weeks, rows: scRows, deletedValues, hit: scHit, missed: scMissed, pct: rptPct(scHit, scHit + scMissed), goals: goalRows, allWeeks: allWeeks.length },
     tasks: { quarters: taskQuarters, total: tasksTotal, done: tasksDone, pct: rptPct(tasksDone, tasksTotal), tracked: tqWith.length > 0 },
     todos: { created: tdCreated.length, completed: tdCompleted.length, avgDays: durs.length ? durs.reduce((a, b) => a + b, 0) / durs.length : null,
       doneUpToEnd: tdDoneUpToEnd.length, doneWithDate: tdDoneWithDate, tracked: tdTracked, aging, owners: Object.values(tdOwners).sort((a, b) => a.owner.localeCompare(b.owner)) },
@@ -5707,45 +5982,130 @@ function RptTile({ label, value, status, sub, notTracked }) {
 }
 
 // Vertical bars with optional goal line. data: [{label, value|null, status}]
-function RptBars({ data, goal, title, height = 150, showValues }) {
+// Charts are drawn at the real width of their box (measured), so bars spread
+// across the whole widget and text stays at its normal size. Printing can't
+// be measured ahead of time, so a fixed print width is used while printing
+// (the printed chart is then scaled to the printed widget's width).
+const RPT_PRINT_W = 318;
+function useRptWidth(fallback) {
+  const ref = useRef(null);
+  const [w, setW] = useState(fallback);
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => { const cw = Math.floor(el.getBoundingClientRect().width); if (cw > 40) setW(cw); };
+    measure();
+    let ro = null;
+    if (window.ResizeObserver) { ro = new ResizeObserver(measure); ro.observe(el); } else window.addEventListener("resize", measure);
+    const before = () => { try { ReactDOM.flushSync(() => setPrinting(true)); } catch (e) { setPrinting(true); } };
+    const after = () => setPrinting(false);
+    window.addEventListener("beforeprint", before);
+    window.addEventListener("afterprint", after);
+    return () => {
+      if (ro) ro.disconnect(); else window.removeEventListener("resize", measure);
+      window.removeEventListener("beforeprint", before);
+      window.removeEventListener("afterprint", after);
+    };
+  }, []);
+  return [ref, printing ? RPT_PRINT_W : w];
+}
+// Short value with its unit for chart text: $130k, 38.5%, 25.
+const rptShortUnit = (v, unit) => {
+  if (v == null || isNaN(v)) return "—";
+  const u = String(unit || "").trim();
+  const t = rptShort(v);
+  if (u === "$") return t.startsWith("-") ? "-$" + t.slice(1) : "$" + t;
+  if (u === "%") return t + "%";
+  return t;
+};
+
+// fmt = short label on the chart; tipFmt = full value in the hover tooltip.
+function RptBars({ data, goal, title, height = 190, showValues, unit, tipFmt, goalText }) {
+  const [boxRef, W] = useRptWidth(480);
+  const [hover, setHover] = useState(null);
   if (!data.length || data.every(d => d.value == null)) return <RptNote>No data for this period.</RptNote>;
+  const short = (v) => rptShortUnit(v, unit);
+  const full = tipFmt || short;
   const vals = data.filter(d => d.value != null).map(d => d.value);
   let max = Math.max(...vals, goal != null ? goal : -Infinity, 0);
   const min = Math.min(...vals, 0);
   if (max === min) max = min + 1;
-  const n = data.length, bw = n > 20 ? 10 : n <= 6 ? 36 : 18, gap = n > 20 ? 4 : n <= 6 ? 24 : 10, left = 44, top = 18, bottom = 22;
-  const W = left + n * (bw + gap) + 8, H = height;
+  const n = data.length, H = height, top = 16, bottom = 22;
+  const CH = 6.2;                                  // ~width of one 10px mono character
+  const tw = (t) => String(t).length * CH + 2;
+  const left = Math.max(28, Math.ceil(Math.max(tw(short(max)), tw(short(Math.max(min, 0) === 0 ? 0 : min)))) + 8);
+  const right = goal != null ? Math.ceil(tw(short(goal))) + 10 : 8; // goal value sits at the right end of its line
+  const plotW = Math.max(40, W - left - right);
+  const slot = plotW / n;
+  const bw = Math.max(2, Math.min(56, slot * (n > 20 ? 0.7 : 0.62)));
   const y = (v) => top + (H - top - bottom) * (1 - (v - min) / (max - min));
-  const labelsOn = showValues != null ? showValues : n <= 16;
-  const xEvery = n > 20 ? 4 : 1;
+  const gy = goal != null ? y(goal) : null;
+  const cx = (i) => left + slot * (i + 0.5);
+  // Week labels: thin out so they never touch.
+  const xw = Math.max(...data.map(d => tw(d.label)));
+  const xEvery = Math.max(1, Math.ceil((xw + 6) / slot));
+  // Value labels: shown only where they fit inside their own column (so they
+  // can't touch a neighbour), and moved above the goal line when they would
+  // sit on it. Every bar's value is also in the hover tooltip.
+  const labelsOn = showValues != null ? showValues : true;
+  const labels = data.map((d, i) => {
+    if (!labelsOn || d.value == null) return null;
+    const t = short(d.value);
+    if (tw(t) > slot - 3) return null;
+    let base = Math.min(y(d.value), y(0)) - 4;          // text spans base-9 .. base+1
+    if (gy != null && gy > base - 12 && gy < base + 4) base = gy - 5;
+    if (base - 9 < 0) base = 9;
+    return { t, base };
+  });
+  const tipOf = (d) => `${d.label}: ${d.value == null ? "no number" : full(d.value)}${d.status === "good" ? " · hit" : d.status === "bad" ? " · missed" : ""}`;
+  const hd = hover != null ? data[hover] : null;
   return (
-    <svg className="rpt-chart" viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: Math.max(W, 260) * 1.25 }} role="img" aria-label={title}>
-      <title>{title}</title>
-      <line x1={left} x2={W - 4} y1={y(0)} y2={y(0)} stroke={rptVar("borderStrong")} strokeWidth="1" />
-      <text x={left - 6} y={y(max) + 4} textAnchor="end" className="rpt-ax">{rptShort(max)}</text>
-      <text x={left - 6} y={y(0) + 4} textAnchor="end" className="rpt-ax">{rptShort(Math.max(min, 0) === 0 ? 0 : min)}</text>
-      {data.map((d, i) => {
-        const x = left + i * (bw + gap) + gap / 2;
-        const fill = d.status === "good" ? rptVar("green") : d.status === "bad" ? rptVar("red") : rptVar("blue");
-        return (
-          <g key={i}>
-            {d.value != null ? (
-              <>
-                <rect x={x} y={Math.min(y(d.value), y(0))} width={bw} height={Math.max(1, Math.abs(y(0) - y(d.value)))} rx="2" fill={fill}><title>{`${d.label}: ${d.value}${d.status ? d.status === "good" ? " (hit)" : " (missed)" : ""}`}</title></rect>
-                {labelsOn && <text x={x + bw / 2} y={Math.min(y(d.value), y(0)) - 4} textAnchor="middle" className="rpt-val">{rptShort(d.value)}</text>}
-              </>
-            ) : <text x={x + bw / 2} y={y(0) - 4} textAnchor="middle" className="rpt-ax">–</text>}
-            {i % xEvery === 0 && <text x={x + bw / 2} y={H - 6} textAnchor="middle" className="rpt-ax">{d.label}</text>}
+    <div ref={boxRef} className="rpt-chart-box" onMouseLeave={() => setHover(null)}>
+      <svg className="rpt-chart" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={title}>
+        <title>{title}</title>
+        <defs><pattern id="rpt-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="5" fill="#fff" /></pattern></defs>
+        <line x1={left} x2={left + plotW} y1={y(0)} y2={y(0)} stroke={rptVar("borderStrong")} strokeWidth="1" />
+        <text x={left - 6} y={y(max) + 4} textAnchor="end" className="rpt-ax">{short(max)}</text>
+        <text x={left - 6} y={y(0) + 4} textAnchor="end" className="rpt-ax">{short(Math.max(min, 0) === 0 ? 0 : min)}</text>
+        {data.map((d, i) => {
+          const x = cx(i) - bw / 2;
+          // Hit = accent blue, missed = neutral gray (3:1+ on the card in both
+          // themes). Only a missed week's value label is red. In print, missed
+          // bars also get a hatch so they read in black and white.
+          const miss = d.status === "bad";
+          const fill = miss ? rptVar("inputBottom") : rptVar("blue");
+          const by = d.value != null ? Math.min(y(d.value), y(0)) : 0;
+          const bh = d.value != null ? Math.max(1, Math.abs(y(0) - y(d.value))) : 0;
+          return (
+            <g key={i}>
+              {d.value != null ? (
+                <>
+                  <rect x={x} y={by} width={bw} height={bh} rx="2" fill={fill} fillOpacity={hover === i ? 0.8 : 1} />
+                  {miss && <rect className="rpt-hatch" x={x} y={by} width={bw} height={bh} rx="2" fill="url(#rpt-hatch)" />}
+                  {labels[i] && <text x={cx(i)} y={labels[i].base} textAnchor="middle" className={`rpt-val ${miss ? "miss" : ""}`}>{labels[i].t}</text>}
+                </>
+              ) : <text x={cx(i)} y={y(0) - 4} textAnchor="middle" className="rpt-ax">–</text>}
+              {i % xEvery === 0 && <text x={cx(i)} y={H - 6} textAnchor="middle" className="rpt-ax">{d.label}</text>}
+            </g>
+          );
+        })}
+        {goal != null && (
+          <g>
+            <line className="rpt-goal-line" x1={left} x2={left + plotW} y1={gy} y2={gy} stroke={rptVar("textMuted")} strokeWidth="1.5" strokeDasharray="4 3" />
+            <text x={left + plotW + 5} y={gy + 3.5} textAnchor="start" className="rpt-ax rpt-goal">{short(goal)}<title>{`Goal ${goalText || full(goal)}`}</title></text>
           </g>
-        );
-      })}
-      {goal != null && (
-        <g>
-          <line x1={left} x2={W - 4} y1={y(goal)} y2={y(goal)} stroke={rptVar("text")} strokeWidth="1.5" strokeDasharray="4 3" />
-          <text x={left - 6} y={y(goal) + 4} textAnchor="end" className="rpt-ax rpt-goal">{rptShort(goal)}</text>
-        </g>
+        )}
+        {/* Hover targets: one full-height column per bar */}
+        {data.map((d, i) => (
+          <rect key={"h" + i} className="rpt-hit" x={left + slot * i} y={top - 6} width={slot} height={H - top - bottom + 6} fill="transparent"
+            onMouseEnter={() => setHover(i)} onClick={() => setHover(i)} aria-label={tipOf(d)} />
+        ))}
+      </svg>
+      {hd && (
+        <div className="rpt-tip" role="tooltip" style={{ left: `${(cx(hover) / W) * 100}%`, top: `${((hd.value != null ? Math.min(y(hd.value), y(0)) : y(0)) / H) * 100}%` }}>{tipOf(hd)}</div>
       )}
-    </svg>
+    </div>
   );
 }
 
@@ -5803,6 +6163,47 @@ function RptSummary({ r }) {
   );
 }
 
+const RPT_CALC = { sum: "Sum", avg: "Average", latest: "Latest" };
+function RptGoalCell({ g, unit }) {
+  if (!g) return <span className="rpt-muted">—</span>;
+  if (g.empty) return <span className="rpt-muted">No numbers</span>;
+  if (g.noGoal) return <span className="rpt-muted">No goal</span>;
+  const word = goalStatusWord(g);
+  return <span style={{ color: g.good ? undefined : rptVar("red"), fontWeight: 600, whiteSpace: "nowrap" }}>{g.rollup === "sum" ? <span className="num">{rptPctText(g.pct)} </span> : <span className="num">{rptUnitVal(g.actual, unit)} </span>}<span style={{ fontWeight: 400 }}>{word}</span></span>;
+}
+// Quarter / year goal tracking table (top of the Scorecard section).
+function RptGoals({ r }) {
+  const sc = r.scorecard, isYear = !r.period.q;
+  if (!sc.goals || !sc.goals.length) return null;
+  const label = isYear ? "Year" : "Quarter";
+  return (
+    <div className="rpt-keep" style={{ marginBottom: 12 }}>
+      <h3 className="rpt-h3" style={{ marginTop: 4 }}>{label} goal tracking</h3>
+      <div className="rpt-scroll">
+        <table className="rpt-table rpt-goal-table">
+          <thead><tr><th>Measurable</th><th>Owner</th><th>Calc</th><th className="r">{label} goal</th><th className="r">So far</th><th className="r">% of goal</th><th className="r">Should be by now</th><th>Status</th>
+            {isYear && [1, 2, 3, 4].map(n => <th key={n}>Q{n}</th>)}</tr></thead>
+          <tbody>{sc.goals.map(({ m, owner, track: g, byQ }) => (
+            <tr key={m.id}>
+              <td>{m.name}</td><td>{owner}</td><td>{RPT_CALC[g.rollup] || "Sum"}</td>
+              <td className="r num">{g.goal == null ? "—" : `${g.rollup === "sum" ? "" : (RPT_OPS[m.operator || "gte"] + " ")}${rptUnitVal(g.goal, m.unit)}`}{g.auto && g.goal != null && <span className="rpt-muted"> *</span>}</td>
+              <td className="r num">{g.actual == null ? "—" : rptUnitVal(g.actual, m.unit)}</td>
+              <td className="r num">{g.pct == null ? "—" : rptPctText(g.pct)}</td>
+              <td className="r num">{g.expected == null || g.complete ? "—" : `${g.lower ? "≤ " : ""}${rptUnitVal(g.expected, m.unit)}`}</td>
+              <td>{g.empty ? <span className="rpt-muted">No numbers</span> : g.noGoal ? <span className="rpt-muted">No goal</span> : <span style={{ color: g.good ? undefined : rptVar("red"), fontWeight: 600 }}>{goalStatusWord(g)}</span>}</td>
+              {isYear && byQ.map((qg, i) => <td key={i}><RptGoalCell g={qg} unit={m.unit} /></td>)}
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <div className="rpt-foot" style={{ marginTop: 6 }}>
+        Sum: total so far vs the goal; "Should be by now" = goal × share of the {label.toLowerCase()}'s weeks gone ({r.scorecard.weeks.length} of {r.scorecard.allWeeks}). Average / Latest: compared with the goal.
+        {" "}* = no quarterly goal entered, so the weekly goal is used (× weeks in the period for Sum).{isYear ? " Year goal for Sum = quarterly goal × 4." : ""} Goals are the measurable's current settings.
+      </div>
+    </div>
+  );
+}
+
 function RptScorecard({ r }) {
   const sc = r.scorecard;
   const owners = {};
@@ -5810,32 +6211,39 @@ function RptScorecard({ r }) {
   const ownerNames = Object.keys(owners).sort((a, b) => a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : a.localeCompare(b));
   return (
     <RptSection id="rpt-scorecard" title="Scorecard" sub={`${sc.weeks.length} week${sc.weeks.length === 1 ? "" : "s"} in this period${sc.weeks.length ? ` (W${rptWeekNum(sc.weeks[0])}–W${rptWeekNum(sc.weeks[sc.weeks.length - 1])})` : ""}`}>
-      {sc.rows.length === 0 ? <RptNote>No measurables set up.</RptNote> : sc.weeks.length === 0 ? <RptNote>No scorecard weeks in this period yet.</RptNote> : ownerNames.map(owner => (
-        <div key={owner} className="rpt-group">
-          <h3 className="rpt-h3">{owner}</h3>
-          <div className="rpt-mgrid">
-          {owners[owner].map(row => (
+      {sc.weeks.length > 0 && <RptGoals r={r} />}
+      {sc.rows.length > 0 && sc.weeks.length > 0 && (
+        <div className="rpt-legend rpt-legend-top">
+          <span><i style={{ background: rptVar("blue") }} /> Hit goal</span>
+          <span><i className="rpt-miss-key" style={{ background: rptVar("inputBottom") }} /> Missed</span>
+          <span><i className="rpt-dash" /> Goal</span>
+          <span>– = no number</span>
+          <span className="rpt-noprint">Hover a bar to see its value.</span>
+        </div>
+      )}
+      {sc.rows.length === 0 ? <RptNote>No measurables set up.</RptNote> : sc.weeks.length === 0 ? <RptNote>No scorecard weeks in this period yet.</RptNote> : (
+        <div className="rpt-mgrid">
+          {ownerNames.flatMap(owner => owners[owner]).map(row => (
             <div key={row.m.id} className="rpt-card rpt-keep">
-              <div className="rpt-row-between">
-                <div className="rpt-strong">{row.m.name || "(unnamed)"}</div>
-                <div className="rpt-muted">Goal <span className="num">{row.goal}</span></div>
+              <div className="rpt-card-head">
+                <div className="rpt-card-title"><span className="rpt-strong">{row.m.name || "(unnamed)"}</span> <span className="rpt-muted">· {row.owner}</span></div>
+                <div className="rpt-muted rpt-card-goal">Goal <span className="num">{row.goal}</span></div>
               </div>
               {row.entered === 0 ? <RptNote>No numbers entered for this period.</RptNote> : (<>
-                <div className="rpt-stats">
+                <div className="rpt-stats rpt-stats-compact">
                   <span><RptDot status={rptLevel(row.pct)} label={rptStatusWord[rptLevel(row.pct)]} /> Hit <b className="num">{row.hit}</b> · Missed <b className="num">{row.missed}</b> · <b className="num">{rptPctText(row.pct)}</b></span>
                   <span>Average <b className="num">{rptUnitVal(row.avg, row.m.unit)}</b>{row.avgHit != null && <> ({row.avgHit ? "meets goal" : "misses goal"})</>}</span>
                   <span>Best <b className="num">{rptUnitVal(row.best && row.best.value, row.m.unit)}</b> <span className="rpt-muted num">W{row.best && rptWeekNum(row.best.week)}</span></span>
                   <span>Worst <b className="num">{rptUnitVal(row.worst && row.worst.value, row.m.unit)}</b> <span className="rpt-muted num">W{row.worst && rptWeekNum(row.worst.week)}</span></span>
                 </div>
-                <RptBars title={`${row.m.name}: weekly values${row.target != null ? `, goal ${row.goal}` : ""}`} goal={row.target}
+                <RptBars title={`${row.m.name}: weekly values${row.target != null ? `, goal ${row.goal}` : ""}`} goal={row.target} goalText={row.goal}
+                  unit={row.m.unit} tipFmt={(v) => rptUnitVal(v, row.m.unit)}
                   data={row.pts.map(p => ({ label: `W${rptWeekNum(p.week)}`, value: p.value, status: p.hit === true ? "good" : p.hit === false ? "bad" : null }))} />
-                <div className="rpt-legend"><span><i style={{ background: rptVar("green") }} /> hit</span><span><i style={{ background: rptVar("red") }} /> missed</span>{row.target != null && <span><i className="rpt-dash" /> goal</span>}<span>– = no number</span></div>
               </>)}
             </div>
           ))}
-          </div>
         </div>
-      ))}
+      )}
       {sc.deletedValues > 0 && <RptNote>{sc.deletedValues} value{sc.deletedValues === 1 ? "" : "s"} from deleted measurables not shown.</RptNote>}
       <div className="rpt-foot">Weeks are judged against each measurable's current goal. A week belongs to the quarter that contains its Thursday.</div>
     </RptSection>
@@ -5883,7 +6291,7 @@ function RptSplitBar({ parts, title }) {
   let x = 0;
   return (
     <div className="rpt-keep">
-      <svg className="rpt-chart" viewBox="0 0 300 18" width="100%" style={{ maxWidth: 520 }} preserveAspectRatio="none" role="img" aria-label={title}>
+      <svg className="rpt-chart" viewBox="0 0 300 18" width="100%" height="18" style={{ height: 18 }} preserveAspectRatio="none" role="img" aria-label={title}>
         <title>{title}</title>
         {parts.map((p, i) => { const w = 300 * p.value / total; const el = w > 0 ? <rect key={i} x={x} y="0" width={Math.max(0, w - (i < parts.length - 1 ? 2 : 0))} height="18" rx="2" fill={p.color}><title>{`${p.label}: ${p.value}`}</title></rect> : null; x += w; return el; })}
       </svg>
@@ -5899,7 +6307,7 @@ function RptTaskQuarter({ tq, showHeading }) {
       {tq.note && <RptNote>{tq.note}</RptNote>}
       {tq.rows && (tq.rows.length === 0 ? <RptNote>No quarterly tasks recorded.</RptNote> : (<>
         <div className="rpt-stats"><span>Completion <b className="num">{rptPctText(tq.pct)}</b> · <span className="num">{tq.done}</span> of <span className="num">{tq.total}</span> done</span><span className="rpt-muted">{tq.source === "archive" ? "From the Historical Quarters archive" : "From current Quarterly Tasks"}</span></div>
-        <RptSplitBar title={`${tq.label} tasks: ${tq.done} done, ${tq.total - tq.done} not done`} parts={[{ label: "Done", value: tq.done, color: rptVar("green") }, { label: "Not done", value: tq.total - tq.done, color: rptVar("borderStrong") }]} />
+        <RptSplitBar title={`${tq.label} tasks: ${tq.done} done, ${tq.total - tq.done} not done`} parts={[{ label: "Done", value: tq.done, color: rptVar("blue") }, { label: "Not done", value: tq.total - tq.done, color: rptVar("inputBottom") }]} />
         <div className="rpt-two">
           <div className="rpt-scroll rpt-keep">
             <table className="rpt-table">
@@ -6049,7 +6457,7 @@ function RptYear({ r, company }) {
           <div key={row.label} className="rpt-keep">
             <h3 className="rpt-h3">{row.label}</h3>
             {row.values.every(x => x == null) ? <RptNote>No data for this year.</RptNote> : (
-              <RptBars title={`${row.label} by quarter`} height={130} showValues
+              <RptBars title={`${row.label} by quarter`} height={160} showValues unit={row.pct ? "%" : ""}
                 data={row.values.map((val, i) => ({ label: `Q${i + 1}`, value: val == null ? null : row.pct ? Math.round(val * 100) : row.dec ? Math.round(val * 10) / 10 : val, status: null }))} />
             )}
             {row.pct && <div className="rpt-foot" style={{ marginTop: 0 }}>Shown as %.</div>}
@@ -6111,6 +6519,17 @@ function rptWorkbook(XLSX, company, r, companyName) {
     [], ["Weeks are judged against each measurable's current goal."],
     ...(sc.deletedValues ? [[`${sc.deletedValues} value(s) from deleted measurables not shown.`]] : []),
   ], [18, 26, 10, 10, 10, 12, 8, 10, 8, 10, 8, 11, ...wkHead.map(() => 7)]);
+  if (sc.goals && sc.goals.length) {
+    const isYear = !p.q;
+    const xv = (v) => v == null || isNaN(v) ? null : Math.round(v * 100) / 100;
+    add("Goal tracking", [
+      ["Measurable", "Owner", "Calc", isYear ? "Year goal" : "Quarter goal", "Automatic goal", "So far", "% of goal", "Should be by now", "Status", ...(isYear ? ["Q1", "Q2", "Q3", "Q4"] : [])],
+      ...sc.goals.map(({ m, owner, track: g, byQ }) => [m.name || "", owner, RPT_CALC[g.rollup] || "Sum", xv(g.goal), g.goal == null ? null : g.auto ? "Yes" : "No", xv(g.actual), g.pct == null ? null : rptXPct(g.pct),
+        g.complete ? null : xv(g.expected), g.empty ? "No numbers" : g.noGoal ? "No goal" : goalStatusWord(g),
+        ...(isYear ? byQ.map(x => !x ? null : x.empty ? "No numbers" : x.noGoal ? "No goal" : `${x.rollup === "sum" ? rptPctText(x.pct) + " " : ""}${goalStatusWord(x)}`) : [])]),
+      [], ["Sum: total so far vs the goal; 'Should be by now' = goal × share of the period's weeks gone. Average/Latest: compared with the goal. Automatic goal = weekly goal (× weeks for Sum); year Sum goal = quarterly goal × 4."],
+    ], [26, 18, 9, 14, 10, 14, 10, 16, 14, 16, 16, 16, 16]);
+  }
   const taskRows = [["Quarter", "Source", "Task", "Owner", "Final status", "Weeks off track", "Carried over from"]];
   tk.quarters.forEach(tq => {
     if (!tq.rows) { taskRows.push([tq.label, null, tq.note]); return; }
@@ -6181,16 +6600,33 @@ const rptCss = () => `
   .rpt-chart{display:block;height:auto;margin-top:4px;overflow:visible}
   .rpt-chart .rpt-ax{font-family:var(--font-mono);font-size:10px;fill:var(--c-text-muted)}
   .rpt-chart .rpt-val{font-family:var(--font-mono);font-size:10px;fill:var(--c-text);paint-order:stroke;stroke:var(--c-surface2);stroke-width:3px;stroke-linejoin:round}
-  .rpt-mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(440px,100%),1fr));gap:0 12px}
-  .rpt-chart .rpt-goal{fill:var(--c-text);font-weight:600}
+  .rpt-mgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:8px}
+  .rpt-mgrid .rpt-card{margin:0;min-width:0}
+  @media(min-width:1800px){.rpt-mgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media(max-width:768px){.rpt-mgrid{grid-template-columns:minmax(0,1fr)}}
+  .rpt-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .rpt-card-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rpt-card-goal{white-space:nowrap;flex-shrink:0}
+  .rpt-stats-compact{gap:2px 14px;font-size:12px;margin:6px 0 2px}
+  .rpt-stats-compact > span{white-space:nowrap}
+  .rpt-legend-top{margin:0 0 4px}
+  .rpt-chart-box{position:relative;width:100%;min-width:0}
+  .rpt-chart-box .rpt-chart{margin-top:4px}
+  .rpt-chart .rpt-hit{cursor:default}
+  .rpt-tip{position:absolute;transform:translate(-50%,calc(-100% - 6px));background:var(--c-text);color:var(--c-surface2);font-size:12px;line-height:1.3;padding:4px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:5;font-family:var(--font-mono)}
+  .rpt-chart .rpt-goal{fill:var(--c-text-muted);font-weight:600}
+  .rpt-chart .rpt-val.miss{fill:var(--c-red)}
+  .rpt-chart .rpt-hatch{display:none}
   .rpt-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--c-text-muted);margin-top:4px}
   .rpt-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
-  .rpt-legend i.rpt-dash{width:14px;height:0;border-top:2px dashed var(--c-text);border-radius:0;vertical-align:3px}
+  .rpt-legend i.rpt-dash{width:14px;height:0;border-top:2px dashed var(--c-text-muted);border-radius:0;vertical-align:3px}
   .rpt-scroll{overflow-x:auto;max-width:100%}
   .rpt-table{width:100%;border-collapse:collapse;font-size:13px}
   .rpt-table th{text-align:left;font-size:12px;font-weight:600;color:var(--c-text-muted);border-bottom:2px solid var(--c-border);padding:6px 8px;white-space:nowrap}
   .rpt-table td{border-bottom:1px solid var(--c-border);padding:6px 8px;color:var(--c-text);vertical-align:top}
   .rpt-table .r{text-align:right}
+  .rpt-goal-table td{white-space:nowrap}
+  .rpt-goal-table td:first-child{white-space:normal;min-width:140px}
   .rpt-table tr.rpt-total td{font-weight:600;border-top:2px solid var(--c-border)}
   .rpt-group{margin-bottom:8px}
   .rpt-ygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:0 20px}
@@ -6215,8 +6651,11 @@ const rptCss = () => `
     .rpt-keep,.rpt-card,.rpt-tile,.rpt-table tr,.rpt-chart,.rpt-note{break-inside:avoid}
     .rpt-h2,.rpt-h3{break-after:avoid}
     .rpt-scroll{overflow:visible}
-    .rpt-mgrid,.rpt-two{grid-template-columns:minmax(0,1fr)!important}
-    .rpt-chart{max-width:440px!important}
+    .rpt-two{grid-template-columns:minmax(0,1fr)!important}
+    .rpt-mgrid,.rpt-ygrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .rpt-tip{display:none!important}
+    .rpt-chart .rpt-hatch{display:inline}
+    .rpt-legend i.rpt-miss-key{background-image:repeating-linear-gradient(45deg,transparent 0 2px,#fff 2px 3.5px)!important}
     .rpt-print-footer{display:flex;justify-content:space-between;gap:12px;position:fixed;bottom:0;left:0;right:0;font-size:10px;color:#5B6475;border-top:1px solid #E4E7EC;padding-top:4px;background:#fff}
   }
   @media(max-width:768px){.rpt-big{font-size:24px}.rpt-section{padding:12px}.rpt-picker select{min-width:0;flex:1}.rpt-picker label{flex:1}}
