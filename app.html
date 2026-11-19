@@ -1530,6 +1530,27 @@ function Tip({ text, children, truncOnly, style, className }) {
   );
 }
 
+// Send an item to Problem Solving. This is the Huddle's existing
+// addToProblemQueue logic, moved here unchanged so every screen can use it:
+// no-op if the item is already queued, otherwise one atomic add to
+// problemQueue tagged with the huddle it belongs to.
+function queueProblem(company, onAdd, huddleId, item) {
+  if ((company.problemQueue || []).find(p => p.id === item.id)) return; // already queued — no-op
+  onAdd("problemQueue", { ...item, huddleId: huddleId, id: item.id });
+}
+// The flag button, same look/tooltip/"sent" state as the Huddle's flag.
+function ProblemFlag({ company, id, onClick }) {
+  const queued = !!(company.problemQueue || []).find(p => p.id === id);
+  const tip = queued ? "Already in problem queue" : "Send to Problem Solving";
+  return (
+    <Tip text={tip}>
+      <button onClick={onClick} aria-label={tip} aria-pressed={queued} className={`icon-btn hd-flag ${queued ? "on" : ""}`}>
+        <Icon.flag />
+      </button>
+    </Tip>
+  );
+}
+
 function ScorecardCell({ value, onCommit, placeholder, style, format, className }) {
   const [local, setLocal] = useState(value ?? "");
   const [focused, setFocused] = useState(false);
@@ -2053,10 +2074,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
     ? allMembers.filter(m => huddleMemberIds.includes(m.id))
     : allMembers;
 
-  const addToProblemQueue = (item) => {
-    if ((company.problemQueue || []).find(p => p.id === item.id)) return; // already queued — no-op
-    onAdd("problemQueue", { ...item, huddleId: huddleId, id: item.id });
-  };
+  const addToProblemQueue = (item) => queueProblem(company, onAdd, huddleId, item);
   const seg = agenda[activeIdx];
   const segLimit = seg.minutes * 60;
   const segElapsed = segTimes[activeIdx] || 0;
@@ -2633,6 +2651,7 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                             <span className="num">{weekLabel(wk)}</span>{wk === curWk && <span className="hd-thiswk">This week</span>}
                           </th>
                         ))}
+                        <th className="shrink" aria-label="Actions"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2643,20 +2662,6 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                               <Tip text={m.owner ? `${m.name} · ${m.owner}` : m.name} truncOnly style={{ flex: 1 }}>
                                 <span className="hd-ellip"><span style={{ fontWeight: 600 }}>{m.name}</span>{m.owner && <span style={{ color: C.textMuted, fontSize: C.fs.xs, marginLeft: 8 }}>{m.owner}</span>}</span>
                               </Tip>
-                              {(() => {
-                                const curVal = entries[curWk]?.[m.id] ?? "";
-                                const met = meetsGoal(curVal, m);
-                                const alreadyQueued = (company.problemQueue || []).find(p => p.id === m.id);
-                                const tip = alreadyQueued ? "Already in problem queue" : "Send to Problem Solving";
-                                return (
-                                  <Tip text={tip}>
-                                    <button onClick={() => addToProblemQueue({ id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })}
-                                      aria-label={tip} aria-pressed={!!alreadyQueued} className={`icon-btn hd-flag ${alreadyQueued ? "on" : ""}`}>
-                                      <Icon.flag />
-                                    </button>
-                                  </Tip>
-                                );
-                              })()}
                             </div>
                           </td>
                           <td className="r num muted" style={{ whiteSpace: "nowrap" }}>{({gte:"≥",lte:"≤",gt:">",lt:"<",eq:"="})[m.operator||"gte"]} {fmtMeasure(m.target, m.unit)}</td>
@@ -2679,6 +2684,20 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                               </td>
                             );
                           })}
+                          <td className="shrink">
+                            {(() => {
+                              const alreadyQueued = (company.problemQueue || []).find(p => p.id === m.id);
+                              const tip = alreadyQueued ? "Already in problem queue" : "Send to Problem Solving";
+                              return (
+                                <Tip text={tip}>
+                                  <button onClick={() => addToProblemQueue({ id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })}
+                                    aria-label={tip} aria-pressed={!!alreadyQueued} className={`icon-btn hd-flag ${alreadyQueued ? "on" : ""}`}>
+                                    <Icon.flag />
+                                  </button>
+                                </Tip>
+                              );
+                            })()}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2714,20 +2733,16 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                           </button>
                         );
                       })}
-                      <span className="hd-slot">
-                        {t.status === "off" && (
-                          <Tip text={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"}>
-                            <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
-                              aria-label={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===t.id) ? "on" : ""}`}>
-                              <Icon.flag />
-                            </button>
-                          </Tip>
-                        )}
-                      </span>
                       <Tip text={noteOpen[t.id] ? "Hide notes" : "Notes"}>
                         <button onClick={() => toggleNote(t.id)} aria-label="Notes" aria-pressed={!!noteOpen[t.id]}
                           className="icon-btn" style={noteOpen[t.id] ? { background: C.selBg, color: C.link } : t.notes ? { color: C.text } : undefined}>
                           <Icon.note size={13} />
+                        </button>
+                      </Tip>
+                      <Tip text={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"}>
+                        <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "task", sourceLabel: "Task" })}
+                          aria-label={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===t.id) ? "on" : ""}`}>
+                          <Icon.flag />
                         </button>
                       </Tip>
                     </div>
@@ -2778,16 +2793,16 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                           style={{ padding: "4px 8px", borderRadius: C.radius.control, border: `1px solid ${C.greenBorder}`, background: C.greenTint, color: C.green, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer", whiteSpace:"nowrap" }}>
                           ✓ Reviewed
                         </button>
-                        <Tip text={(company.problemQueue||[]).find(p=>p.id===h.id) ? "Already in problem queue" : "Send to Problem Solving"}>
-                          <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
-                            aria-label={(company.problemQueue||[]).find(p=>p.id===h.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===h.id) ? "on" : ""}`}>
-                            <Icon.flag />
-                          </button>
-                        </Tip>
                         <Tip text={noteOpen[h.id] ? "Hide notes" : "Notes"}>
                           <button onClick={() => toggleNote(h.id)} aria-label="Notes" aria-pressed={!!noteOpen[h.id]}
                             className="icon-btn" style={noteOpen[h.id] ? { background: C.selBg, color: C.link } : h.notes ? { color: C.text } : undefined}>
                             <Icon.note size={13} />
+                          </button>
+                        </Tip>
+                        <Tip text={(company.problemQueue||[]).find(p=>p.id===h.id) ? "Already in problem queue" : "Send to Problem Solving"}>
+                          <button onClick={() => addToProblemQueue({ id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })}
+                            aria-label={(company.problemQueue||[]).find(p=>p.id===h.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===h.id) ? "on" : ""}`}>
+                            <Icon.flag />
                           </button>
                         </Tip>
                       </div>
@@ -2860,16 +2875,16 @@ function WeeklyHuddle({ company, onSave, onAdd, huddleId, huddleName, me, compan
                             style={{ padding: "4px 12px", borderRadius: C.radius.control, border: `1px solid ${C.greenBorder}`, background: C.greenTint, color: C.green, fontFamily: C.fontUI, fontWeight:600, fontSize:C.fs.xs, cursor:"pointer", whiteSpace:"nowrap" }}>
                             ✓ Complete
                           </button>
-                          <Tip text={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"}>
-                            <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
-                              aria-label={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===t.id) ? "on" : ""}`}>
-                              <Icon.flag />
-                            </button>
-                          </Tip>
                           <Tip text={noteOpen[t.id] ? "Hide notes" : "Notes"}>
                             <button onClick={() => toggleNote(t.id)} aria-label="Notes" aria-pressed={!!noteOpen[t.id]}
                               className="icon-btn" style={noteOpen[t.id] ? { background: C.selBg, color: C.link } : t.notes ? { color: C.text } : undefined}>
                               <Icon.note size={13} />
+                            </button>
+                          </Tip>
+                          <Tip text={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"}>
+                            <button onClick={() => addToProblemQueue({ id: t.id, title: t.title, source: "todo", sourceLabel: "To-Do" })}
+                              aria-label={(company.problemQueue||[]).find(p=>p.id===t.id) ? "Already in problem queue" : "Send to Problem Solving"} className={`icon-btn hd-flag ${(company.problemQueue||[]).find(p=>p.id===t.id) ? "on" : ""}`}>
+                              <Icon.flag />
                             </button>
                           </Tip>
                         </div>
@@ -3749,6 +3764,7 @@ function Tasks({ company, onSave, onAdd }) {
                       <div style={{ display: "flex", gap: 2 }}>
                         <button className="icon-btn" title="Edit" aria-label={`Edit task: ${t.title}`} onClick={() => startEdit(t)}><Icon.edit /></button>
                         <button className="icon-btn danger" title="Delete" aria-label={`Delete task: ${t.title}`} onClick={() => deleteTask(t.id)}><Icon.trash /></button>
+                        <ProblemFlag company={company} id={t.id} onClick={() => queueProblem(company, onAdd, t.huddleId || null, { id: t.id, title: t.title, source: "task", sourceLabel: "Task" })} />
                       </div>
                     </td>
                   </tr>
@@ -3787,6 +3803,7 @@ function Tasks({ company, onSave, onAdd }) {
                           <option value="off">Off Track</option>
                           <option value="done">Done</option>
                         </select>
+                        <ProblemFlag company={company} id={t.id} onClick={() => queueProblem(company, onAdd, t.huddleId || null, { id: t.id, title: t.title, source: "task", sourceLabel: "Task" })} />
                       </div>
                     </div>
                   );
@@ -3887,7 +3904,7 @@ function useViewportWidth() {
   return w;
 }
 
-function Scorecard({ company, onSave }) {
+function Scorecard({ company, onSave, onAdd }) {
   // Default new measurables to the team's first/active huddle (no orphans).
   const defaultHuddleId = (company.huddles && company.huddles[0] && company.huddles[0].id) || "huddle-1";
   const [showAdd, setShowAdd] = useState(false);
@@ -4072,6 +4089,7 @@ function Scorecard({ company, onSave }) {
                       <div style={{ display: "flex", gap: 2 }}>
                         <button className="icon-btn" title="Edit" aria-label={`Edit ${m.name}`} onClick={() => editMeasurable(m)}><Icon.edit /></button>
                         <button className="icon-btn danger" title="Delete" aria-label={`Delete ${m.name}`} onClick={() => deleteMeasurable(m.id)}><Icon.trash /></button>
+                        <ProblemFlag company={company} id={m.id} onClick={() => queueProblem(company, onAdd, m.huddleId || null, { id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })} />
                       </div>
                     </td>
                   </tr>
@@ -4133,6 +4151,7 @@ function Scorecard({ company, onSave }) {
                   </div>
                   <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
                     <button className="btn-secondary" style={{ flex: 1 }} onClick={() => editMeasurable(m)}>Edit</button>
+                    <ProblemFlag company={company} id={m.id} onClick={() => queueProblem(company, onAdd, m.huddleId || null, { id: m.id, title: `${m.name} off target`, source: "scorecard", sourceLabel: "Scorecard" })} />
                   </div>
                 </div>
               ))}
@@ -4256,6 +4275,7 @@ function Headlines({ company, onSave, onAdd }) {
           <button className="btn-secondary lbtn" onClick={() => unmarkReviewed(h.id)}>Reopen</button>
         )}
         <button className="icon-btn danger" title="Delete" aria-label={`Delete headline: ${h.text}`} onClick={() => del(h.id)}><Icon.trash /></button>
+        <ProblemFlag company={company} id={h.id} onClick={() => queueProblem(company, onAdd, h.huddleId || null, { id: h.id, title: h.text, source: "headline", sourceLabel: h.type + " Headline" })} />
       </span>
     </div>
   );
